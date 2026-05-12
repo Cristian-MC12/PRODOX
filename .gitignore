@@ -1,0 +1,28 @@
+# ─── Angular ───────────────────────────────────────────────
+mpdia-angular/node_modules/
+mpdia-angular/dist/
+mpdia-angular/.angular/cache/
+mpdia-angular/.angular/
+mpdia-angular/*.env
+
+# ─── Spring Boot / Maven ────────────────────────────────────
+mpdia-springboot/target/
+mpdia-springboot/.mvn/wrapper/maven-wrapper.jar
+*.class
+*.jar
+*.war
+
+# ─── IDEs ───────────────────────────────────────────────────
+.idea/
+*.iml
+.vscode/
+*.suo
+*.user
+
+# ─── OS ─────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ─── Logs ───────────────────────────────────────────────────
+*.log
+logs/
