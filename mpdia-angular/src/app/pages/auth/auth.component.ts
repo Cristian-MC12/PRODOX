@@ -32,21 +32,20 @@ import { AuthService } from '../../services/auth.service';
             <ul class="nav nav-tabs mb-3" role="tablist">
               <li class="nav-item">
                 <button class="nav-link" [class.active]="tab === 'login'"
-                        (click)="tab = 'login'">Iniciar sesión</button>
+                        (click)="switchTab('login')">Iniciar sesión</button>
               </li>
               <li class="nav-item">
                 <button class="nav-link" [class.active]="tab === 'register'"
-                        (click)="tab = 'register'">Registrarse</button>
+                        (click)="switchTab('register')">Registrarse</button>
               </li>
             </ul>
 
-            <!-- Alert -->
             @if (errorMsg) {
               <div class="alert alert-danger py-2 small">{{ errorMsg }}</div>
             }
 
-            <!-- Form -->
             <form [formGroup]="form" (ngSubmit)="submit()">
+
               <div class="mb-3">
                 <label class="form-label">Correo electrónico</label>
                 <input type="email" class="form-control"
@@ -65,6 +64,23 @@ import { AuthService } from '../../services/auth.service';
                 <div class="invalid-feedback">Mínimo 8 caracteres.</div>
               </div>
 
+              <!-- Rol: solo en registro -->
+              @if (tab === 'register') {
+                <div class="mb-3">
+                  <label class="form-label">Rol en el equipo</label>
+                  <select class="form-select" formControlName="role"
+                          [class.is-invalid]="f['role'].invalid && f['role'].touched">
+                    <option value="">Seleccionar rol...</option>
+                    <option value="scrum_member">Scrum Member (Developer / PO / QA)</option>
+                    <option value="scrum_master">Scrum Master</option>
+                  </select>
+                  <div class="invalid-feedback">Seleccioná un rol.</div>
+                  <div class="form-text small text-muted">
+                    El Scrum Master puede verificar y aprobar parametrizaciones.
+                  </div>
+                </div>
+              }
+
               <button type="submit" class="btn btn-primary w-100" [disabled]="loading">
                 @if (loading) {
                   <span class="spinner-border spinner-border-sm me-1"></span>
@@ -81,7 +97,7 @@ import { AuthService } from '../../services/auth.service';
 export class AuthComponent {
   tab: 'login' | 'register' = 'login';
   form: FormGroup;
-  loading = false;
+  loading  = false;
   errorMsg = '';
 
   constructor(
@@ -89,31 +105,42 @@ export class AuthComponent {
     private authService: AuthService,
     private router: Router
   ) {
-    this.form = this.fb.group({
-      email:    ['', [Validators.required, Validators.email]],
-      password: ['', [Validators.required, Validators.minLength(8)]]
-    });
+    this.form = this.buildForm('login');
   }
 
   get f() { return this.form.controls; }
 
+  switchTab(t: 'login' | 'register'): void {
+    this.tab = t;
+    this.errorMsg = '';
+    this.form = this.buildForm(t);
+  }
+
   submit(): void {
     if (this.form.invalid) { this.form.markAllAsTouched(); return; }
-
-    this.loading = true;
+    this.loading  = true;
     this.errorMsg = '';
 
-    const req = this.form.value;
+    const { email, password, role } = this.form.value;
     const obs = this.tab === 'login'
-      ? this.authService.login(req)
-      : this.authService.register(req);
+      ? this.authService.login({ email, password })
+      : this.authService.register({ email, password, role });
 
     obs.subscribe({
-      next: () => this.router.navigate(['/']),
+      next:  () => this.router.navigate(['/']),
       error: (err) => {
         this.errorMsg = err?.error?.error ?? 'Error al autenticar.';
-        this.loading = false;
+        this.loading  = false;
       }
+    });
+  }
+
+  private buildForm(tab: 'login' | 'register'): FormGroup {
+    return this.fb.group({
+      email:    ['', [Validators.required, Validators.email]],
+      password: ['', [Validators.required, Validators.minLength(8)]],
+      role:     [tab === 'register' ? '' : null,
+                 tab === 'register' ? Validators.required : []]
     });
   }
 }

@@ -7,7 +7,9 @@ import { catchError, of } from 'rxjs';
 import { ShellComponent } from '../../layout/shell/shell.component';
 import { FactorService } from '../../services/factor.service';
 import { SeleccionService } from '../../services/seleccion.service';
+import { MetricRankingService } from '../../services/metric-ranking.service';
 import { Factor } from '../../models/factor.model';
+import { RankingMetrica } from '../../models/metric-ranking.model';
 
 @Component({
   selector: 'app-seleccion',
@@ -80,7 +82,17 @@ import { Factor } from '../../models/factor.model';
                         style="cursor:pointer"
                         (click)="!yaSeleccionada(m) && mover(m)">
                       <td class="ps-3">
-                        <div class="small fw-semibold">{{ m.name }}</div>
+                        <div class="small fw-semibold d-flex align-items-center gap-1">
+                          {{ m.name }}
+                          @if (rankingPos(m) !== -1) {
+                            <span class="badge rounded-pill ms-1"
+                                  [class]="rankingPos(m) === 0 ? 'bg-warning text-dark' : 'bg-secondary'"
+                                  style="font-size:0.6rem"
+                                  title="{{ rankingUsos(m) }} uso(s)">
+                              #{{ rankingPos(m) + 1 }}
+                            </span>
+                          }
+                        </div>
                         <div class="text-muted" style="font-size:0.71rem">
                           {{ m.description | slice:0:65 }}...
                         </div>
@@ -162,7 +174,6 @@ import { Factor } from '../../models/factor.model';
               </table>
             }
           </div>
-          <!-- Botón Seleccionar -->
           @if (seleccionadas.length > 0) {
             <div class="card-footer d-flex justify-content-end py-2">
               <button class="btn btn-primary btn-sm" (click)="continuar()">
@@ -177,19 +188,19 @@ import { Factor } from '../../models/factor.model';
   `
 })
 export class SeleccionComponent implements OnInit {
-  /** Todos los registros del backend */
-  todas: Factor[]        = [];
-  /** Métricas del factor actualmente seleccionado */
+  todas: Factor[]               = [];
   metricasDisponibles: Factor[] = [];
-  seleccionadas          = this.seleccionService.getSnapshot();
-  factorSeleccionado     = '';
-  cargando               = true;
+  seleccionadas                 = this.seleccionService.getSnapshot();
+  ranking: RankingMetrica[]     = [];
+  factorSeleccionado            = '';
+  cargando                      = true;
   alertMsg   = '';
   alertClass = 'alert-success';
 
   constructor(
     private factorService: FactorService,
     private seleccionService: SeleccionService,
+    private rankingService: MetricRankingService,
     private router: Router
   ) {}
 
@@ -205,14 +216,18 @@ export class SeleccionComponent implements OnInit {
         return of([]);
       })
     ).subscribe(data => {
-      this.todas   = data;
+      this.todas    = data;
       this.cargando = false;
     });
 
     this.seleccionService.getAll().subscribe(s => this.seleccionadas = s);
+
+    // Cargar ranking del backend
+    this.rankingService.getRanking().pipe(
+      catchError(() => of([]))
+    ).subscribe(r => this.ranking = r);
   }
 
-  /** Lista de factores únicos (categorías) para el dropdown */
   get factores(): string[] {
     return [...new Set(this.todas.map(m => m.category))].sort();
   }
@@ -221,11 +236,32 @@ export class SeleccionComponent implements OnInit {
     this.metricasDisponibles = this.todas.filter(m => m.category === this.factorSeleccionado);
   }
 
+  /** Posición en el ranking (0-based), -1 si no está */
+  rankingPos(m: Factor): number {
+    return this.ranking.findIndex(r => r.factorId === m.id);
+  }
+
+  /** Usos de una métrica en el ranking */
+  rankingUsos(m: Factor): number {
+    return this.ranking.find(r => r.factorId === m.id)?.usos ?? 0;
+  }
+
   yaSeleccionada(m: Factor): boolean {
     return this.seleccionadas.some(s => s.factorId === m.id);
   }
 
   mover(m: Factor): void {
+    // Si la métrica está en el ranking, incrementar su contador
+    const enRanking = this.ranking.some(r => r.factorId === m.id);
+    if (enRanking) {
+      this.rankingService.incrementarUso(m.id).pipe(
+        catchError(() => of(null))
+      ).subscribe(() => {
+        // Refrescar ranking
+        this.rankingService.getRanking().pipe(catchError(() => of([]))).subscribe(r => this.ranking = r);
+      });
+    }
+
     this.seleccionService.agregar({
       factorId:           m.id,
       factorNombre:       m.name,

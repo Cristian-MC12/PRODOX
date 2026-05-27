@@ -1,13 +1,8 @@
+// Autor: Cristian Santiago Martinez Cordoba — MPDIA
 import { Component, signal } from '@angular/core';
 import { RouterLink, RouterLinkActive } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { AuthService } from '../../services/auth.service';
-
-interface NavItem {
-  label: string;
-  icon: string;
-  route: string;
-}
 
 @Component({
   selector: 'app-sidebar',
@@ -20,9 +15,18 @@ interface NavItem {
         <i class="bi bi-speedometer2 me-2"></i>MPDIA
       </a>
 
+      <!-- Rol badge -->
+      <div class="px-3 pb-2">
+        <span class="badge w-100 py-1"
+              [class]="esScrumMaster() ? 'bg-primary' : 'bg-secondary'">
+          <i class="bi me-1" [class]="esScrumMaster() ? 'bi-shield-check' : 'bi-person'"></i>
+          {{ esScrumMaster() ? 'Scrum Master' : 'Scrum Member' }}
+        </span>
+      </div>
+
       <!-- Nav links -->
-      <ul class="nav flex-column mt-2 flex-grow-1">
-        @for (item of navItems; track item.route) {
+      <ul class="nav flex-column mt-1 flex-grow-1">
+        @for (item of navItemsFiltrados(); track item.route) {
           <li class="nav-item">
             <a class="nav-link"
                [routerLink]="item.route"
@@ -54,16 +58,25 @@ interface NavItem {
 export class SidebarComponent {
   open = signal(false);
 
-  navItems: NavItem[] = [
-    { label: 'Selección',        icon: 'bi-layers',          route: '/seleccion'         },
-    { label: 'Resumen',          icon: 'bi-table',           route: '/resumen-seleccion' },
-    { label: 'Verificación SM',  icon: 'bi-clipboard-check', route: '/verificacion'      },
-    { label: 'Copiloto',         icon: 'bi-robot',           route: '/configuracion'     },
-    { label: 'Equipo Scrum',     icon: 'bi-people',          route: '/equipo'            },
-    { label: 'Sprints',          icon: 'bi-calendar3',       route: '/sprints'           },
+  private readonly allNavItems = [
+    { label: 'Selección',       icon: 'bi-layers',          route: '/seleccion',        roles: ['scrum_member', 'scrum_master'] },
+    { label: 'Resumen',         icon: 'bi-table',           route: '/resumen-seleccion',roles: ['scrum_member', 'scrum_master'] },
+    { label: 'Verificación SM', icon: 'bi-clipboard-check', route: '/verificacion',     roles: ['scrum_master'] },
+    { label: 'Copiloto',        icon: 'bi-robot',           route: '/configuracion',    roles: ['scrum_member', 'scrum_master'] },
+    { label: 'Equipo Scrum',    icon: 'bi-people',          route: '/equipo',           roles: ['scrum_member', 'scrum_master'] },
+    { label: 'Sprints',         icon: 'bi-calendar3',       route: '/sprints',          roles: ['scrum_member', 'scrum_master'] },
   ];
 
   constructor(public auth: AuthService) {}
+
+  esScrumMaster(): boolean {
+    return this.auth.currentUser()?.role === 'scrum_master';
+  }
+
+  navItemsFiltrados() {
+    const role = this.auth.currentUser()?.role ?? 'scrum_member';
+    return this.allNavItems.filter(item => item.roles.includes(role));
+  }
 
   toggle(): void { this.open.update(v => !v); }
   close(): void  { this.open.set(false); }

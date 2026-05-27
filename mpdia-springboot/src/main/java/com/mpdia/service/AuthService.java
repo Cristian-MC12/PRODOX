@@ -9,6 +9,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
+
 @Service
 @RequiredArgsConstructor
 public class AuthService {
@@ -21,10 +23,16 @@ public class AuthService {
         if (userRepository.existsByEmail(request.email())) {
             throw new IllegalArgumentException("El correo ya está registrado.");
         }
+        // Validar rol — solo se permiten los dos roles del sistema
+        String role = (request.role() != null &&
+                       List.of("scrum_master", "scrum_member").contains(request.role()))
+                      ? request.role()
+                      : "scrum_member";
+
         AppUser user = new AppUser();
         user.setEmail(request.email());
         user.setPasswordHash(passwordEncoder.encode(request.password()));
-        user.setRole("scrum_member");
+        user.setRole(role);
         userRepository.save(user);
 
         String token = jwtUtil.generateToken(user.getId().toString(), user.getEmail(), user.getRole());
