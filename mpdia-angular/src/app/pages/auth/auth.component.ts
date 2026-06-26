@@ -1,8 +1,8 @@
 // Autor: Cristian Santiago Martinez Cordoba — MPDIA
-import { Component } from '@angular/core';
+import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
-import { Router } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { AuthService } from '../../services/auth.service';
 
 @Component({
@@ -11,9 +11,8 @@ import { AuthService } from '../../services/auth.service';
   imports: [CommonModule, ReactiveFormsModule],
   template: `
     <div class="min-vh-100 d-flex align-items-center justify-content-center bg-light p-3">
-      <div style="width:100%;max-width:420px">
+      <div style="width:100%;max-width:440px">
 
-        <!-- Brand -->
         <div class="text-center mb-4">
           <div class="d-inline-flex align-items-center justify-content-center
                       bg-primary text-white rounded-3 mb-2"
@@ -24,11 +23,20 @@ import { AuthService } from '../../services/auth.service';
           <p class="text-muted small">Sistema de Medición de Productividad Ágil</p>
         </div>
 
+        <!-- Banner de invitación -->
+        @if (codigoInvitacion) {
+          <div class="alert alert-info d-flex align-items-center gap-2 mb-3 py-2">
+            <i class="bi bi-people-fill"></i>
+            <span class="small">
+              Fuiste invitado a un proyecto. <strong>Registrate e ingresá el código en la sección Proyectos.</strong>
+            </span>
+          </div>
+        }
+
         <div class="card shadow-sm">
           <div class="card-body p-4">
             <h5 class="card-title mb-3">Acceso al sistema</h5>
 
-            <!-- Tabs -->
             <ul class="nav nav-tabs mb-3" role="tablist">
               <li class="nav-item">
                 <button class="nav-link" [class.active]="tab === 'login'"
@@ -45,7 +53,6 @@ import { AuthService } from '../../services/auth.service';
             }
 
             <form [formGroup]="form" (ngSubmit)="submit()">
-
               <div class="mb-3">
                 <label class="form-label">Correo electrónico</label>
                 <input type="email" class="form-control"
@@ -64,7 +71,6 @@ import { AuthService } from '../../services/auth.service';
                 <div class="invalid-feedback">Mínimo 8 caracteres.</div>
               </div>
 
-              <!-- Rol: solo en registro -->
               @if (tab === 'register') {
                 <div class="mb-3">
                   <label class="form-label">Rol en el equipo</label>
@@ -75,9 +81,6 @@ import { AuthService } from '../../services/auth.service';
                     <option value="scrum_master">Scrum Master</option>
                   </select>
                   <div class="invalid-feedback">Seleccioná un rol.</div>
-                  <div class="form-text small text-muted">
-                    El Scrum Master puede verificar y aprobar parametrizaciones.
-                  </div>
                 </div>
               }
 
@@ -94,18 +97,24 @@ import { AuthService } from '../../services/auth.service';
     </div>
   `
 })
-export class AuthComponent {
+export class AuthComponent implements OnInit {
   tab: 'login' | 'register' = 'login';
   form: FormGroup;
   loading  = false;
   errorMsg = '';
+  codigoInvitacion = '';
 
   constructor(
     private fb: FormBuilder,
     private authService: AuthService,
-    private router: Router
+    private router: Router,
+    private route: ActivatedRoute
   ) {
     this.form = this.buildForm('login');
+  }
+
+  ngOnInit(): void {
+    // Legacy: query param ?codigo no longer auto-joins a team
   }
 
   get f() { return this.form.controls; }
@@ -139,8 +148,7 @@ export class AuthComponent {
     return this.fb.group({
       email:    ['', [Validators.required, Validators.email]],
       password: ['', [Validators.required, Validators.minLength(8)]],
-      role:     [tab === 'register' ? '' : null,
-                 tab === 'register' ? Validators.required : []]
+      role:     [tab === 'register' ? '' : null, tab === 'register' ? Validators.required : []]
     });
   }
 }

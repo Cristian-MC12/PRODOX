@@ -9,6 +9,7 @@ export interface MetricaSeleccionada {
   factorCategoria: string;
   metricaNombre: string;
   metricaDescripcion: string;
+  proyectoId: string | null;
   // Parametrización (se completa con GenAI o manualmente)
   parametrizacion?: Parametrizacion;
   estadoParametrizacion: 'sin_parametrizar' | 'parcial' | 'completa';

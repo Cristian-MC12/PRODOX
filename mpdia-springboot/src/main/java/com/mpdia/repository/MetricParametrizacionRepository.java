@@ -20,16 +20,48 @@ public interface MetricParametrizacionRepository extends JpaRepository<MetricPar
     /** Todas las parametrizaciones con un estado dado, ordenadas por fecha */
     List<MetricParametrizacion> findByStatusOrderByCreatedAtDesc(String status);
 
+    /** Parametrización existente del mismo usuario para la misma métrica (ranking global) */
+    Optional<MetricParametrizacion> findByUserIdAndMetricaId(String userId, UUID metricaId);
+
+    /** Parametrización existente del mismo usuario para el mismo factor (ranking global) */
+    Optional<MetricParametrizacion> findByUserIdAndFactor_Id(String userId, UUID factorId);
+
+    /** Parametrización existente del mismo usuario para la misma métrica y proyecto (legacy) */
+    Optional<MetricParametrizacion> findByUserIdAndMetricaIdAndProyectoId(String userId, UUID metricaId, UUID proyectoId);
+
+    /** Parametrización existente del mismo usuario para el mismo factor y proyecto (legacy) */
+    Optional<MetricParametrizacion> findByUserIdAndFactor_IdAndProyectoId(String userId, UUID factorId, UUID proyectoId);
+
     /**
-     * Top 3 parametrizaciones de un factor, ordenadas por fecha de creación descendente.
-     * Muestra todas las versiones guardadas (base y derivadas) para que el usuario
-     * pueda ver las diferentes formas en que se ha parametrizado esta métrica.
+     * Top 3 parametrizaciones de un factor — una por usuario (la más reciente de cada uno).
      */
     @Query("""
         SELECT p FROM MetricParametrizacion p
         WHERE p.factor.id = :factorId
+          AND p.createdAt = (
+              SELECT MAX(p2.createdAt) FROM MetricParametrizacion p2
+              WHERE p2.factor.id = :factorId AND p2.userId = p.userId
+          )
         ORDER BY p.createdAt DESC
         LIMIT 3
         """)
     List<MetricParametrizacion> findTop3BaseByFactorId(@Param("factorId") UUID factorId);
+
+    /**
+     * Top 3 parametrizaciones por metricaId — una por usuario (la más reciente de cada uno).
+     */
+    @Query("""
+        SELECT p FROM MetricParametrizacion p
+        WHERE p.metricaId = :metricaId
+          AND p.createdAt = (
+              SELECT MAX(p2.createdAt) FROM MetricParametrizacion p2
+              WHERE p2.metricaId = :metricaId AND p2.userId = p.userId
+          )
+        ORDER BY p.createdAt DESC
+        LIMIT 3
+        """)
+    List<MetricParametrizacion> findTop3ByMetricaId(@Param("metricaId") UUID metricaId);
+
+    /** Última parametrización por metricaId */
+    Optional<MetricParametrizacion> findTopByMetricaIdOrderByCreatedAtDesc(UUID metricaId);
 }

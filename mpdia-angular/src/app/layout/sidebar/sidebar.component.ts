@@ -1,8 +1,10 @@
 // Autor: Cristian Santiago Martinez Cordoba — MPDIA
-import { Component, signal } from '@angular/core';
-import { RouterLink, RouterLinkActive } from '@angular/router';
+import { Component, OnInit, OnDestroy, signal } from '@angular/core';
+import { RouterLink, RouterLinkActive, NavigationEnd, Router } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { AuthService } from '../../services/auth.service';
+import { ProyectoDto } from '../../models/proyecto.model';
+import { filter, Subscription } from 'rxjs';
 
 @Component({
   selector: 'app-sidebar',
@@ -10,12 +12,31 @@ import { AuthService } from '../../services/auth.service';
   imports: [CommonModule, RouterLink, RouterLinkActive],
   template: `
     <nav class="sidebar d-flex flex-column" [class.open]="open()">
+
       <!-- Brand -->
       <a routerLink="/" class="sidebar-brand">
         <i class="bi bi-speedometer2 me-2"></i>MPDIA
       </a>
 
-      <!-- Rol badge -->
+      <!-- Proyecto activo -->
+      @if (proyectoActivo()) {
+        <div class="px-3 pb-2">
+          <div class="small text-muted" style="font-size:0.7rem">Proyecto activo:</div>
+          <div class="small fw-semibold text-truncate">{{ proyectoActivo()!.nombre }}</div>
+          <div class="d-flex gap-1 mt-1 flex-wrap">
+            <span class="badge"
+                  [class]="proyectoActivo()!.metodo === 'scrum' ? 'bg-primary' : 'bg-info text-dark'"
+                  style="font-size:0.6rem">
+              {{ proyectoActivo()!.metodo === 'scrum' ? 'Scrum' : 'XP' }}
+            </span>
+            <span class="badge bg-light text-dark border" style="font-size:0.6rem">
+              {{ proyectoActivo()!.numeroSprints }} sprints
+            </span>
+          </div>
+        </div>
+      }
+
+      <!-- Rol del usuario -->
       <div class="px-3 pb-2">
         <span class="badge w-100 py-1"
               [class]="esScrumMaster() ? 'bg-primary' : 'bg-secondary'">
@@ -26,18 +47,61 @@ import { AuthService } from '../../services/auth.service';
 
       <!-- Nav links -->
       <ul class="nav flex-column mt-1 flex-grow-1">
-        @for (item of navItemsFiltrados(); track item.route) {
+        <!-- Proyectos siempre visible -->
+        <li class="nav-item">
+          <a class="nav-link" routerLink="/proyectos" routerLinkActive="active" (click)="close()">
+            <i class="bi bi-folder2-open"></i>Proyectos
+          </a>
+        </li>
+
+        @if (proyectoActivo()) {
+          <!-- Separador de fase -->
+          <li class="nav-item px-3 pt-2">
+            <small class="text-muted text-uppercase" style="font-size:0.65rem;letter-spacing:.05em">
+              Fases del proyecto
+            </small>
+          </li>
+
           <li class="nav-item">
-            <a class="nav-link"
-               [routerLink]="item.route"
-               routerLinkActive="active"
-               [routerLinkActiveOptions]="{ exact: item.route === '/' }"
-               (click)="close()">
-              <i class="bi {{ item.icon }}"></i>
-              {{ item.label }}
+            <a class="nav-link" routerLink="/planeacion" routerLinkActive="active" (click)="close()">
+              <i class="bi bi-layers"></i>
+              <span>Planeación</span>
+            </a>
+          </li>
+
+          <li class="nav-item">
+            <a class="nav-link" routerLink="/ejecucion" routerLinkActive="active" (click)="close()">
+              <i class="bi bi-pencil-square"></i>
+              <span>Ejecución</span>
+            </a>
+          </li>
+
+          <li class="nav-item">
+            <a class="nav-link" routerLink="/evaluacion" routerLinkActive="active" (click)="close()">
+              <i class="bi bi-bar-chart-line"></i>
+              <span>Evaluación</span>
+            </a>
+          </li>
+
+          <!-- Separador general -->
+          <li class="nav-item px-3 pt-2">
+            <small class="text-muted text-uppercase" style="font-size:0.65rem;letter-spacing:.05em">
+              General
+            </small>
+          </li>
+
+          <li class="nav-item">
+            <a class="nav-link" routerLink="/equipo" routerLinkActive="active" (click)="close()">
+              <i class="bi bi-people"></i>Equipo
             </a>
           </li>
         }
+
+        <li class="nav-item">
+          <a class="nav-link" routerLink="/configuracion" routerLinkActive="active" (click)="close()">
+            <i class="bi bi-robot"></i>Copiloto
+          </a>
+        </li>
       </ul>
 
       <!-- User / logout -->
@@ -55,27 +119,36 @@ import { AuthService } from '../../services/auth.service';
     </nav>
   `
 })
-export class SidebarComponent {
+export class SidebarComponent implements OnInit, OnDestroy {
   open = signal(false);
+  proyectoActivo = signal<ProyectoDto | null>(this.leerProyectoActivo());
 
-  private readonly allNavItems = [
-    { label: 'Selección',       icon: 'bi-layers',          route: '/seleccion',        roles: ['scrum_member', 'scrum_master'] },
-    { label: 'Resumen',         icon: 'bi-table',           route: '/resumen-seleccion',roles: ['scrum_member', 'scrum_master'] },
-    { label: 'Verificación SM', icon: 'bi-clipboard-check', route: '/verificacion',     roles: ['scrum_master'] },
-    { label: 'Copiloto',        icon: 'bi-robot',           route: '/configuracion',    roles: ['scrum_member', 'scrum_master'] },
-    { label: 'Equipo Scrum',    icon: 'bi-people',          route: '/equipo',           roles: ['scrum_member', 'scrum_master'] },
-    { label: 'Sprints',         icon: 'bi-calendar3',       route: '/sprints',          roles: ['scrum_member', 'scrum_master'] },
-  ];
+  private routerSub?: Subscription;
 
-  constructor(public auth: AuthService) {}
+  constructor(public auth: AuthService, private router: Router) {}
+
+  ngOnInit(): void {
+    // Actualizar proyecto activo en cada navegación (por si cambió en localStorage)
+    this.routerSub = this.router.events.pipe(
+      filter(e => e instanceof NavigationEnd)
+    ).subscribe(() => {
+      this.proyectoActivo.set(this.leerProyectoActivo());
+    });
+  }
+
+  ngOnDestroy(): void {
+    this.routerSub?.unsubscribe();
+  }
+
+  private leerProyectoActivo(): ProyectoDto | null {
+    try {
+      const raw = localStorage.getItem('mpdia_proyecto_activo');
+      return raw ? JSON.parse(raw) : null;
+    } catch { return null; }
+  }
 
   esScrumMaster(): boolean {
     return this.auth.currentUser()?.role === 'scrum_master';
-  }
-
-  navItemsFiltrados() {
-    const role = this.auth.currentUser()?.role ?? 'scrum_member';
-    return this.allNavItems.filter(item => item.roles.includes(role));
   }
 
   toggle(): void { this.open.update(v => !v); }

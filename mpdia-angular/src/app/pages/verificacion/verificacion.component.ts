@@ -8,6 +8,7 @@ import { catchError, of } from 'rxjs';
 import { ShellComponent } from '../../layout/shell/shell.component';
 import { AuthService } from '../../services/auth.service';
 import { MetricRankingService } from '../../services/metric-ranking.service';
+import { SeleccionService } from '../../services/seleccion.service';
 import { MetricParametrizacionBase } from '../../models/metric-ranking.model';
 import { environment } from '../../../environments/environment';
 
@@ -45,6 +46,21 @@ interface Pendiente {
         </div>
       } @else {
 
+        <!-- Breadcrumb -->
+        <nav aria-label="breadcrumb" class="mb-3">
+          <ol class="breadcrumb small mb-0">
+            <li class="breadcrumb-item">
+              <a href="#" (click)="$event.preventDefault(); router.navigate(['/planeacion'])">
+                <i class="bi bi-layers me-1"></i>Planeación
+              </a>
+            </li>
+            <li class="breadcrumb-item">
+              <a href="#" (click)="$event.preventDefault(); router.navigate(['/resumen-seleccion'])">Resumen</a>
+            </li>
+            <li class="breadcrumb-item active">Verificación</li>
+          </ol>
+        </nav>
+
         <p class="text-muted small mb-4">
           Revisá las parametrizaciones enviadas por el equipo y aprobá o rechazá cada una.
         </p>
@@ -81,7 +97,19 @@ interface Pendiente {
           <div class="alert py-2 small" [class]="alertClass">{{ alertMsg }}</div>
         }
 
-        <!-- Tabla de pendientes -->
+        <!-- Acciones rápidas cuando todo está verificado -->
+        @if (pendientes.length === 0 && aprobadas > 0) {
+          <div class="alert alert-success d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+            <div>
+              <i class="bi bi-check-circle-fill me-2"></i>
+              <strong>{{ aprobadas }} parametrización(es) aprobada(s).</strong>
+              Las variables están listas para registrar valores en Ejecución.
+            </div>
+            <button class="btn btn-success btn-sm" (click)="irAEjecucion()">
+              <i class="bi bi-pencil-square me-1"></i>Ir a Ejecución
+            </button>
+          </div>
+        }
         <div class="card">
           <div class="card-header fw-semibold small d-flex justify-content-between align-items-center">
             <span><i class="bi bi-clipboard-check me-1"></i>Parametrizaciones pendientes de revisión</span>
@@ -115,9 +143,10 @@ interface Pendiente {
                     @for (p of pendientes; track p.id) {
                       <tr>
                         <td>
-                          <span class="badge mb-1" [class]="categoryBadge(p.factorCategoria)"
+                          <span class="badge mb-1"
+                                [class]="categoryBadge(factorCategoriaNombre(p))"
                                 style="font-size:0.65rem">
-                            {{ p.factorCategoria }}
+                            {{ factorCategoriaNombre(p) }}
                           </span>
                           <div class="small fw-semibold">{{ p.factorNombre }}</div>
                         </td>
@@ -169,8 +198,8 @@ interface Pendiente {
                 </div>
                 <div class="modal-body">
                   <div class="mb-2">
-                    <span class="badge" [class]="categoryBadge(detalle.factorCategoria)">
-                      {{ detalle.factorCategoria }}
+                    <span class="badge" [class]="categoryBadge(factorCategoriaNombre(detalle))">
+                      {{ factorCategoriaNombre(detalle) }}
                     </span>
                     <strong class="ms-2">{{ detalle.factorNombre }}</strong>
                     <span class="text-muted small ms-2">— por {{ detalle.userEmail }}</span>
@@ -260,11 +289,18 @@ export class VerificacionComponent implements OnInit {
 
   constructor(
     public  auth: AuthService,
-    private http: HttpClient
+    public  router: Router,
+    private http: HttpClient,
+    private seleccionService: SeleccionService
   ) {}
 
   get esScrumMaster(): boolean {
     return this.auth.currentUser()?.role === 'scrum_master';
+  }
+
+  irAEjecucion(): void {
+    this.seleccionService.limpiar();
+    this.router.navigate(['/ejecucion']);
   }
 
   ngOnInit(): void {
@@ -273,7 +309,12 @@ export class VerificacionComponent implements OnInit {
 
   cargar(): void {
     this.cargando = true;
-    this.http.get<Pendiente[]>(`${this.apiBase}/metric-ranking/pendientes`).pipe(
+    const proyectoActivo = localStorage.getItem('mpdia_proyecto_activo');
+    const proyectoId = proyectoActivo ? JSON.parse(proyectoActivo)?.id ?? null : null;
+    const url = proyectoId
+      ? `${this.apiBase}/metric-ranking/pendientes?proyectoId=${proyectoId}`
+      : `${this.apiBase}/metric-ranking/pendientes`;
+    this.http.get<Pendiente[]>(url).pipe(
       catchError(() => of([]))
     ).subscribe(list => {
       this.pendientes = list;
@@ -326,12 +367,26 @@ export class VerificacionComponent implements OnInit {
 
   categoryBadge(cat: string): string {
     const map: Record<string, string> = {
+      'Calidad':       'bg-danger',
       'Productividad': 'bg-primary',
-      'Calidad':       'bg-warning text-dark',
       'Cumplimiento':  'bg-success',
+      'Flexibilidad':  'bg-warning text-dark',
       'Sociohumano':   'bg-info text-dark'
     };
     return map[cat] ?? 'bg-secondary';
+  }
+
+  /** Devuelve la categoría del factor, infiriéndola del nombre si el backend retorna "—" */
+  factorCategoriaNombre(p: Pendiente): string {
+    if (p.factorCategoria && p.factorCategoria !== '—') return p.factorCategoria;
+    // Inferir categoría por el nombre de la métrica
+    const nombre = (p.factorNombre ?? '').toLowerCase();
+    if (['defectos','errores','problemas','impedimentos','calidad','twq'].some(k => nombre.includes(k))) return 'Calidad';
+    if (['velocidad','capacidad','satisfacción','comprensión','productividad'].some(k => nombre.includes(k))) return 'Productividad';
+    if (['metas','requisitos','cumplimiento'].some(k => nombre.includes(k))) return 'Cumplimiento';
+    if (['proceso','aprendizaje','fracasos','flexibilidad','nmp','fat','gae'].some(k => nombre.includes(k))) return 'Flexibilidad';
+    if (['bienestar','ánimo','sociohumano'].some(k => nombre.includes(k))) return 'Sociohumano';
+    return p.factorCategoria ?? '—';
   }
 
   private showAlert(msg: string, cls: string): void {

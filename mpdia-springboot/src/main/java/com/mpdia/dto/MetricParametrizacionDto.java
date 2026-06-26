@@ -15,9 +15,10 @@ public record MetricParametrizacionDto(
     String  indicadorVariable,
     String  escala,
     UUID    metricaBaseId,
-    String  status,           // pendiente | aprobada | rechazada
+    String  status,
     String  revisadoPor,
     Instant revisadoAt,
     String  motivoRechazo,
+    UUID    proyectoId,
     Instant createdAt
 ) {}

@@ -1,3 +1,4 @@
+// Autor: Cristian Santiago Martinez Cordoba — MPDIA
 package com.mpdia.service;
 
 import com.mpdia.dto.AuthRequest;
@@ -8,6 +9,7 @@ import com.mpdia.security.JwtUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
@@ -16,14 +18,15 @@ import java.util.List;
 public class AuthService {
 
     private final AppUserRepository userRepository;
-    private final PasswordEncoder passwordEncoder;
-    private final JwtUtil jwtUtil;
+    private final PasswordEncoder   passwordEncoder;
+    private final JwtUtil           jwtUtil;
 
+    @Transactional
     public AuthResponse register(AuthRequest request) {
         if (userRepository.existsByEmail(request.email())) {
             throw new IllegalArgumentException("El correo ya está registrado.");
         }
-        // Validar rol — solo se permiten los dos roles del sistema
+
         String role = (request.role() != null &&
                        List.of("scrum_master", "scrum_member").contains(request.role()))
                       ? request.role()
@@ -33,10 +36,9 @@ public class AuthService {
         user.setEmail(request.email());
         user.setPasswordHash(passwordEncoder.encode(request.password()));
         user.setRole(role);
-        userRepository.save(user);
+        AppUser saved = userRepository.save(user);
 
-        String token = jwtUtil.generateToken(user.getId().toString(), user.getEmail(), user.getRole());
-        return new AuthResponse(token, user.getId().toString(), user.getEmail(), user.getRole());
+        return buildResponse(saved);
     }
 
     public AuthResponse login(AuthRequest request) {
@@ -47,6 +49,10 @@ public class AuthService {
             throw new IllegalArgumentException("Credenciales inválidas.");
         }
 
+        return buildResponse(user);
+    }
+
+    private AuthResponse buildResponse(AppUser user) {
         String token = jwtUtil.generateToken(user.getId().toString(), user.getEmail(), user.getRole());
         return new AuthResponse(token, user.getId().toString(), user.getEmail(), user.getRole());
     }

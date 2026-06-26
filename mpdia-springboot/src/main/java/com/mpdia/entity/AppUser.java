@@ -1,3 +1,4 @@
+// Autor: Cristian Santiago Martinez Cordoba — MPDIA
 package com.mpdia.entity;
 
 import jakarta.persistence.*;
@@ -24,7 +25,7 @@ public class AppUser {
     private String passwordHash;
 
     @Column(nullable = false)
-    private String role = "scrum_member"; // admin | scrum_member
+    private String role = "scrum_member";
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt = Instant.now();

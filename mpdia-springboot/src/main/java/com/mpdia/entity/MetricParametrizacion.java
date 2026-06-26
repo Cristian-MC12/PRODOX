@@ -23,8 +23,8 @@ public class MetricParametrizacion {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "factor_id", nullable = false)
+    @ManyToOne(fetch = FetchType.LAZY, optional = true)
+    @JoinColumn(name = "factor_id", nullable = true)
     private Factor factor;
 
     @Column(name = "user_id", nullable = false)
@@ -49,6 +49,10 @@ public class MetricParametrizacion {
     @Column(name = "metrica_base_id")
     private UUID metricaBaseId;
 
+    /** Métrica del catálogo asociada (para búsqueda desde el flujo de Planeación) */
+    @Column(name = "metrica_id")
+    private UUID metricaId;
+
     @Column(nullable = false, length = 30)
     private String status = "pendiente"; // pendiente | aprobada | rechazada
 
@@ -60,6 +64,9 @@ public class MetricParametrizacion {
 
     @Column(name = "motivo_rechazo", columnDefinition = "TEXT")
     private String motivoRechazo;
+
+    @Column(name = "proyecto_id")
+    private UUID proyectoId;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt = Instant.now();

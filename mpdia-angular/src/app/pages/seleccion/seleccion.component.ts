@@ -262,12 +262,16 @@ export class SeleccionComponent implements OnInit {
       });
     }
 
+    const proyectoActivo = localStorage.getItem('mpdia_proyecto_activo');
+    const proyectoId = proyectoActivo ? JSON.parse(proyectoActivo)?.id ?? null : null;
+
     this.seleccionService.agregar({
       factorId:           m.id,
       factorNombre:       m.name,
       factorCategoria:    m.category,
       metricaNombre:      m.name,
-      metricaDescripcion: m.description
+      metricaDescripcion: m.description,
+      proyectoId:         proyectoId
     });
   }
 

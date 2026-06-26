@@ -23,12 +23,14 @@ export interface MetricParametrizacionBase {
 }
 
 export interface GuardarParametrizacionRequest {
-  factorId:          string;
+  factorId?:         string | null;
   objetivo:          string;
   procedimiento:     string;
   indicadorVariable: string;
   escala:            string;
   metricaBaseId:     string | null;
+  proyectoId:        string | null;
+  metricaId?:        string | null;
 }
 
 export interface TopParametrizacion {

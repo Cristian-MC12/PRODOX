@@ -41,4 +41,14 @@ export class MetricRankingService {
   getTop3(factorId: string): Observable<TopParametrizacion[]> {
     return this.http.get<TopParametrizacion[]>(`${this.base}/${factorId}/top3`);
   }
+
+  /** Top 3 parametrizaciones por metricaId (flujo desde Planeación) */
+  getTop3ByMetricaId(metricaId: string): Observable<TopParametrizacion[]> {
+    return this.http.get<TopParametrizacion[]>(`${this.base}/metrica/${metricaId}/top3`);
+  }
+
+  /** Parametrización base por metricaId */
+  getBaseByMetricaId(metricaId: string): Observable<MetricParametrizacionBase> {
+    return this.http.get<MetricParametrizacionBase>(`${this.base}/metrica/${metricaId}/base`);
+  }
 }

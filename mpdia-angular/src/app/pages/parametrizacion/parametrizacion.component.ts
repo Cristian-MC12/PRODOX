@@ -23,6 +23,21 @@ import { environment } from '../../../environments/environment';
         <div class="text-center py-5 text-muted">Cargando...</div>
       } @else {
 
+        <!-- Breadcrumb de navegación -->
+        <nav aria-label="breadcrumb" class="mb-3">
+          <ol class="breadcrumb small mb-0">
+            <li class="breadcrumb-item">
+              <a href="#" (click)="$event.preventDefault(); router.navigate(['/planeacion'])">
+                <i class="bi bi-layers me-1"></i>Planeación
+              </a>
+            </li>
+            <li class="breadcrumb-item">
+              <a href="#" (click)="$event.preventDefault(); volver()">Resumen</a>
+            </li>
+            <li class="breadcrumb-item active">{{ metrica.metricaNombre }}</li>
+          </ol>
+        </nav>
+
         <!-- Info de la métrica -->
         <div class="card mb-4 border-primary">
           <div class="card-body py-3">
@@ -293,7 +308,7 @@ export class ParametrizacionComponent implements OnInit {
 
   constructor(
     private route: ActivatedRoute,
-    private router: Router,
+    public  router: Router,
     private seleccionService: SeleccionService,
     private rankingService: MetricRankingService,
     private http: HttpClient
@@ -309,14 +324,23 @@ export class ParametrizacionComponent implements OnInit {
       }
       // Cargar parametrización base del backend si existe
       if (this.metrica) {
-        this.rankingService.getBase(this.metrica.factorId).pipe(
-          catchError(() => of(null))
-        ).subscribe(base => this.parametrizacionBase = base);
+        const metricaId = this.metrica.factorId;
+        // Buscar primero por metricaId (flujo Planeación), luego por factorId (flujo Selección)
+        this.rankingService.getTop3ByMetricaId(metricaId).pipe(
+          catchError(() => of([] as TopParametrizacion[]))
+        ).subscribe(top => {
+          if (top.length > 0) {
+            this.top3 = top;
+          } else {
+            this.rankingService.getTop3(metricaId).pipe(
+              catchError(() => of([] as TopParametrizacion[]))
+            ).subscribe(t => this.top3 = t);
+          }
+        });
 
-        // Cargar top 3 parametrizaciones más usadas
-        this.rankingService.getTop3(this.metrica.factorId).pipe(
-          catchError(() => of([]))
-        ).subscribe(top => this.top3 = top);
+        this.rankingService.getBaseByMetricaId(metricaId).pipe(
+          catchError(() => this.rankingService.getBase(metricaId).pipe(catchError(() => of(null))))
+        ).subscribe(base => this.parametrizacionBase = base);
       }
     });
   }
@@ -402,14 +426,18 @@ export class ParametrizacionComponent implements OnInit {
     });
 
     // Guardar en el backend (persistencia compartida + ranking)
+    const proyectoActivo = localStorage.getItem('mpdia_proyecto_activo');
+    const proyectoId = proyectoActivo ? JSON.parse(proyectoActivo)?.id ?? null : null;
+
     this.rankingService.guardar({
-      factorId:          this.metrica.factorId,
+      factorId:          null,
       objetivo:          this.form.objetivo,
       procedimiento:     this.form.procedimiento,
       indicadorVariable: this.form.indicadorVariable,
       escala:            this.form.escala,
-      // Si se usó la base como plantilla, apuntar a ella
-      metricaBaseId: this.parametrizacionBase?.id ?? null
+      metricaBaseId:     this.parametrizacionBase?.id ?? null,
+      proyectoId:        proyectoId,
+      metricaId:         this.metrica.factorId  // desde Planeación, factorId contiene el metricaId
     }).pipe(
       catchError(() => of(null))
     ).subscribe(() => {

@@ -26,8 +26,9 @@ public class MetricRankingController {
 
     /** GET /api/metric-ranking/pendientes — parametrizaciones pendientes (solo Scrum Master) */
     @GetMapping("/pendientes")
-    public ResponseEntity<List<com.mpdia.dto.MetricParametrizacionDto>> pendientes() {
-        return ResponseEntity.ok(service.getPendientes());
+    public ResponseEntity<List<com.mpdia.dto.MetricParametrizacionDto>> pendientes(
+            @RequestParam(required = false) java.util.UUID proyectoId) {
+        return ResponseEntity.ok(service.getPendientesPorProyecto(proyectoId));
     }
 
     /** POST /api/metric-ranking/verificar — aprobar o rechazar (solo Scrum Master) */
@@ -56,6 +57,20 @@ public class MetricRankingController {
     @GetMapping("/{factorId}/base")
     public ResponseEntity<MetricParametrizacionDto> base(@PathVariable UUID factorId) {
         return service.getBase(factorId)
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.noContent().build());
+    }
+
+    /** GET /api/metric-ranking/metrica/{metricaId}/top3 — top 3 por metricaId */
+    @GetMapping("/metrica/{metricaId}/top3")
+    public ResponseEntity<List<com.mpdia.dto.TopParametrizacionDto>> top3ByMetrica(@PathVariable UUID metricaId) {
+        return ResponseEntity.ok(service.getTop3ByMetricaId(metricaId));
+    }
+
+    /** GET /api/metric-ranking/metrica/{metricaId}/base — base por metricaId */
+    @GetMapping("/metrica/{metricaId}/base")
+    public ResponseEntity<MetricParametrizacionDto> baseByMetrica(@PathVariable UUID metricaId) {
+        return service.getBaseByMetricaId(metricaId)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.noContent().build());
     }
