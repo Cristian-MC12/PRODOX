@@ -1,5 +1,8 @@
 package com.mpdia.dto;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+
+@JsonIgnoreProperties(ignoreUnknown = true)
 public record PropuestaParametrizacionDto(
     String titulo,
     String objetivo,
