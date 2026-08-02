@@ -12,6 +12,13 @@ mpdia-springboot/.mvn/wrapper/maven-wrapper.jar
 *.jar
 *.war
 
+# ─── Archivos de configuración sensibles ───────────────────
+mpdia-springboot/src/main/resources/application.properties
+mpdia-springboot/src/main/resources/application-prod.properties
+mpdia-springboot/src/main/resources/application-dev.properties
+*.env
+.env*
+
 # ─── IDEs ───────────────────────────────────────────────────
 .idea/
 *.iml
