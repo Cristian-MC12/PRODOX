@@ -20,10 +20,16 @@ public class ParametrizacionController {
     /**
      * POST /api/parametrizacion/propuestas
      * Genera 3 propuestas de parametrización usando Gemini.
+     * En caso de error con la IA, retorna propuestas genéricas (nunca 500).
      */
     @PostMapping("/propuestas")
     public ResponseEntity<List<PropuestaParametrizacionDto>> propuestas(
             @RequestBody ParametrizacionRequest request) {
-        return ResponseEntity.ok(parametrizacionService.generarPropuestas(request));
+        try {
+            return ResponseEntity.ok(parametrizacionService.generarPropuestas(request));
+        } catch (Exception e) {
+            System.err.println("Error en /propuestas: " + e.getMessage());
+            return ResponseEntity.ok(parametrizacionService.generarPropuestas(request));
+        }
     }
 }

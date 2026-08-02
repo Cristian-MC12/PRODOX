@@ -6,6 +6,7 @@ export interface ProyectoMetricaDto {
   nombre:        string;
   descripcion:   string | null;
   categoria:     string;
+  factor:        string | null;
   seleccionada:  boolean;
   aprobada:      boolean;
   aprobadaPor:   string | null;

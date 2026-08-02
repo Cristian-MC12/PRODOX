@@ -24,8 +24,44 @@ public class ParametrizacionService {
 
     public List<PropuestaParametrizacionDto> generarPropuestas(ParametrizacionRequest request) {
         String prompt = buildPrompt(request);
-        String raw    = geminiService.generate(prompt);
-        return parsePropuestas(raw, request);
+        try {
+            String raw = geminiService.generate(prompt);
+            return parsePropuestas(raw, request);
+        } catch (Exception e) {
+            System.err.println("=== ERROR GEMINI ===");
+            System.err.println(e.getMessage());
+            System.err.println("===================");
+            return fallbackPropuestas(request);
+        }
+    }
+
+    private List<PropuestaParametrizacionDto> fallbackPropuestas(ParametrizacionRequest r) {
+        return List.of(
+            new PropuestaParametrizacionDto(
+                "Conteo directo por sprint",
+                "Medir la cantidad total de " + r.metricaNombre() + " registrados durante el sprint.",
+                "Al cierre del sprint, el Scrum Master recopila y suma el valor de todos los miembros.",
+                r.metricaNombre() + " = suma de ocurrencias registradas en el sprint",
+                "Numérica entera ≥ 0",
+                "Propuesta estándar de medición directa."
+            ),
+            new PropuestaParametrizacionDto(
+                "Promedio por iteración",
+                "Calcular el promedio de " + r.metricaNombre() + " a lo largo de los sprints.",
+                "Suma de valores individuales dividido por el número de participantes.",
+                r.metricaNombre() + " promedio = Σ valores / n participantes",
+                "Decimal con 2 cifras, rango 0-100",
+                "Permite comparar tendencias entre sprints."
+            ),
+            new PropuestaParametrizacionDto(
+                "Escala de valoración",
+                "Evaluar " + r.metricaNombre() + " en una escala ordinal acordada por el equipo.",
+                "Cada miembro asigna un valor al finalizar el sprint según criterios definidos.",
+                r.metricaNombre() + " = valoración subjetiva del equipo",
+                "Escala ordinal 1-5 (1=muy bajo, 5=muy alto)",
+                "Útil para métricas cualitativas o de percepción."
+            )
+        );
     }
 
     private String buildPrompt(ParametrizacionRequest r) {

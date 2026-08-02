@@ -1,6 +1,7 @@
 // Autor: Cristian Santiago Martinez Cordoba — MPDIA
 package com.mpdia.service;
 
+import com.mpdia.dto.ActualizarFormulaRequest;
 import com.mpdia.dto.CrearVariableRequest;
 import com.mpdia.dto.VariableDto;
 import com.mpdia.entity.Metrica;
@@ -58,6 +59,18 @@ public class VariableService {
         variableRepo.save(v);
     }
 
+    @Transactional
+    public VariableDto actualizarFormula(UUID variableId, ActualizarFormulaRequest req) {
+        Variable v = variableRepo.findById(variableId)
+                .orElseThrow(() -> new IllegalArgumentException("Variable no encontrada."));
+        v.setFormulaTexto(req.formulaTexto());
+        v.setFormulaJson(req.formulaJson());
+        if (req.frecuenciaCaptura() != null) {
+            v.setFrecuenciaCaptura(req.frecuenciaCaptura());
+        }
+        return toDto(variableRepo.save(v));
+    }
+
     private VariableDto toDto(Variable v) {
         return new VariableDto(
                 v.getId(), v.getProyectoId(),
@@ -69,6 +82,10 @@ public class VariableService {
                 v.getTipoAlcance(), v.getFrecuencia(),
                 v.getCardinalidad(), v.getTipoDato(),
                 v.getEscalaMin(), v.getEscalaMax(),
-                v.getActiva(), v.getCreatedAt());
+                v.getActiva(), v.getCreatedAt(),
+                v.getFormulaTexto(),
+                v.getFormulaJson(),
+                v.getFrecuenciaCaptura(),
+                null, null, null); // objetivo, procedimiento, escalaDefinicion (no disponibles en este contexto)
     }
 }

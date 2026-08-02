@@ -299,7 +299,7 @@ export class EvaluacionComponent implements OnInit {
   tab: 'comparacion' | 'tendencias' | 'estadisticas' = 'comparacion';
   cargando = true;
 
-  readonly categorias = ['Calidad', 'Productividad', 'Cumplimiento', 'Flexibilidad', 'Sociohumano'];
+  readonly categorias = ['Significado', 'Flexibilidad', 'Impacto', 'Socio-Humano FSH'];
 
   constructor(
     public  router: Router,
@@ -406,9 +406,10 @@ export class EvaluacionComponent implements OnInit {
 
   badgeCat(cat: string): string {
     const map: Record<string, string> = {
-      'Calidad': 'bg-danger', 'Productividad': 'bg-primary',
-      'Cumplimiento': 'bg-success', 'Flexibilidad': 'bg-warning text-dark',
-      'Sociohumano': 'bg-info text-dark'
+      'Significado':      'bg-primary',
+      'Flexibilidad':     'bg-warning text-dark',
+      'Impacto':          'bg-danger',
+      'Socio-Humano FSH': 'bg-info text-dark'
     };
     return map[cat] ?? 'bg-secondary';
   }

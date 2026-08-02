@@ -23,6 +23,9 @@ public class Metrica {
     @Column(nullable = false, unique = true, length = 20)
     private String codigo;
 
+    @Column(length = 120)
+    private String factor;
+
     @Column(nullable = false, length = 120)
     private String nombre;
 

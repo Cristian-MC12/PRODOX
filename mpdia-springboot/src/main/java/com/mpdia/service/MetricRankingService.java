@@ -22,6 +22,10 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -49,9 +53,19 @@ public class MetricRankingService {
             // en Planeación para generar la variable de Ejecución
             if (p.getMetricaId() != null && p.getProyectoId() != null) {
                 try {
-                    planeacionService.aprobar(p.getProyectoId(), p.getMetricaId(), revisadoPor);
-                } catch (Exception ignored) {
-                    // Si ya estaba aprobada o no existe la selección, continuar sin error
+                    // Verificar si ya está aprobada antes de intentar aprobar
+                    var existing = planeacionService.listarSeleccionadas(p.getProyectoId()).stream()
+                            .filter(m -> m.metricaId().equals(p.getMetricaId()))
+                            .findFirst();
+                    
+                    if (existing.isEmpty() || !existing.get().aprobada()) {
+                        planeacionService.aprobar(p.getProyectoId(), p.getMetricaId(), revisadoPor);
+                    }
+                } catch (Exception e) {
+                    // Log para diagnosticar si falla la generación de variable
+                    System.err.println("[VERIFICAR] Error al aprobar métrica en Planeación: "
+                            + e.getMessage() + " | metricaId=" + p.getMetricaId()
+                            + " | proyectoId=" + p.getProyectoId());
                 }
             }
         } else if ("rechazar".equals(req.accion())) {
@@ -121,7 +135,10 @@ public class MetricRankingService {
             p.setUserId(userId);
             p.setUserEmail(userEmail);
             p.setProyectoId(req.proyectoId());
-            p.setMetricaId(req.metricaId());
+            // Solo asignar metricaId si realmente existe en la tabla metricas
+            UUID metricaId = req.metricaId() != null && metricaRepo.existsById(req.metricaId())
+                    ? req.metricaId() : null;
+            p.setMetricaId(metricaId);
         }
 
         // Actualizar campos (upsert)
@@ -137,18 +154,24 @@ public class MetricRankingService {
 
         MetricParametrizacion saved = parametrizacionRepo.save(p);
 
-        // Solo actualizar ranking si hay factor asociado
+        // Actualizar ranking solo si hay factor y evitar conflictos
         if (factor != null) {
-            MetricUsoRanking ranking = rankingRepo.findById(factor.getId())
-                    .orElseGet(() -> {
-                        MetricUsoRanking r = new MetricUsoRanking();
-                        r.setFactor(factor);
-                        r.setUsos(0);
-                        return r;
-                    });
-            ranking.setParametrizacionId(saved.getId());
-            ranking.setUpdatedAt(Instant.now());
-            rankingRepo.save(ranking);
+            try {
+                MetricUsoRanking ranking = rankingRepo.findById(factor.getId())
+                        .orElseGet(() -> {
+                            MetricUsoRanking r = new MetricUsoRanking();
+                            r.setFactor(factor);
+                            r.setUsos(0);
+                            return r;
+                        });
+                ranking.setParametrizacionId(saved.getId());
+                ranking.setUsos(ranking.getUsos() + 1);
+                ranking.setUpdatedAt(Instant.now());
+                rankingRepo.save(ranking);
+            } catch (Exception e) {
+                // Ignorar errores de ranking para no bloquear la parametrización
+                System.err.println("[GUARDAR] Error al actualizar ranking: " + e.getMessage());
+            }
         }
 
         return toDto(saved, factor);
@@ -203,17 +226,15 @@ public class MetricRankingService {
 
     /**
      * Top 3 parametrizaciones por metricaId (flujo desde Planeación).
+     * Los "usos" se calculan como la cantidad total de parametrizaciones
+     * guardadas para esta métrica (indica popularidad).
      */
     public List<TopParametrizacionDto> getTop3ByMetricaId(UUID metricaId) {
-        Map<UUID, Integer> usosMap = rankingRepo.findAll().stream()
-                .filter(r -> r.getParametrizacionId() != null)
-                .collect(Collectors.toMap(
-                        MetricUsoRanking::getParametrizacionId,
-                        MetricUsoRanking::getUsos,
-                        (a, b) -> a
-                ));
+        List<MetricParametrizacion> todas = parametrizacionRepo.findTop3ByMetricaId(metricaId);
+        // Contar usos totales para esta métrica (todas las parametrizaciones de todos los usuarios)
+        long usosTotales = parametrizacionRepo.countByMetricaId(metricaId);
 
-        return parametrizacionRepo.findTop3ByMetricaId(metricaId).stream()
+        return todas.stream()
                 .map(p -> new TopParametrizacionDto(
                         p.getId(),
                         p.getUserEmail(),
@@ -221,7 +242,7 @@ public class MetricRankingService {
                         p.getProcedimiento(),
                         p.getIndicadorVariable(),
                         p.getEscala(),
-                        usosMap.getOrDefault(p.getId(), 0),
+                        (int) usosTotales,
                         p.getCreatedAt()
                 ))
                 .toList();

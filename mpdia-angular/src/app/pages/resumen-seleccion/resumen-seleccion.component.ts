@@ -112,9 +112,16 @@ import { MetricaSeleccionada } from '../../models/seleccion.model';
                       </td>
                       <td class="text-center align-middle">
                         <div class="d-flex gap-1 justify-content-center">
+                          @if (s.estadoParametrizacion !== 'sin_parametrizar') {
+                            <button class="btn btn-sm btn-outline-info py-0 px-2"
+                                    (click)="toggleDetalle(s.id)"
+                                    title="Ver detalle de parametrización">
+                              <i class="bi" [class.bi-eye]="!esDetalleVisible(s.id)" [class.bi-eye-slash]="esDetalleVisible(s.id)"></i>
+                            </button>
+                          }
                           <button class="btn btn-sm btn-outline-primary py-0 px-2"
                                   (click)="parametrizar(s)"
-                                  title="Parametrizar con GenAI">
+                                  [title]="s.estadoParametrizacion === 'sin_parametrizar' ? 'Parametrizar con GenAI' : 'Editar parametrización'">
                             <i class="bi bi-stars"></i>
                           </button>
                           <button class="btn btn-sm btn-outline-danger py-0 px-2"
@@ -125,6 +132,31 @@ import { MetricaSeleccionada } from '../../models/seleccion.model';
                         </div>
                       </td>
                     </tr>
+                    <!-- Fila expandible con detalle de parametrización -->
+                    @if (esDetalleVisible(s.id) && s.parametrizacion) {
+                      <tr class="table-active">
+                        <td colspan="4" class="py-3 px-4">
+                          <div class="small">
+                            <div class="mb-3">
+                              <strong class="text-primary"><i class="bi bi-bullseye me-1"></i>Objetivo:</strong>
+                              <p class="mb-0 mt-1 text-muted">{{ s.parametrizacion.objetivo }}</p>
+                            </div>
+                            <div class="mb-3">
+                              <strong class="text-primary"><i class="bi bi-list-ol me-1"></i>Procedimiento:</strong>
+                              <p class="mb-0 mt-1 text-muted">{{ s.parametrizacion.procedimiento }}</p>
+                            </div>
+                            <div class="mb-3">
+                              <strong class="text-primary"><i class="bi bi-speedometer2 me-1"></i>Indicador/Variable:</strong>
+                              <p class="mb-0 mt-1 text-muted">{{ s.parametrizacion.indicadorVariable }}</p>
+                            </div>
+                            <div>
+                              <strong class="text-primary"><i class="bi bi-bar-chart-steps me-1"></i>Escala:</strong>
+                              <p class="mb-0 mt-1 text-muted">{{ s.parametrizacion.escala }}</p>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    }
                   }
                 </tbody>
               </table>
@@ -167,6 +199,7 @@ export class ResumenSeleccionComponent implements OnInit {
   seleccionadas: MetricaSeleccionada[] = [];
   enviando  = false;
   errorMsg  = '';
+  detallesVisibles = new Set<string>(); // IDs de métricas con detalle visible
 
   constructor(
     public  router: Router,
@@ -190,6 +223,18 @@ export class ResumenSeleccionComponent implements OnInit {
     this.seleccionService.quitar(id);
   }
 
+  toggleDetalle(id: string): void {
+    if (this.detallesVisibles.has(id)) {
+      this.detallesVisibles.delete(id);
+    } else {
+      this.detallesVisibles.add(id);
+    }
+  }
+
+  esDetalleVisible(id: string): boolean {
+    return this.detallesVisibles.has(id);
+  }
+
   /** Guarda todas las parametrizaciones completas en el backend y navega a verificación */
   aceptar(): void {
     const proyectoActivo = localStorage.getItem('mpdia_proyecto_activo');
@@ -199,7 +244,7 @@ export class ResumenSeleccionComponent implements OnInit {
       s.estadoParametrizacion === 'completa' && s.parametrizacion
     );
 
-    if (completas.length === 0) return;
+    if (completas.length === 0 || !proyectoId) return;
 
     this.enviando = true;
     this.errorMsg = '';
@@ -219,8 +264,9 @@ export class ResumenSeleccionComponent implements OnInit {
 
     forkJoin(guardados$).subscribe(() => {
       this.enviando = false;
-      this.seleccionService.limpiar();
-      this.router.navigate(['/verificacion']);
+      this.seleccionService.limpiar(); // Limpiar localStorage
+      // Navegar a la siguiente fase
+      this.router.navigate(['/planeacion']);
     });
   }
 
@@ -230,8 +276,10 @@ export class ResumenSeleccionComponent implements OnInit {
 
   categoryBadge(cat: string): string {
     const map: Record<string, string> = {
-      'Productividad': 'bg-primary', 'Calidad': 'bg-warning text-dark',
-      'Cumplimiento':  'bg-success',  'Sociohumano': 'bg-info text-dark'
+      'Significado':      'bg-primary',
+      'Flexibilidad':     'bg-warning text-dark',
+      'Impacto':          'bg-danger',
+      'Socio-Humano FSH': 'bg-info text-dark'
     };
     return map[cat] ?? 'bg-secondary';
   }

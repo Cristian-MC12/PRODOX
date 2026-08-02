@@ -10,6 +10,7 @@ public record ProyectoMetricaDto(
     String  nombre,
     String  descripcion,
     String  categoria,
+    String  factor,
     boolean seleccionada,
     boolean aprobada,
     String  aprobadaPor,

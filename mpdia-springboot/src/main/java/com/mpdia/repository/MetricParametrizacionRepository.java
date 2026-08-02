@@ -64,4 +64,10 @@ public interface MetricParametrizacionRepository extends JpaRepository<MetricPar
 
     /** Última parametrización por metricaId */
     Optional<MetricParametrizacion> findTopByMetricaIdOrderByCreatedAtDesc(UUID metricaId);
+
+    /** Contar total de parametrizaciones para una métrica (popularidad/ranking) */
+    long countByMetricaId(UUID metricaId);
+
+    /** Verificar si existe parametrización para una métrica en un proyecto */
+    boolean existsByMetricaIdAndProyectoId(UUID metricaId, UUID proyectoId);
 }

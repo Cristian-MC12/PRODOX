@@ -17,10 +17,11 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class PlaneacionService {
 
-    private final MetricaRepository        metricaRepo;
-    private final ProyectoMetricaRepository pmRepo;
-    private final VariableRepository        variableRepo;
-    private final ProyectoRepository        proyectoRepo;
+    private final MetricaRepository               metricaRepo;
+    private final ProyectoMetricaRepository       pmRepo;
+    private final VariableRepository              variableRepo;
+    private final ProyectoRepository              proyectoRepo;
+    private final MetricParametrizacionRepository parametrizacionRepo;
 
     // ── Consultas ─────────────────────────────────────────────────────────
 
@@ -37,6 +38,7 @@ public class PlaneacionService {
                     return new ProyectoMetricaDto(
                             m.getId(), m.getCodigo(), m.getNombre(), m.getDescripcion(),
                             m.getCategoria().getNombre(),
+                            m.getFactor(),
                             pm != null,
                             pm != null && pm.getAprobada(),
                             pm != null ? pm.getAprobadaPor() : null,
@@ -55,6 +57,7 @@ public class PlaneacionService {
                     return new ProyectoMetricaDto(
                             m.getId(), m.getCodigo(), m.getNombre(), m.getDescripcion(),
                             m.getCategoria().getNombre(),
+                            m.getFactor(),
                             true,
                             pm.getAprobada(),
                             pm.getAprobadaPor(), pm.getAprobadaAt(),
@@ -146,20 +149,22 @@ public class PlaneacionService {
 
     /**
      * Sincroniza variables: genera las que faltan para métricas ya aprobadas.
+     * También auto-aprueba métricas seleccionadas que ya tienen parametrización.
      * Útil para recuperar variables que no se crearon por bugs previos.
      */
     @Transactional
     public List<VariableDto> sincronizarVariables(UUID proyectoId) {
+        autoAprobarMetricasConParametrizacion(proyectoId, "sistema-sync");
+
+        // Generar variables para todas las aprobadas
         List<ProyectoMetrica> aprobadas = pmRepo.findByIdProyectoIdAndAprobadaTrue(proyectoId);
 
         for (ProyectoMetrica pm : aprobadas) {
             UUID metricaId = pm.getId().getMetricaId();
-            // Si no existe variable activa, regenerarla
             boolean existe = variableRepo.existsByProyectoIdAndMetrica_Id(proyectoId, metricaId);
             if (!existe) {
                 generarVariable(proyectoId, pm.getMetrica());
             } else {
-                // Si existe pero está inactiva, reactivarla
                 variableRepo.findByProyectoIdAndMetrica_Id(proyectoId, metricaId)
                         .filter(v -> !v.getActiva())
                         .ifPresent(v -> { v.setActiva(true); variableRepo.save(v); });
@@ -168,19 +173,59 @@ public class PlaneacionService {
         return listarVariables(proyectoId);
     }
 
+    /**
+     * Auto-aprueba métricas seleccionadas que tienen parametrización asociada
+     */
+    private void autoAprobarMetricasConParametrizacion(UUID proyectoId, String aprobadaPor) {
+        List<ProyectoMetrica> seleccionadas = pmRepo.findByIdProyectoId(proyectoId);
+        for (ProyectoMetrica pm : seleccionadas) {
+            if (!pm.getAprobada()) {
+                UUID metricaId = pm.getId().getMetricaId();
+                // Verificar si existe parametrización (sin importar el status)
+                boolean tieneParam = parametrizacionRepo.existsByMetricaIdAndProyectoId(metricaId, proyectoId);
+                if (tieneParam) {
+                    pm.setAprobada(true);
+                    pm.setAprobadaPor(aprobadaPor);
+                    pm.setAprobadaAt(Instant.now());
+                    pmRepo.save(pm);
+                    
+                    // Generar variable si no existe
+                    if (!variableRepo.existsByProyectoIdAndMetrica_Id(proyectoId, metricaId)) {
+                        generarVariable(proyectoId, pm.getMetrica());
+                    } else {
+                        // Reactivar si existe pero está inactiva
+                        variableRepo.findByProyectoIdAndMetrica_Id(proyectoId, metricaId)
+                                .filter(v -> !v.getActiva())
+                                .ifPresent(v -> { v.setActiva(true); variableRepo.save(v); });
+                    }
+                }
+            }
+        }
+    }
+
     // ── Helpers ──────────────────────────────────────────────────────────
 
     private VariableDto generarVariable(UUID proyectoId, Metrica m) {
         String categoria = m.getCategoria().getNombre().toLowerCase();
-        String alcance   = categoria.equals("sociohumano") ? "individual" : "grupal";
-        String tipoDato  = categoria.equals("sociohumano")  ? "escala"    : "numerico";
+        String alcance   = categoria.contains("socio") ? "individual" : "grupal";
+        String tipoDato  = categoria.contains("socio") ? "escala"     : "numerico";
+        
+        // Mapear categoría a tipo_indicador válido según CHECK constraint
+        String tipoIndicador;
+        switch (categoria) {
+            case "significado" -> tipoIndicador = "cumplimiento";
+            case "impacto" -> tipoIndicador = "productividad";
+            case "flexibilidad" -> tipoIndicador = "flexibilidad";
+            case "socio-humano fsh" -> tipoIndicador = "sociohumano";
+            default -> tipoIndicador = "calidad";
+        }
 
         Variable v = new Variable();
         v.setProyectoId(proyectoId);
         v.setMetrica(m);
         v.setNombre(m.getNombre());
         v.setDescripcion(m.getDescripcion());
-        v.setTipoIndicador(categoria);
+        v.setTipoIndicador(tipoIndicador);
         v.setTipoAlcance(alcance);
         v.setFrecuencia("por_sprint");
         v.setCardinalidad("unico");
@@ -193,6 +238,22 @@ public class PlaneacionService {
     }
 
     private VariableDto toVariableDto(Variable v) {
+        // Buscar parametrización asociada para obtener objetivo, procedimiento y escala
+        String objetivo = null;
+        String procedimiento = null;
+        String escalaDefinicion = null;
+        
+        // Buscar la parametrización más reciente para esta métrica y proyecto
+        var parametrizacion = parametrizacionRepo.findTopByMetricaIdOrderByCreatedAtDesc(v.getMetrica().getId())
+                .filter(p -> p.getProyectoId() != null && p.getProyectoId().equals(v.getProyectoId()))
+                .or(() -> parametrizacionRepo.findTopByMetricaIdOrderByCreatedAtDesc(v.getMetrica().getId()));
+        
+        if (parametrizacion.isPresent()) {
+            objetivo = parametrizacion.get().getObjetivo();
+            procedimiento = parametrizacion.get().getProcedimiento();
+            escalaDefinicion = parametrizacion.get().getEscala();
+        }
+        
         return new VariableDto(
                 v.getId(), v.getProyectoId(),
                 v.getMetrica().getId(),
@@ -203,6 +264,8 @@ public class PlaneacionService {
                 v.getTipoAlcance(), v.getFrecuencia(),
                 v.getCardinalidad(), v.getTipoDato(),
                 v.getEscalaMin(), v.getEscalaMax(),
-                v.getActiva(), v.getCreatedAt());
+                v.getActiva(), v.getCreatedAt(),
+                v.getFormulaTexto(), v.getFormulaJson(), v.getFrecuenciaCaptura(),
+                objetivo, procedimiento, escalaDefinicion);
     }
 }

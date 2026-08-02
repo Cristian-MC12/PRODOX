@@ -37,12 +37,31 @@ public class GeminiService {
 
         String url = apiUrl + "?key=" + apiKey;
 
-        String response = restClient.post()
-                .uri(url)
-                .header("Content-Type", "application/json")
-                .body(body)
-                .retrieve()
-                .body(String.class);
+        String response;
+        try {
+            response = restClient.post()
+                    .uri(url)
+                    .header("Content-Type", "application/json")
+                    .body(body)
+                    .retrieve()
+                    .onStatus(status -> status.isError(), (req, res) -> {
+                        byte[] bytes;
+                        try { bytes = res.getBody().readAllBytes(); } catch (Exception ex) { bytes = new byte[0]; }
+                        String errorBody = new String(bytes);
+                        System.err.println("=== GEMINI HTTP " + res.getStatusCode() + " ===");
+                        System.err.println(errorBody);
+                        System.err.println("===========================================");
+                        throw new RuntimeException("Gemini error " + res.getStatusCode() + ": " + errorBody);
+                    })
+                    .body(String.class);
+        } catch (RuntimeException e) {
+            throw e;
+        } catch (Exception e) {
+            System.err.println("=== GEMINI ERROR ===");
+            System.err.println(e.getMessage());
+            System.err.println("===================");
+            throw new RuntimeException("Error al llamar Gemini: " + e.getMessage());
+        }
 
         try {
             JsonNode root = mapper.readTree(response);
@@ -56,7 +75,12 @@ public class GeminiService {
                     text = part.path("text").asText();
                 }
             }
+            if (text.isBlank()) {
+                throw new RuntimeException("Gemini devolvió texto vacío. Response: " + response);
+            }
             return text;
+        } catch (RuntimeException e) {
+            throw e;
         } catch (Exception e) {
             throw new RuntimeException("Error al procesar respuesta de Gemini: " + e.getMessage());
         }

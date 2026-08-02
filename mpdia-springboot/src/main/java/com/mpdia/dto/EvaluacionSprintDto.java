@@ -14,5 +14,9 @@ public record EvaluacionSprintDto(
     BigDecimal promedio,
     BigDecimal min,
     BigDecimal max,
-    Integer    totalRegistros
+    Integer    totalRegistros,
+    /** Fórmula con la que se midió (contexto para el evaluador) */
+    String     formulaTexto,
+    /** Frecuencia con que se capturó */
+    String     frecuenciaCaptura
 ) {}

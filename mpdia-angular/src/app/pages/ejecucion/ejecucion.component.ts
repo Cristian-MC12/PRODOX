@@ -197,7 +197,37 @@ interface FormValor {
                       <tbody>
                         @for (fv of formsGrupalFiltrados; track fv.variableId) {
                           <tr [class.table-success]="fv.yaRegistrado">
-                            <td class="ps-3 fw-semibold small">{{ nombreVariable(fv.variableId) }}</td>
+                            <td class="ps-3 fw-semibold small">
+                              <div class="d-flex align-items-center gap-2">
+                                <span>{{ nombreVariable(fv.variableId) }}</span>
+                                @if (tieneInfoContextual(fv.variableId)) {
+                                  <button type="button" 
+                                          class="btn btn-sm btn-link p-0" 
+                                          (click)="toggleInfo(fv.variableId)"
+                                          [title]="isInfoExpanded(fv.variableId) ? 'Ocultar' : 'Ver guía'">
+                                    <i class="bi" 
+                                       [class.bi-info-circle]="!isInfoExpanded(fv.variableId)"
+                                       [class.bi-info-circle-fill]="isInfoExpanded(fv.variableId)"
+                                       [class.text-primary]="!isInfoExpanded(fv.variableId)"
+                                       [class.text-success]="isInfoExpanded(fv.variableId)"></i>
+                                  </button>
+                                }
+                              </div>
+                              @if (isInfoExpanded(fv.variableId)) {
+                                <div class="alert alert-info py-2 px-2 small mt-2 mb-0" style="font-weight:normal">
+                                  @if (getObjetivo(fv.variableId)) {
+                                    <div class="mb-1"><strong>🎯 Objetivo:</strong> {{ getObjetivo(fv.variableId) }}</div>
+                                  }
+                                  @if (getProcedimiento(fv.variableId)) {
+                                    <div class="mb-1"><strong>📏 Como medir:</strong> {{ getProcedimiento(fv.variableId) }}</div>
+                                  }
+                                  @if (getEscalaDefinicion(fv.variableId)) {
+                                    <div class="mb-1"><strong>📊 Escala:</strong> {{ getEscalaDefinicion(fv.variableId) }}</div>
+                                  }
+                                  <div><strong>📅 Frecuencia:</strong> {{ getFrecuenciaTexto(fv.variableId) }} <span class="text-muted">(IA)</span></div>
+                                </div>
+                              }
+                            </td>
                             <td>
                               <span class="badge" style="font-size:.6rem"
                                     [class]="badgeCat(categoriaVariable(fv.variableId))">
@@ -301,7 +331,37 @@ interface FormValor {
                       <tbody>
                         @for (fv of formsIndividualFiltrados; track fv.variableId) {
                           <tr [class.table-success]="fv.yaRegistrado">
-                            <td class="ps-3 fw-semibold small">{{ nombreVariable(fv.variableId) }}</td>
+                            <td class="ps-3 fw-semibold small">
+                              <div class="d-flex align-items-center gap-2">
+                                <span>{{ nombreVariable(fv.variableId) }}</span>
+                                @if (tieneInfoContextual(fv.variableId)) {
+                                  <button type="button" 
+                                          class="btn btn-sm btn-link p-0" 
+                                          (click)="toggleInfo(fv.variableId)"
+                                          [title]="isInfoExpanded(fv.variableId) ? 'Ocultar' : 'Ver guía'">
+                                    <i class="bi" 
+                                       [class.bi-info-circle]="!isInfoExpanded(fv.variableId)"
+                                       [class.bi-info-circle-fill]="isInfoExpanded(fv.variableId)"
+                                       [class.text-primary]="!isInfoExpanded(fv.variableId)"
+                                       [class.text-success]="isInfoExpanded(fv.variableId)"></i>
+                                  </button>
+                                }
+                              </div>
+                              @if (isInfoExpanded(fv.variableId)) {
+                                <div class="alert alert-info py-2 px-2 small mt-2 mb-0" style="font-weight:normal">
+                                  @if (getObjetivo(fv.variableId)) {
+                                    <div class="mb-1"><strong>🎯 Objetivo:</strong> {{ getObjetivo(fv.variableId) }}</div>
+                                  }
+                                  @if (getProcedimiento(fv.variableId)) {
+                                    <div class="mb-1"><strong>📏 Como medir:</strong> {{ getProcedimiento(fv.variableId) }}</div>
+                                  }
+                                  @if (getEscalaDefinicion(fv.variableId)) {
+                                    <div class="mb-1"><strong>📊 Escala:</strong> {{ getEscalaDefinicion(fv.variableId) }}</div>
+                                  }
+                                  <div><strong>📅 Frecuencia:</strong> {{ getFrecuenciaTexto(fv.variableId) }} <span class="text-muted">(IA)</span></div>
+                                </div>
+                              }
+                            </td>
                             <td>
                               <span class="badge" style="font-size:.6rem"
                                     [class]="badgeCat(categoriaVariable(fv.variableId))">
@@ -432,6 +492,7 @@ export class EjecucionComponent implements OnInit {
   cargando  = false;
   guardando = false;
   sincronizando = false;
+  expandedInfo: Set<string> = new Set(); // Control de info expandida
 
   alertMsg   = signal('');
   alertClass = signal('alert-success');
@@ -608,5 +669,45 @@ export class EjecucionComponent implements OnInit {
   private alert(msg: string, cls: string): void {
     this.alertMsg.set(msg); this.alertClass.set(cls);
     setTimeout(() => this.alertMsg.set(''), 4000);
+  }
+
+  // Métodos para información de parametrización (guía contextual)
+  getObjetivo(id: string): string { return this.variables.find(v => v.id === id)?.objetivo ?? ''; }
+  getProcedimiento(id: string): string { return this.variables.find(v => v.id === id)?.procedimiento ?? ''; }
+  getEscalaDefinicion(id: string): string { return this.variables.find(v => v.id === id)?.escalaDefinicion ?? ''; }
+  getFrecuenciaCaptura(id: string): string { return this.variables.find(v => v.id === id)?.frecuenciaCaptura ?? 'por_sprint'; }
+  getFrecuenciaTexto(id: string): string { 
+    const freq = this.getFrecuenciaCaptura(id);
+    const map: Record<string, string> = {
+      'por_sprint': 'Al finalizar sprint',
+      'semanal': 'Una vez por semana',
+      'diaria': 'Diariamente',
+      'ilimitada': 'Cuando ocurra el evento'
+    };
+    return map[freq] || freq;
+  }
+  tieneInfoContextual(id: string): boolean { 
+    const v = this.variables.find(x => x.id === id); 
+    return !!(v?.objetivo || v?.procedimiento || v?.escalaDefinicion); 
+  }
+  getTooltipTexto(id: string): string {
+    const partes: string[] = [];
+    if (this.getObjetivo(id)) partes.push('Objetivo: ' + this.getObjetivo(id));
+    if (this.getProcedimiento(id)) partes.push('Como medir: ' + this.getProcedimiento(id));
+    if (this.getEscalaDefinicion(id)) partes.push('Escala: ' + this.getEscalaDefinicion(id));
+    if (this.getFrecuenciaTexto(id)) partes.push('Frecuencia: ' + this.getFrecuenciaTexto(id));
+    return partes.join('\\n');
+  }
+
+  toggleInfo(id: string): void {
+    if (this.expandedInfo.has(id)) {
+      this.expandedInfo.delete(id);
+    } else {
+      this.expandedInfo.add(id);
+    }
+  }
+
+  isInfoExpanded(id: string): boolean {
+    return this.expandedInfo.has(id);
   }
 }

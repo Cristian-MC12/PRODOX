@@ -367,11 +367,10 @@ export class VerificacionComponent implements OnInit {
 
   categoryBadge(cat: string): string {
     const map: Record<string, string> = {
-      'Calidad':       'bg-danger',
-      'Productividad': 'bg-primary',
-      'Cumplimiento':  'bg-success',
-      'Flexibilidad':  'bg-warning text-dark',
-      'Sociohumano':   'bg-info text-dark'
+      'Significado':      'bg-primary',
+      'Flexibilidad':     'bg-warning text-dark',
+      'Impacto':          'bg-danger',
+      'Socio-Humano FSH': 'bg-info text-dark'
     };
     return map[cat] ?? 'bg-secondary';
   }
@@ -379,13 +378,12 @@ export class VerificacionComponent implements OnInit {
   /** Devuelve la categoría del factor, infiriéndola del nombre si el backend retorna "—" */
   factorCategoriaNombre(p: Pendiente): string {
     if (p.factorCategoria && p.factorCategoria !== '—') return p.factorCategoria;
-    // Inferir categoría por el nombre de la métrica
     const nombre = (p.factorNombre ?? '').toLowerCase();
-    if (['defectos','errores','problemas','impedimentos','calidad','twq'].some(k => nombre.includes(k))) return 'Calidad';
-    if (['velocidad','capacidad','satisfacción','comprensión','productividad'].some(k => nombre.includes(k))) return 'Productividad';
-    if (['metas','requisitos','cumplimiento'].some(k => nombre.includes(k))) return 'Cumplimiento';
+    if (['defectos','errores','calidad','twq','impedimentos','problemas'].some(k => nombre.includes(k))) return 'Impacto';
+    if (['velocidad','capacidad','satisfacción cliente','comprensión','roles'].some(k => nombre.includes(k))) return 'Significado';
+    if (['metas','requisitos','cumplimiento','alcance'].some(k => nombre.includes(k))) return 'Impacto';
     if (['proceso','aprendizaje','fracasos','flexibilidad','nmp','fat','gae'].some(k => nombre.includes(k))) return 'Flexibilidad';
-    if (['bienestar','ánimo','sociohumano'].some(k => nombre.includes(k))) return 'Sociohumano';
+    if (['bienestar','ánimo','satisfacción equipo','atmósfera','confianza','compromiso','motivación','comunicación','liderazgo','orgullo','habilidades','poder','configuración'].some(k => nombre.includes(k))) return 'Socio-Humano FSH';
     return p.factorCategoria ?? '—';
   }
 

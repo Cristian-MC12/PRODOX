@@ -133,64 +133,75 @@ type Paso = 'metricas' | 'variables' | 'sprints';
                   } @else {
                     @for (cat of categorias; track cat) {
                       @if (metricasFiltradas(cat).length > 0) {
-                        <div class="px-3 pt-2 pb-1">
+                        <!-- Categoría principal -->
+                        <div class="px-3 pt-2 pb-1 d-flex align-items-center gap-2">
                           <span class="badge" [class]="badgeCategoria(cat)">{{ cat }}</span>
                         </div>
-                        @for (m of metricasFiltradas(cat); track m.metricaId) {
-                          <div class="d-flex align-items-start gap-2 px-3 py-2 border-bottom metrica-row"
-                               [class.bg-success-subtle]="m.aprobada"
-                               [class.bg-primary-subtle]="estaSeleccionada(m) && !m.aprobada">
-                            <div class="flex-grow-1">
-                              <div class="fw-semibold small">{{ m.nombre }}</div>
-                              <div class="text-muted" style="font-size:0.72rem">{{ m.descripcion }}</div>
-                              <div class="mt-1 d-flex gap-1 flex-wrap">
-                                <span class="badge bg-light text-dark border" style="font-size:0.62rem">
-                                  {{ m.codigo }}
-                                </span>
-                                @if (m.aprobada) {
-                                  <span class="badge bg-success" style="font-size:0.62rem">
-                                    <i class="bi bi-check me-1"></i>Aprobada
-                                  </span>
-                                  @if (m.tieneVariable) {
-                                    <span class="badge bg-info text-dark" style="font-size:0.62rem">
-                                      <i class="bi bi-lightning me-1"></i>Variable generada
+                        <!-- Factores dentro de la categoría -->
+                        @for (factor of factoresDeCat(cat); track factor) {
+                          @if (metricasDeFactor(cat, factor).length > 0) {
+                            <div class="px-3 py-1 bg-light border-bottom">
+                              <span class="small text-muted fw-semibold">
+                                <i class="bi bi-diagram-3 me-1"></i>{{ factor }}
+                              </span>
+                            </div>
+                            @for (m of metricasDeFactor(cat, factor); track m.metricaId) {
+                              <div class="d-flex align-items-start gap-2 px-3 py-2 border-bottom metrica-row"
+                                   [class.bg-success-subtle]="m.aprobada"
+                                   [class.bg-primary-subtle]="estaSeleccionada(m) && !m.aprobada">
+                                <div class="flex-grow-1">
+                                  <div class="fw-semibold small">{{ m.nombre }}</div>
+                                  <div class="text-muted" style="font-size:0.72rem">{{ m.descripcion }}</div>
+                                  <div class="mt-1 d-flex gap-1 flex-wrap">
+                                    <span class="badge bg-light text-dark border" style="font-size:0.62rem">
+                                      {{ m.codigo }}
                                     </span>
-                                  }
-                                } @else if (estaSeleccionada(m)) {
-                                  <span class="badge bg-warning text-dark" style="font-size:0.62rem">
-                                    Pendiente aprobación
-                                  </span>
-                                }
-                              </div>
-                            </div>
-                            <div class="d-flex gap-1 flex-shrink-0 pt-1">
-                              @if (!estaSeleccionada(m)) {
-                                <button class="btn btn-sm btn-outline-primary py-0 px-2"
-                                        (click)="seleccionar(m)" title="Agregar">
-                                  <i class="bi bi-plus-lg"></i>
-                                </button>
-                              } @else if (!m.aprobada) {
-                                <button class="btn btn-sm btn-success py-0 px-2"
-                                        (click)="aprobar(m)" title="Aprobar y generar variable"
-                                        [disabled]="aprobando === m.metricaId">
-                                  @if (aprobando === m.metricaId) {
-                                    <span class="spinner-border spinner-border-sm"></span>
+                                    @if (m.aprobada) {
+                                      <span class="badge bg-success" style="font-size:0.62rem">
+                                        <i class="bi bi-check me-1"></i>Aprobada
+                                      </span>
+                                      @if (m.tieneVariable) {
+                                        <span class="badge bg-info text-dark" style="font-size:0.62rem">
+                                          <i class="bi bi-lightning me-1"></i>Variable generada
+                                        </span>
+                                      }
+                                    } @else if (estaSeleccionada(m)) {
+                                      <span class="badge bg-warning text-dark" style="font-size:0.62rem">
+                                        Pendiente aprobación
+                                      </span>
+                                    }
+                                  </div>
+                                </div>
+                                <div class="d-flex gap-1 flex-shrink-0 pt-1">
+                                  @if (!estaSeleccionada(m)) {
+                                    <button class="btn btn-sm btn-outline-primary py-0 px-2"
+                                            (click)="seleccionar(m)" title="Agregar">
+                                      <i class="bi bi-plus-lg"></i>
+                                    </button>
+                                  } @else if (!m.aprobada) {
+                                    <button class="btn btn-sm btn-success py-0 px-2"
+                                            (click)="aprobar(m)" title="Aprobar y generar variable"
+                                            [disabled]="aprobando === m.metricaId">
+                                      @if (aprobando === m.metricaId) {
+                                        <span class="spinner-border spinner-border-sm"></span>
+                                      } @else {
+                                        <i class="bi bi-check-lg"></i>
+                                      }
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-danger py-0 px-2"
+                                            (click)="deseleccionar(m)" title="Quitar">
+                                      <i class="bi bi-x-lg"></i>
+                                    </button>
                                   } @else {
-                                    <i class="bi bi-check-lg"></i>
+                                    <button class="btn btn-sm btn-outline-warning py-0 px-2"
+                                            (click)="desaprobar(m)" title="Desaprobar">
+                                      <i class="bi bi-arrow-counterclockwise"></i>
+                                    </button>
                                   }
-                                </button>
-                                <button class="btn btn-sm btn-outline-danger py-0 px-2"
-                                        (click)="deseleccionar(m)" title="Quitar">
-                                  <i class="bi bi-x-lg"></i>
-                                </button>
-                              } @else {
-                                <button class="btn btn-sm btn-outline-warning py-0 px-2"
-                                        (click)="desaprobar(m)" title="Desaprobar">
-                                  <i class="bi bi-arrow-counterclockwise"></i>
-                                </button>
-                              }
-                            </div>
-                          </div>
+                                </div>
+                              </div>
+                            }
+                          }
                         }
                       }
                     }
@@ -207,7 +218,7 @@ type Paso = 'metricas' | 'variables' | 'sprints';
                   <span class="badge bg-primary ms-1">{{ totalSeleccionadas }}</span>
                   <span class="badge bg-success ms-1">{{ totalAprobadas }} aprobadas</span>
                 </div>
-                <div style="max-height:200px;overflow-y:auto">
+                <div style="max-height:280px;overflow-y:auto">
                   @if (seleccionadasList.length === 0) {
                     <div class="text-center text-muted py-3 small">
                       Hacé click en <i class="bi bi-plus-lg"></i> para agregar métricas.
@@ -224,6 +235,33 @@ type Paso = 'metricas' | 'variables' | 'sprints';
                                   {{ m.categoria }}
                                 </span>
                               </td>
+                              <td class="text-center">
+                                @switch (estadoParametrizacion(m)) {
+                                  @case ('completa') {
+                                    <span class="badge bg-success" style="font-size:0.62rem">
+                                      <i class="bi bi-check-circle me-1"></i>Completa
+                                    </span>
+                                  }
+                                  @case ('parcial') {
+                                    <span class="badge bg-warning text-dark" style="font-size:0.62rem">
+                                      <i class="bi bi-exclamation-circle me-1"></i>Parcial
+                                    </span>
+                                  }
+                                  @default {
+                                    <span class="badge bg-secondary" style="font-size:0.62rem">
+                                      Sin parametrizar
+                                    </span>
+                                  }
+                                }
+                              </td>
+                              <td class="text-center">
+                                <button class="btn btn-sm py-0 px-2"
+                                        [class]="estadoParametrizacion(m) === 'sin_parametrizar' ? 'btn-outline-primary' : 'btn-outline-success'"
+                                        (click)="irAParametrizar(m)"
+                                        title="Parametrizar con GenAI">
+                                  <i class="bi bi-stars"></i>
+                                </button>
+                              </td>
                               <td class="text-end pe-2">
                                 @if (m.aprobada) {
                                   <i class="bi bi-check-circle-fill text-success"></i>
@@ -237,60 +275,13 @@ type Paso = 'metricas' | 'variables' | 'sprints';
                     </table>
                   }
                 </div>
-              </div>
-
-              <!-- Panel de parametrización con GenAI -->
-              @if (seleccionadasList.length > 0) {
-                <div class="card mb-3">
-                  <div class="card-header d-flex align-items-center justify-content-between py-2">
-                    <span class="fw-semibold small">
-                      <i class="bi bi-robot me-1 text-primary"></i>Parametrización GenAI
-                    </span>
-                    <span class="badge bg-success">
-                      {{ parametrizacionesCompletas }} / {{ seleccionadasList.length }}
-                    </span>
-                  </div>
-                  <div class="card-body p-0">
-                    @for (m of seleccionadasList; track m.metricaId) {
-                      <div class="d-flex align-items-center justify-content-between px-3 py-2 border-bottom">
-                        <div class="flex-grow-1 me-2" style="min-width:0">
-                          <div class="small fw-semibold text-truncate">{{ m.nombre }}</div>
-                          <div class="mt-1">
-                            @switch (estadoParametrizacion(m)) {
-                              @case ('completa') {
-                                <span class="badge bg-success" style="font-size:0.62rem">
-                                  <i class="bi bi-check-circle me-1"></i>Completa
-                                </span>
-                              }
-                              @case ('parcial') {
-                                <span class="badge bg-warning text-dark" style="font-size:0.62rem">
-                                  <i class="bi bi-exclamation-circle me-1"></i>Parcial
-                                </span>
-                              }
-                              @default {
-                                <span class="badge bg-secondary" style="font-size:0.62rem">
-                                  <i class="bi bi-dash-circle me-1"></i>Sin parametrizar
-                                </span>
-                              }
-                            }
-                          </div>
-                        </div>
-                        <button class="btn btn-sm py-0 px-2 flex-shrink-0"
-                                [class]="estadoParametrizacion(m) === 'sin_parametrizar' ? 'btn-outline-primary' : 'btn-outline-success'"
-                                (click)="irAParametrizar(m)"
-                                title="Parametrizar con GenAI">
-                          <i class="bi bi-stars me-1"></i>
-                          {{ estadoParametrizacion(m) === 'sin_parametrizar' ? 'Parametrizar' : 'Editar' }}
-                        </button>
-                      </div>
-                    }
-                  </div>
+                @if (seleccionadasList.length > 0) {
                   <div class="card-footer py-2 text-center">
                     <button class="btn btn-sm w-100"
                             [class]="parametrizacionesCompletas === seleccionadasList.length ? 'btn-success' : 'btn-outline-primary'"
                             (click)="router.navigate(['/resumen-seleccion'])">
                       <i class="bi bi-list-check me-1"></i>
-                      Ver resumen de parametrización
+                      Ver resumen y enviar al Scrum Master
                       @if (parametrizacionesCompletas < seleccionadasList.length) {
                         <span class="badge bg-light text-dark ms-1">
                           {{ parametrizacionesCompletas }}/{{ seleccionadasList.length }}
@@ -298,11 +289,11 @@ type Paso = 'metricas' | 'variables' | 'sprints';
                       }
                     </button>
                   </div>
-                </div>
-              }
+                }
+              </div>
 
               <!-- Guía de estados -->
-              <div class="card">
+              <div class="card mt-3">
                 <div class="card-header fw-semibold small py-2">
                   <i class="bi bi-info-circle me-1"></i>Flujo de planeación
                 </div>
@@ -466,7 +457,7 @@ export class PlaneacionComponent implements OnInit {
 
   private selecciones: MetricaSeleccionada[] = [];
 
-  readonly categorias = ['Calidad', 'Productividad', 'Cumplimiento', 'Flexibilidad', 'Sociohumano'];
+  readonly categorias = ['Significado', 'Flexibilidad', 'Impacto', 'Socio-Humano FSH'];
 
   constructor(
     public  router: Router,
@@ -576,6 +567,20 @@ export class PlaneacionComponent implements OnInit {
     );
   }
 
+  /** Factores únicos dentro de una categoría (respetando búsqueda) */
+  factoresDeCat(categoria: string): string[] {
+    return [...new Set(
+      this.metricasFiltradas(categoria).map(m => m.factor ?? 'Sin factor')
+    )];
+  }
+
+  /** Métricas de un factor específico dentro de una categoría */
+  metricasDeFactor(categoria: string, factor: string): ProyectoMetricaDto[] {
+    return this.metricasFiltradas(categoria).filter(
+      m => (m.factor ?? 'Sin factor') === factor
+    );
+  }
+
   estaSeleccionada(m: ProyectoMetricaDto): boolean {
     return m.seleccionada;
   }
@@ -645,11 +650,10 @@ export class PlaneacionComponent implements OnInit {
 
   badgeCategoria(cat: string): string {
     const map: Record<string, string> = {
-      'Calidad':       'bg-danger',
-      'Productividad': 'bg-primary',
-      'Cumplimiento':  'bg-success',
-      'Flexibilidad':  'bg-warning text-dark',
-      'Sociohumano':   'bg-info text-dark'
+      'Significado':      'bg-primary',
+      'Flexibilidad':     'bg-warning text-dark',
+      'Impacto':          'bg-danger',
+      'Socio-Humano FSH': 'bg-info text-dark'
     };
     return map[cat] ?? 'bg-secondary';
   }

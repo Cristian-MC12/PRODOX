@@ -354,6 +354,10 @@ export class ParametrizacionComponent implements OnInit {
       escala:            t.escala
     };
     this.propuestaElegida = null;
+    // Incrementar el ranking de uso de esta parametrización
+    if (this.metrica?.factorId) {
+      this.rankingService.incrementarUso(this.metrica.factorId).pipe(catchError(() => of(null))).subscribe();
+    }
   }
 
   /** Copiar la parametrización base al formulario para editarla */
@@ -452,8 +456,10 @@ export class ParametrizacionComponent implements OnInit {
 
   categoryBadge(cat: string): string {
     const map: Record<string, string> = {
-      'Productividad': 'bg-primary', 'Calidad': 'bg-warning text-dark',
-      'Cumplimiento':  'bg-success',  'Sociohumano': 'bg-info text-dark'
+      'Significado':      'bg-primary',
+      'Flexibilidad':     'bg-warning text-dark',
+      'Impacto':          'bg-danger',
+      'Socio-Humano FSH': 'bg-info text-dark'
     };
     return map[cat] ?? 'bg-secondary';
   }

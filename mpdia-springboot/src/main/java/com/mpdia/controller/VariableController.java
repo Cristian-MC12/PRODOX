@@ -1,6 +1,7 @@
 // Autor: Cristian Santiago Martinez Cordoba — MPDIA
 package com.mpdia.controller;
 
+import com.mpdia.dto.ActualizarFormulaRequest;
 import com.mpdia.dto.CrearVariableRequest;
 import com.mpdia.dto.VariableDto;
 import com.mpdia.service.VariableService;
@@ -30,6 +31,15 @@ public class VariableController {
             @PathVariable UUID proyectoId,
             @Valid @RequestBody CrearVariableRequest request) {
         return ResponseEntity.ok(variableService.crear(proyectoId, request));
+    }
+
+    /** PATCH /api/proyectos/{proyectoId}/variables/{variableId}/formula */
+    @PatchMapping("/{variableId}/formula")
+    public ResponseEntity<VariableDto> actualizarFormula(
+            @PathVariable UUID proyectoId,
+            @PathVariable UUID variableId,
+            @RequestBody ActualizarFormulaRequest request) {
+        return ResponseEntity.ok(variableService.actualizarFormula(variableId, request));
     }
 
     /** DELETE /api/proyectos/{proyectoId}/variables/{variableId} */
