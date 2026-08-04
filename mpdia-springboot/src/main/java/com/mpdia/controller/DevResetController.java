@@ -58,4 +58,11 @@ public class DevResetController {
         info.put("detalle_parametrizaciones", params);
         return ResponseEntity.ok(info);
     }
+
+    /** POST /api/dev/activar-variables — Activar todas las variables */
+    @org.springframework.web.bind.annotation.PostMapping("/activar-variables")
+    public ResponseEntity<Map<String, Object>> activarVariables() {
+        int updated = jdbc.update("UPDATE variables SET activa = true WHERE activa = false");
+        return ResponseEntity.ok(Map.of("variables_activadas", updated));
+    }
 }

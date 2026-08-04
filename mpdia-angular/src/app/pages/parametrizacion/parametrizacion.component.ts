@@ -258,6 +258,17 @@ import { environment } from '../../../environments/environment';
                        placeholder="Ej: Porcentual 0-100%, Numérica 0-50 pts..."
                        [(ngModel)]="form.escala">
               </div>
+              <div class="col-md-6">
+                <label class="form-label small fw-semibold">
+                  📅 Frecuencia de captura <span class="text-muted">(recomendada por IA)</span>
+                </label>
+                <select class="form-select form-select-sm" [(ngModel)]="form.frecuenciaCaptura">
+                  <option value="por_sprint">Al finalizar sprint</option>
+                  <option value="semanal">Una vez por semana</option>
+                  <option value="diaria">Diariamente</option>
+                  <option value="ilimitada">Cuando ocurra el evento</option>
+                </select>
+              </div>
             </div>
           </div>
           <div class="card-footer d-flex justify-content-between align-items-center">
@@ -301,7 +312,7 @@ export class ParametrizacionComponent implements OnInit {
   errorGenAI = '';
 
   form: Parametrizacion = {
-    objetivo: '', procedimiento: '', indicadorVariable: '', escala: ''
+    objetivo: '', procedimiento: '', indicadorVariable: '', escala: '', frecuenciaCaptura: 'por_sprint'
   };
 
   private readonly apiBase = environment.apiBaseUrl;
@@ -396,6 +407,7 @@ export class ParametrizacionComponent implements OnInit {
       procedimiento:     p.procedimiento,
       indicadorVariable: p.indicadorVariable,
       escala:            p.escala,
+      frecuenciaCaptura: p.frecuenciaCaptura || 'por_sprint',
       propuestaElegida:  idx
     };
   }

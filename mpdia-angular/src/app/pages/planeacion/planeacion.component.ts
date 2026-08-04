@@ -512,16 +512,23 @@ export class PlaneacionComponent implements OnInit {
       if (sel) this.seleccionService.quitar(sel.id);
     });
 
-    // Agregar solo las seleccionadas que NO estén aprobadas aún
+    // Agregar métricas seleccionadas del backend que NO estén ya en SeleccionService
     this.seleccionadasList.filter(m => !m.aprobada).forEach(m => {
-      this.seleccionService.agregar({
-        factorId:           m.metricaId,
-        factorNombre:       m.nombre,
-        factorCategoria:    m.categoria,
-        metricaNombre:      m.nombre,
-        metricaDescripcion: m.descripcion ?? '',
-        proyectoId
-      });
+      const yaExiste = this.seleccionService.getSnapshot().find(
+        s => s.factorId === m.metricaId || s.metricaNombre === m.nombre
+      );
+      
+      // Solo agregar si NO existe ya (para no sobrescribir parametrizaciones)
+      if (!yaExiste) {
+        this.seleccionService.agregar({
+          factorId:           m.metricaId,
+          factorNombre:       m.nombre,
+          factorCategoria:    m.categoria,
+          metricaNombre:      m.nombre,
+          metricaDescripcion: m.descripcion ?? '',
+          proyectoId
+        });
+      }
     });
   }
 

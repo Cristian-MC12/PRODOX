@@ -2,11 +2,13 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
+import { HttpClient } from '@angular/common/http';
 import { catchError, forkJoin, of } from 'rxjs';
 import { ShellComponent } from '../../layout/shell/shell.component';
 import { SeleccionService } from '../../services/seleccion.service';
 import { MetricRankingService } from '../../services/metric-ranking.service';
 import { MetricaSeleccionada } from '../../models/seleccion.model';
+import { environment } from '../../../environments/environment';
 
 @Component({
   selector: 'app-resumen-seleccion',
@@ -32,6 +34,17 @@ import { MetricaSeleccionada } from '../../models/seleccion.model';
         y luego enviá al Scrum Master para verificación.
       </p>
 
+      <!-- Botón de limpieza de emergencia (solo para debug) -->
+      <div class="alert alert-warning py-2 small d-flex align-items-center justify-content-between mb-3">
+        <div>
+          <i class="bi bi-exclamation-triangle me-2"></i>
+          <strong>¿No ves todas tus métricas?</strong> Puede haber un problema con el almacenamiento local.
+        </div>
+        <button class="btn btn-sm btn-outline-danger" (click)="limpiarStorage()" title="Limpiar y recargar">
+          <i class="bi bi-trash me-1"></i>Limpiar datos
+        </button>
+      </div>
+
       <!-- Leyenda de colores -->
       <div class="d-flex gap-3 mb-3 flex-wrap">
         <span class="small"><span class="badge bg-danger me-1">●</span>Sin parametrizar</span>
@@ -50,7 +63,11 @@ import { MetricaSeleccionada } from '../../models/seleccion.model';
         </div>
 
         <div class="card-body p-0">
-          @if (seleccionadas.length === 0) {
+          @if (cargando) {
+            <div class="text-center text-muted py-5">
+              <span class="spinner-border spinner-border-sm me-2"></span>Cargando selecciones...
+            </div>
+          } @else if (seleccionadas.length === 0) {
             <div class="text-center text-muted py-5">
               <i class="bi bi-inbox fs-2 d-block mb-2"></i>
               No hay métricas seleccionadas.
@@ -200,15 +217,68 @@ export class ResumenSeleccionComponent implements OnInit {
   enviando  = false;
   errorMsg  = '';
   detallesVisibles = new Set<string>(); // IDs de métricas con detalle visible
+  cargando = true;
 
   constructor(
     public  router: Router,
     private seleccionService: SeleccionService,
-    private rankingService: MetricRankingService
+    private rankingService: MetricRankingService,
+    private http: HttpClient
   ) {}
 
   ngOnInit(): void {
-    this.seleccionService.getAll().subscribe(s => this.seleccionadas = s);
+    // Cargar tanto desde localStorage como desde el backend
+    this.cargarSelecciones();
+  }
+
+  private cargarSelecciones(): void {
+    this.cargando = true;
+    
+    // Primero intentar desde localStorage
+    this.seleccionService.getAll().subscribe(locales => {
+      this.seleccionadas = locales;
+      this.cargando = false;
+      
+      // Si no hay nada en localStorage, intentar cargar parametrizaciones del backend
+      if (locales.length === 0) {
+        this.cargarDesdeBackend();
+      }
+    });
+  }
+
+  private cargarDesdeBackend(): void {
+    const proyectoActivo = localStorage.getItem('mpdia_proyecto_activo');
+    const proyectoId = proyectoActivo ? JSON.parse(proyectoActivo)?.id ?? null : null;
+    
+    if (!proyectoId) {
+      this.cargando = false;
+      return;
+    }
+
+    // Cargar parametrizaciones del proyecto actual
+    this.http.get<any[]>(`${environment.apiBaseUrl}/metric-ranking/pendientes?proyectoId=${proyectoId}`)
+      .pipe(catchError(() => of([])))
+      .subscribe(params => {
+        // Convertir parametrizaciones a MetricaSeleccionada
+        this.seleccionadas = params.map(p => ({
+          id: p.id || crypto.randomUUID(),
+          factorId: p.metricaId,
+          factorNombre: p.metricaNombre || 'Métrica',
+          factorCategoria: p.factorCategoria || 'General',
+          metricaNombre: p.metricaNombre || 'Métrica',
+          metricaDescripcion: '',
+          proyectoId: proyectoId,
+          creadoEn: p.createdAt || new Date().toISOString(),
+          estadoParametrizacion: 'completa' as const,
+          parametrizacion: {
+            objetivo: p.objetivo,
+            procedimiento: p.procedimiento,
+            indicadorVariable: p.indicadorVariable || p.escala,
+            escala: p.escala
+          }
+        }));
+        this.cargando = false;
+      });
   }
 
   get completadas(): number {
@@ -233,6 +303,14 @@ export class ResumenSeleccionComponent implements OnInit {
 
   esDetalleVisible(id: string): boolean {
     return this.detallesVisibles.has(id);
+  }
+
+  /** Limpia el almacenamiento local y recarga la página */
+  limpiarStorage(): void {
+    if (confirm('¿Estás seguro? Esto eliminará todas las selecciones y parametrizaciones no guardadas.')) {
+      this.seleccionService.limpiar();
+      this.router.navigate(['/planeacion']);
+    }
   }
 
   /** Guarda todas las parametrizaciones completas en el backend y navega a verificación */
@@ -265,8 +343,10 @@ export class ResumenSeleccionComponent implements OnInit {
     forkJoin(guardados$).subscribe(() => {
       this.enviando = false;
       this.seleccionService.limpiar(); // Limpiar localStorage
-      // Navegar a la siguiente fase
-      this.router.navigate(['/planeacion']);
+      
+      // Redirigir según el rol del usuario
+      // Scrum Master va a verificación, otros usuarios a planeación
+      this.router.navigate(['/verificacion']);
     });
   }
 
