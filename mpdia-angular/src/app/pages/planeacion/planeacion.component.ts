@@ -3,6 +3,7 @@ import { Component, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
+import { HttpClient } from '@angular/common/http';
 import { catchError, of, forkJoin } from 'rxjs';
 import { ShellComponent } from '../../layout/shell/shell.component';
 import { AuthService } from '../../services/auth.service';
@@ -14,6 +15,7 @@ import { SprintDto } from '../../models/sprint.model';
 import { ProyectoMetricaDto } from '../../models/planeacion.model';
 import { VariableDto } from '../../models/variable.model';
 import { MetricaSeleccionada } from '../../models/seleccion.model';
+import { environment } from '../../../environments/environment';
 
 type Paso = 'metricas' | 'variables' | 'sprints';
 
@@ -255,6 +257,13 @@ type Paso = 'metricas' | 'variables' | 'sprints';
                                 }
                               </td>
                               <td class="text-center">
+                                @if (estadoParametrizacion(m) !== 'sin_parametrizar') {
+                                  <button class="btn btn-sm btn-outline-info py-0 px-2 me-1"
+                                          (click)="verParametrizacion(m)"
+                                          title="Ver parametrización">
+                                    <i class="bi bi-eye"></i>
+                                  </button>
+                                }
                                 <button class="btn btn-sm py-0 px-2"
                                         [class]="estadoParametrizacion(m) === 'sin_parametrizar' ? 'btn-outline-primary' : 'btn-outline-success'"
                                         (click)="irAParametrizar(m)"
@@ -435,6 +444,51 @@ type Paso = 'metricas' | 'variables' | 'sprints';
         }
 
       }
+
+      <!-- Modal para ver parametrización -->
+      @if (parametrizacionVista) {
+        <div class="modal d-block" style="background-color: rgba(0,0,0,0.5)" (click)="cerrarModalParametrizacion()">
+          <div class="modal-dialog modal-lg" (click)="$event.stopPropagation()">
+            <div class="modal-content">
+              <div class="modal-header">
+                <h5 class="modal-title">
+                  <i class="bi bi-eye me-2"></i>Parametrización: {{ parametrizacionVista.nombre }}
+                </h5>
+                <button type="button" class="btn-close" (click)="cerrarModalParametrizacion()"></button>
+              </div>
+              <div class="modal-body">
+                <div class="mb-3">
+                  <strong class="text-primary"><i class="bi bi-bullseye me-1"></i>Objetivo:</strong>
+                  <p class="mt-1">{{ parametrizacionVista.objetivo }}</p>
+                </div>
+                <div class="mb-3">
+                  <strong class="text-primary"><i class="bi bi-list-ol me-1"></i>Procedimiento:</strong>
+                  <p class="mt-1">{{ parametrizacionVista.procedimiento }}</p>
+                </div>
+                @if (parametrizacionVista.indicadorVariable) {
+                  <div class="mb-3">
+                    <strong class="text-primary"><i class="bi bi-speedometer2 me-1"></i>Indicador/Variable:</strong>
+                    <p class="mt-1">{{ parametrizacionVista.indicadorVariable }}</p>
+                  </div>
+                }
+                <div class="mb-3">
+                  <strong class="text-primary"><i class="bi bi-bar-chart-steps me-1"></i>Escala:</strong>
+                  <p class="mt-1">{{ parametrizacionVista.escala }}</p>
+                </div>
+                @if (parametrizacionVista.frecuenciaCaptura) {
+                  <div>
+                    <strong class="text-primary"><i class="bi bi-calendar me-1"></i>Frecuencia de captura:</strong>
+                    <p class="mt-1">{{ parametrizacionVista.frecuenciaCaptura }}</p>
+                  </div>
+                }
+              </div>
+              <div class="modal-footer">
+                <button class="btn btn-secondary btn-sm" (click)="cerrarModalParametrizacion()">Cerrar</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      }
     </app-shell>
   `,
   styles: [`
@@ -456,6 +510,8 @@ export class PlaneacionComponent implements OnInit {
   alertClass = signal('alert-success');
 
   private selecciones: MetricaSeleccionada[] = [];
+  parametrizacionesBackend: Map<string, any> = new Map(); // metricaId -> parametrizacion
+  parametrizacionVista: any = null; // Para el modal
 
   readonly categorias = ['Significado', 'Flexibilidad', 'Impacto', 'Socio-Humano FSH'];
 
@@ -464,7 +520,8 @@ export class PlaneacionComponent implements OnInit {
     public  auth: AuthService,
     private planeacionService: PlaneacionService,
     private sprintService: SprintService,
-    private seleccionService: SeleccionService
+    private seleccionService: SeleccionService,
+    private http: HttpClient
   ) {}
 
   get totalSeleccionadas() { return this.metricas.filter(m => this.estaSeleccionada(m)).length; }
@@ -486,10 +543,19 @@ export class PlaneacionComponent implements OnInit {
     if (this.proyecto) {
       forkJoin({
         metricas: this.planeacionService.listarMetricas(this.proyecto.id).pipe(catchError(() => of([]))),
-        sprints:  this.sprintService.listar(this.proyecto.id).pipe(catchError(() => of([])))
-      }).subscribe(({ metricas, sprints }) => {
+        sprints:  this.sprintService.listar(this.proyecto.id).pipe(catchError(() => of([]))),
+        parametrizaciones: this.http.get<any[]>(`${environment.apiBaseUrl}/metric-ranking/pendientes?proyectoId=${this.proyecto.id}`).pipe(catchError(() => of([])))
+      }).subscribe(({ metricas, sprints, parametrizaciones }) => {
         this.metricas = metricas;
         this.sprints  = [...sprints].sort((a, b) => a.numero - b.numero);
+        
+        // Indexar parametrizaciones por metricaId
+        parametrizaciones.forEach(p => {
+          if (p.metricaId) {
+            this.parametrizacionesBackend.set(p.metricaId, p);
+          }
+        });
+        
         this.cargando = false;
         // Sincronizar métricas seleccionadas con SeleccionService
         this.sincronizarSelecciones();
@@ -533,10 +599,31 @@ export class PlaneacionComponent implements OnInit {
   }
 
   estadoParametrizacion(m: ProyectoMetricaDto): 'sin_parametrizar' | 'parcial' | 'completa' {
+    // Primero verificar en el backend
+    const paramBackend = this.parametrizacionesBackend.get(m.metricaId);
+    if (paramBackend && paramBackend.objetivo && paramBackend.procedimiento && paramBackend.escala) {
+      return 'completa';
+    }
+    
+    // Si no está en backend, verificar en localStorage
     const sel = this.selecciones.find(
       s => s.factorId === m.metricaId || s.metricaNombre === m.nombre
     );
     return sel?.estadoParametrizacion ?? 'sin_parametrizar';
+  }
+
+  verParametrizacion(m: ProyectoMetricaDto): void {
+    const param = this.parametrizacionesBackend.get(m.metricaId);
+    if (param) {
+      this.parametrizacionVista = {
+        nombre: m.nombre,
+        ...param
+      };
+    }
+  }
+
+  cerrarModalParametrizacion(): void {
+    this.parametrizacionVista = null;
   }
 
   irAParametrizar(m: ProyectoMetricaDto): void {

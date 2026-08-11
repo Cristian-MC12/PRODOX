@@ -2,6 +2,7 @@
 import { Component, Input, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { SidebarComponent } from '../sidebar/sidebar.component';
+import { AICopilotComponent } from '../../components/ai-copilot/ai-copilot.component';
 import { SprintService } from '../../services/sprint.service';
 import { ProyectoDto } from '../../models/proyecto.model';
 import { SprintDto } from '../../models/sprint.model';
@@ -10,7 +11,7 @@ import { catchError, of } from 'rxjs';
 @Component({
   selector: 'app-shell',
   standalone: true,
-  imports: [CommonModule, SidebarComponent],
+  imports: [CommonModule, SidebarComponent, AICopilotComponent],
   template: `
     <div class="d-flex">
       <app-sidebar #sidebar></app-sidebar>
@@ -63,6 +64,9 @@ import { catchError, of } from 'rxjs';
         </main>
       </div>
     </div>
+
+    <!-- AI Copilot (flotante) -->
+    <app-ai-copilot></app-ai-copilot>
   `
 })
 export class ShellComponent implements OnInit {
