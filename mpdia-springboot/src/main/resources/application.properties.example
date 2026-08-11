@@ -36,7 +36,7 @@ mpdia.cors.allowed-origins=http://localhost:4200
 
 # Gemini AI
 # Obtén tu API key en: https://aistudio.google.com/app/apikey
-mpdia.gemini.api-key=TU_API_KEY_DE_GEMINI_AQUI
+mpdia.gemini.api-key=
 mpdia.gemini.api-url=https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent
 
 # Logging
@@ -55,3 +55,19 @@ spring.mail.properties.mail.smtp.timeout=3000
 spring.mail.test-connection=false
 spring.autoconfigure.exclude=org.springframework.boot.autoconfigure.mail.MailSenderAutoConfiguration
 mpdia.app.url=http://localhost:4200
+spring.mail.properties.mail.smtp.auth=true
+spring.mail.properties.mail.smtp.starttls.enable=true
+spring.mail.properties.mail.smtp.connectiontimeout=3000
+spring.mail.properties.mail.smtp.timeout=3000
+spring.mail.test-connection=false
+spring.autoconfigure.exclude=org.springframework.boot.autoconfigure.mail.MailSenderAutoConfiguration
+mpdia.app.url=http://localhost:4200
+
+# AI Copilot - Rate Limiting
+# Límite de requests por usuario autenticado para proteger el AI Copilot
+# Configuración: requests por minuto por usuario
+mpdia.ai.rate-limit.requests-per-minute=10
+mpdia.ai.rate-limit.window-seconds=60
+
+# AI Copilot - Configuración general
+mpdia.ai.max-history-messages=10

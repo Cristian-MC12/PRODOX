@@ -1,0 +1,87 @@
+<!-- Botón flotante -->
+<button class="ai-copilot-fab" 
+        (click)="toggle()"
+        [class.open]="isOpen()"
+        title="AI Agile Copilot">
+  <i class="bi" [class.bi-robot]="!isOpen()" [class.bi-x-lg]="isOpen()"></i>
+</button>
+
+<!-- Panel del copilot -->
+<div class="ai-copilot-panel" [class.open]="isOpen()">
+  <!-- Header -->
+  <div class="ai-copilot-header">
+    <div class="d-flex align-items-center gap-2">
+      <i class="bi bi-robot"></i>
+      <h5 class="mb-0">AI Agile Copilot</h5>
+    </div>
+    <button class="btn btn-sm btn-link text-white" (click)="close()">
+      <i class="bi bi-x-lg"></i>
+    </button>
+  </div>
+
+  <!-- Mensajes -->
+  <div class="ai-copilot-messages" #messagesContainer>
+    @for (msg of messages; track $index) {
+      <div class="message" [class.user]="msg.role === 'user'" [class.assistant]="msg.role === 'assistant'">
+        <div class="message-avatar">
+          <i class="bi" [class.bi-person-circle]="msg.role === 'user'" [class.bi-robot]="msg.role === 'assistant'"></i>
+        </div>
+        <div class="message-content" [class.error]="msg.error" [class.loading]="msg.loading">
+          @if (msg.loading) {
+            <div class="spinner-border spinner-border-sm me-2" role="status">
+              <span class="visually-hidden">Cargando...</span>
+            </div>
+          }
+          <div [innerHTML]="formatMessage(msg.content)"></div>
+          <small class="message-time">{{ msg.timestamp | date:'short' }}</small>
+        </div>
+      </div>
+    }
+
+    <!-- Sugerencias rápidas (solo al inicio) -->
+    @if (messages.length === 1) {
+      <div class="quick-prompts">
+        <small class="text-muted d-block mb-2">Preguntas rápidas:</small>
+        <div class="d-flex flex-wrap gap-2">
+          @for (prompt of quickPrompts; track prompt) {
+            <button class="btn btn-sm btn-outline-primary" (click)="useQuickPrompt(prompt)">
+              {{ prompt }}
+            </button>
+          }
+        </div>
+      </div>
+    }
+  </div>
+
+  <!-- Input -->
+  <div class="ai-copilot-input">
+    @if (error()) {
+      <div class="alert alert-danger alert-sm mb-2 py-1 px-2">
+        <small>{{ error() }}</small>
+      </div>
+    }
+    <div class="input-group">
+      <input type="text" 
+             class="form-control" 
+             placeholder="Escribe tu pregunta..."
+             [(ngModel)]="userInput"
+             (keyup.enter)="sendMessage()"
+             [disabled]="loading()"
+             autocomplete="off">
+      <button class="btn btn-primary" 
+              (click)="sendMessage()"
+              [disabled]="!userInput.trim() || loading()">
+        @if (loading()) {
+          <span class="spinner-border spinner-border-sm" role="status"></span>
+        } @else {
+          <i class="bi bi-send"></i>
+        }
+      </button>
+    </div>
+    @if (!proyecto) {
+      <small class="text-warning d-block mt-1">
+        <i class="bi bi-exclamation-triangle"></i> Selecciona un proyecto primero
+      </small>
+    }
+  </div>
+</div>

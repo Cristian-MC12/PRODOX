@@ -1,5 +1,6 @@
 package com.mpdia.controller;
 
+import com.mpdia.ratelimit.RateLimitException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -83,6 +84,19 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<Map<String, Object>> handleAccessDenied(AccessDeniedException ex) {
         return buildResponse(HttpStatus.FORBIDDEN, "No tienes permisos para realizar esta acción.");
+    }
+
+    /** Security exception de servicios (sin acceso a recursos específicos) */
+    @ExceptionHandler(SecurityException.class)
+    public ResponseEntity<Map<String, Object>> handleSecurityException(SecurityException ex) {
+        return buildResponse(HttpStatus.FORBIDDEN, ex.getMessage());
+    }
+
+    /** Rate limiting exception (429 TOO MANY REQUESTS) */
+    @ExceptionHandler(RateLimitException.class)
+    public ResponseEntity<Map<String, Object>> handleRateLimitException(RateLimitException ex) {
+        log.warn("Rate limit excedido: {}", ex.getMessage());
+        return buildResponse(HttpStatus.TOO_MANY_REQUESTS, ex.getMessage());
     }
 
     /** Recurso/ruta no encontrado */
