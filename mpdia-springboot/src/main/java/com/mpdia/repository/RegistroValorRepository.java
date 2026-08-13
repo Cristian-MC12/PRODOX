@@ -10,4 +10,5 @@ public interface RegistroValorRepository extends JpaRepository<RegistroValor, UU
     List<RegistroValor> findBySprintId(UUID sprintId);
     List<RegistroValor> findByVariable_IdAndSprintId(UUID variableId, UUID sprintId);
     List<RegistroValor> findBySprintIdAndUserId(UUID sprintId, String userId);
+    List<RegistroValor> findByVariable_IdOrderByRegistradoAtAsc(UUID variableId);
 }

@@ -4,6 +4,7 @@ import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { environment } from '../../environments/environment';
 import { EvaluacionSprintDto } from '../models/planeacion.model';
+import { MetricaEvaluacionDetalleDto } from '../models/evaluacion-detalle.model';
 
 @Injectable({ providedIn: 'root' })
 export class EvaluacionService {
@@ -18,5 +19,9 @@ export class EvaluacionService {
 
   porSprint(sprintId: string): Observable<EvaluacionSprintDto[]> {
     return this.http.get<EvaluacionSprintDto[]>(`${this.base}/sprint/${sprintId}`);
+  }
+
+  detalle(proyectoId: string): Observable<MetricaEvaluacionDetalleDto[]> {
+    return this.http.get<MetricaEvaluacionDetalleDto[]>(`${this.base}/proyecto/${proyectoId}/detalle`);
   }
 }
