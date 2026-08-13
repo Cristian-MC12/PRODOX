@@ -40,6 +40,7 @@ public class PlaneacionService {
                             m.getCategoria().getNombre(),
                             m.getFactor(),
                             pm != null,
+                            pm != null ? pm.getCreatedAt() : null,
                             pm != null && pm.getAprobada(),
                             pm != null ? pm.getAprobadaPor() : null,
                             pm != null ? pm.getAprobadaAt()  : null,
@@ -48,9 +49,14 @@ public class PlaneacionService {
                 }).toList();
     }
 
-    /** Solo las seleccionadas en el proyecto */
+    /**
+     * Métricas que todavía pertenecen al estado "Seleccionadas" de Planeación:
+     * fueron seleccionadas pero aún NO fueron aprobadas/aceptadas.
+     * Una vez aprobada, la métrica sale de este listado y pasa a Ejecución.
+     */
     public List<ProyectoMetricaDto> listarSeleccionadas(UUID proyectoId) {
         return pmRepo.findByIdProyectoId(proyectoId).stream()
+                .filter(pm -> !pm.getAprobada())
                 .map(pm -> {
                     Metrica m = pm.getMetrica();
                     boolean tieneVariable = variableRepo.existsByProyectoIdAndMetrica_Id(proyectoId, m.getId());
@@ -59,6 +65,7 @@ public class PlaneacionService {
                             m.getCategoria().getNombre(),
                             m.getFactor(),
                             true,
+                            pm.getCreatedAt(),
                             pm.getAprobada(),
                             pm.getAprobadaPor(), pm.getAprobadaAt(),
                             tieneVariable

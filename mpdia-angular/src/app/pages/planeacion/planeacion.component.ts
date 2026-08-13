@@ -301,6 +301,40 @@ type Paso = 'metricas' | 'variables' | 'sprints';
                 }
               </div>
 
+              <!-- Historial de seleccionadas: vista informativa, sin acciones -->
+              <div class="card mb-3">
+                <div class="card-header fw-semibold small py-2">
+                  <i class="bi bi-clock-history me-1"></i>Historial de seleccionadas
+                  <span class="badge bg-secondary ms-1">{{ historialSeleccionadas.length }}</span>
+                </div>
+                <div style="max-height:220px;overflow-y:auto">
+                  @if (historialSeleccionadas.length === 0) {
+                    <div class="text-center text-muted py-3 small">
+                      Todavía no se seleccionó ninguna métrica.
+                    </div>
+                  } @else {
+                    <ul class="list-group list-group-flush">
+                      @for (m of historialSeleccionadas; track m.metricaId) {
+                        <li class="list-group-item d-flex justify-content-between align-items-center py-2">
+                          <div>
+                            <div class="small">{{ m.nombre }}</div>
+                            @if (m.seleccionadaAt) {
+                              <div class="text-muted" style="font-size:0.68rem">
+                                Seleccionada: {{ m.seleccionadaAt | date:'dd/MM/yyyy HH:mm' }}
+                              </div>
+                            }
+                          </div>
+                          <span class="badge" style="font-size:0.6rem"
+                                [class]="badgeCategoria(m.categoria)">
+                            {{ m.categoria }}
+                          </span>
+                        </li>
+                      }
+                    </ul>
+                  }
+                </div>
+              </div>
+
               <!-- Guía de estados -->
               <div class="card mt-3">
                 <div class="card-header fw-semibold small py-2">
@@ -524,9 +558,24 @@ export class PlaneacionComponent implements OnInit {
     private http: HttpClient
   ) {}
 
-  get totalSeleccionadas() { return this.metricas.filter(m => this.estaSeleccionada(m)).length; }
+  // "Seleccionadas" representa únicamente las métricas que están dentro del
+  // estado pendiente de Planeación: seleccionadas pero todavía NO aprobadas.
+  // Una vez aprobada, la métrica sale de este panel y queda disponible en Ejecución.
+  get totalSeleccionadas() { return this.seleccionadasList.length; }
   get totalAprobadas()     { return this.metricas.filter(m => m.aprobada).length; }
-  get seleccionadasList()  { return this.metricas.filter(m => this.estaSeleccionada(m)); }
+  get seleccionadasList()  { return this.metricas.filter(m => this.estaSeleccionada(m) && !m.aprobada); }
+
+  // "Historial de seleccionadas": vista puramente informativa con TODAS las métricas
+  // que alguna vez fueron seleccionadas en este proyecto, hayan sido aprobadas o no.
+  // A diferencia de seleccionadasList, no se filtra por `aprobada`, así que una métrica
+  // que ya pasó a Ejecución permanece aquí. Ordenado por fecha de selección (persistida
+  // en ProyectoMetrica.createdAt), más reciente primero.
+  get historialSeleccionadas(): ProyectoMetricaDto[] {
+    return this.metricas
+      .filter(m => m.seleccionada)
+      .slice()
+      .sort((a, b) => new Date(b.seleccionadaAt ?? 0).getTime() - new Date(a.seleccionadaAt ?? 0).getTime());
+  }
   get parametrizacionesCompletas() {
     return this.seleccionadasList.filter(m => this.estadoParametrizacion(m) === 'completa').length;
   }

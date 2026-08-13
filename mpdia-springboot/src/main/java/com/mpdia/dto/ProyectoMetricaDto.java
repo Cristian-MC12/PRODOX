@@ -12,6 +12,8 @@ public record ProyectoMetricaDto(
     String  categoria,
     String  factor,
     boolean seleccionada,
+    /** fecha/hora en que la métrica fue seleccionada por primera vez en el proyecto (null si nunca se seleccionó) */
+    Instant seleccionadaAt,
     boolean aprobada,
     String  aprobadaPor,
     Instant aprobadaAt,
