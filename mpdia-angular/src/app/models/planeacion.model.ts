@@ -8,6 +8,7 @@ export interface ProyectoMetricaDto {
   categoria:     string;
   factor:        string | null;
   seleccionada:  boolean;
+  seleccionadaAt: string | null;
   aprobada:      boolean;
   aprobadaPor:   string | null;
   aprobadaAt:    string | null;

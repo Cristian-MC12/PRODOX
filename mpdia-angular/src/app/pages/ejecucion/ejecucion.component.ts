@@ -15,12 +15,20 @@ import { VariableDto } from '../../models/variable.model';
 import { RegistroValorDto, RegistrarValorRequest } from '../../models/ejecucion.model';
 
 interface FormValor {
-  variableId:   string;
-  valorNum:     number | null;
-  valorTexto:   string;
-  valorBool:    boolean | null;
-  observacion:  string;
-  yaRegistrado: boolean;
+  variableId:     string;
+  valorNum:       number | null;
+  valorTexto:     string;
+  valorBool:      boolean | null;
+  observacion:    string;
+  yaRegistrado:   boolean;             // tiene al menos un registro previo
+  ultimoValor:    RegistroValorDto | null; // registro más reciente (si existe)
+  mostrandoInput: boolean;             // true = campo de captura visible
+}
+
+interface HistorialGrupo {
+  variableId:     string;
+  variableNombre: string;
+  registros:      RegistroValorDto[]; // más reciente primero
 }
 
 @Component({
@@ -236,43 +244,62 @@ interface FormValor {
                             </td>
                             <td class="small text-muted">{{ tipoVariable(fv.variableId) }}</td>
                             <td>
-                              @if (fv.yaRegistrado) {
-                                <strong class="text-success">{{ valorTextoMostrado(fv.variableId, fv) }}</strong>
-                              } @else if (tipoVariable(fv.variableId) === 'numerico') {
-                                <input type="number" class="form-control form-control-sm"
-                                       style="width:90px" step="0.01"
-                                       [(ngModel)]="fv.valorNum"
-                                       [name]="'g-n-' + fv.variableId">
-                              } @else if (tipoVariable(fv.variableId) === 'escala') {
-                                <select class="form-select form-select-sm" style="width:75px"
-                                        [(ngModel)]="fv.valorNum"
-                                        [name]="'g-e-' + fv.variableId">
-                                  <option [value]="null">—</option>
-                                  @for (n of escalaVariable(fv.variableId); track n) {
-                                    <option [value]="n">{{ n }}</option>
-                                  }
-                                </select>
-                              } @else if (tipoVariable(fv.variableId) === 'texto') {
-                                <input type="text" class="form-control form-control-sm"
-                                       style="width:140px"
-                                       [(ngModel)]="fv.valorTexto"
-                                       [name]="'g-t-' + fv.variableId">
+                              @if (!fv.mostrandoInput) {
+                                <div class="d-flex align-items-center gap-2">
+                                  <span class="small text-muted">Último valor:</span>
+                                  <strong class="text-success">{{ valorTextoMostrado(fv.variableId, fv) }}</strong>
+                                  <button type="button" class="btn btn-sm btn-outline-primary py-0 px-2"
+                                          title="Registrar nuevo valor"
+                                          (click)="mostrarNuevoRegistro(fv)">
+                                    <i class="bi bi-plus-lg"></i>
+                                  </button>
+                                </div>
                               } @else {
-                                <div class="form-check form-switch mb-0">
-                                  <input class="form-check-input" type="checkbox"
-                                         [(ngModel)]="fv.valorBool"
-                                         [name]="'g-b-' + fv.variableId">
+                                <div class="d-flex align-items-center gap-1">
+                                  @if (tipoVariable(fv.variableId) === 'numerico') {
+                                    <input type="number" class="form-control form-control-sm"
+                                           style="width:90px" step="0.01"
+                                           [(ngModel)]="fv.valorNum"
+                                           [name]="'g-n-' + fv.variableId">
+                                  } @else if (tipoVariable(fv.variableId) === 'escala') {
+                                    <select class="form-select form-select-sm" style="width:75px"
+                                            [(ngModel)]="fv.valorNum"
+                                            [name]="'g-e-' + fv.variableId">
+                                      <option [value]="null">—</option>
+                                      @for (n of escalaVariable(fv.variableId); track n) {
+                                        <option [value]="n">{{ n }}</option>
+                                      }
+                                    </select>
+                                  } @else if (tipoVariable(fv.variableId) === 'texto') {
+                                    <input type="text" class="form-control form-control-sm"
+                                           style="width:140px"
+                                           [(ngModel)]="fv.valorTexto"
+                                           [name]="'g-t-' + fv.variableId">
+                                  } @else {
+                                    <div class="form-check form-switch mb-0">
+                                      <input class="form-check-input" type="checkbox"
+                                             [(ngModel)]="fv.valorBool"
+                                             [name]="'g-b-' + fv.variableId">
+                                    </div>
+                                  }
+                                  @if (fv.yaRegistrado) {
+                                    <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2"
+                                            title="Cancelar"
+                                            (click)="cancelarNuevoRegistro(fv)">
+                                      <i class="bi bi-x-lg"></i>
+                                    </button>
+                                  }
                                 </div>
                               }
                             </td>
                             <td>
-                              @if (!fv.yaRegistrado) {
+                              @if (fv.mostrandoInput) {
                                 <input type="text" class="form-control form-control-sm"
                                        placeholder="Opcional"
                                        [(ngModel)]="fv.observacion"
                                        [name]="'g-o-' + fv.variableId">
                               } @else {
-                                <span class="text-muted small fst-italic">{{ fv.observacion || '—' }}</span>
+                                <span class="text-muted small fst-italic">{{ fv.ultimoValor?.observacion || '—' }}</span>
                               }
                             </td>
                             <td class="text-center">
@@ -369,32 +396,51 @@ interface FormValor {
                               </span>
                             </td>
                             <td>
-                              @if (fv.yaRegistrado) {
-                                <strong class="text-success">{{ valorTextoMostrado(fv.variableId, fv) }}</strong>
-                              } @else if (tipoVariable(fv.variableId) === 'escala') {
-                                <select class="form-select form-select-sm" style="width:75px"
-                                        [(ngModel)]="fv.valorNum"
-                                        [name]="'i-e-' + fv.variableId">
-                                  <option [value]="null">—</option>
-                                  @for (n of escalaVariable(fv.variableId); track n) {
-                                    <option [value]="n">{{ n }}</option>
-                                  }
-                                </select>
+                              @if (!fv.mostrandoInput) {
+                                <div class="d-flex align-items-center gap-2">
+                                  <span class="small text-muted">Último valor:</span>
+                                  <strong class="text-success">{{ valorTextoMostrado(fv.variableId, fv) }}</strong>
+                                  <button type="button" class="btn btn-sm btn-outline-primary py-0 px-2"
+                                          title="Registrar nuevo valor"
+                                          (click)="mostrarNuevoRegistro(fv)">
+                                    <i class="bi bi-plus-lg"></i>
+                                  </button>
+                                </div>
                               } @else {
-                                <input type="number" class="form-control form-control-sm"
-                                       style="width:90px" step="0.01"
-                                       [(ngModel)]="fv.valorNum"
-                                       [name]="'i-n-' + fv.variableId">
+                                <div class="d-flex align-items-center gap-1">
+                                  @if (tipoVariable(fv.variableId) === 'escala') {
+                                    <select class="form-select form-select-sm" style="width:75px"
+                                            [(ngModel)]="fv.valorNum"
+                                            [name]="'i-e-' + fv.variableId">
+                                      <option [value]="null">—</option>
+                                      @for (n of escalaVariable(fv.variableId); track n) {
+                                        <option [value]="n">{{ n }}</option>
+                                      }
+                                    </select>
+                                  } @else {
+                                    <input type="number" class="form-control form-control-sm"
+                                           style="width:90px" step="0.01"
+                                           [(ngModel)]="fv.valorNum"
+                                           [name]="'i-n-' + fv.variableId">
+                                  }
+                                  @if (fv.yaRegistrado) {
+                                    <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2"
+                                            title="Cancelar"
+                                            (click)="cancelarNuevoRegistro(fv)">
+                                      <i class="bi bi-x-lg"></i>
+                                    </button>
+                                  }
+                                </div>
                               }
                             </td>
                             <td>
-                              @if (!fv.yaRegistrado) {
+                              @if (fv.mostrandoInput) {
                                 <input type="text" class="form-control form-control-sm"
                                        placeholder="Opcional"
                                        [(ngModel)]="fv.observacion"
                                        [name]="'i-o-' + fv.variableId">
                               } @else {
-                                <span class="text-muted small fst-italic">{{ fv.observacion || '—' }}</span>
+                                <span class="text-muted small fst-italic">{{ fv.ultimoValor?.observacion || '—' }}</span>
                               }
                             </td>
                             <td class="text-center">
@@ -443,32 +489,32 @@ interface FormValor {
         @if (registros.length === 0) {
           <div class="text-center py-4 text-muted small">Sin registros.</div>
         } @else {
-          <div class="table-responsive">
-            <table class="table table-sm mb-0">
-              <thead class="table-light">
-                <tr>
-                  <th class="ps-3">Variable</th>
-                  <th>Valor</th>
-                  <th>Usuario</th>
-                  <th>Fecha</th>
-                  <th>Obs.</th>
-                </tr>
-              </thead>
-              <tbody>
-                @for (r of registros; track r.id) {
-                  <tr>
-                    <td class="ps-3 small fw-semibold">{{ r.variableNombre }}</td>
-                    <td class="fw-bold">
-                      {{ r.valorNum !== null ? r.valorNum : (r.valorTexto ?? (r.valorBool ? 'Sí' : 'No')) }}
-                    </td>
-                    <td class="small text-muted">{{ r.userId }}</td>
-                    <td class="small text-muted">{{ r.registradoAt | date:'dd/MM/yyyy HH:mm' }}</td>
-                    <td class="small text-muted fst-italic">{{ r.observacion || '—' }}</td>
-                  </tr>
-                }
-              </tbody>
-            </table>
-          </div>
+          @for (grupo of historialAgrupado(); track grupo.variableId) {
+            <div class="border-bottom">
+              <div class="px-3 pt-2 pb-1 small fw-semibold">{{ grupo.variableNombre }}</div>
+              <div class="table-responsive">
+                <table class="table table-sm mb-0">
+                  <tbody>
+                    @for (r of grupo.registros; track r.id; let i = $index) {
+                      <tr>
+                        <td class="ps-3 fw-bold" style="width:120px">
+                          {{ r.valorNum !== null ? r.valorNum : (r.valorTexto ?? (r.valorBool ? 'Sí' : 'No')) }}
+                        </td>
+                        <td class="small text-muted">{{ r.registradoAt | date:'dd/MM/yyyy HH:mm' }}</td>
+                        <td class="small text-muted">{{ r.userId }}</td>
+                        <td class="small text-muted fst-italic">{{ r.observacion || '—' }}</td>
+                        <td class="text-end pe-3">
+                          @if (i === 0) {
+                            <span class="badge bg-success">último</span>
+                          }
+                        </td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          }
         }
       </ng-template>
 
@@ -546,9 +592,47 @@ export class EjecucionComponent implements OnInit {
 
   valorTextoMostrado(id: string, fv: FormValor): string {
     const tipo = this.tipoVariable(id);
-    if (tipo === 'booleano') return fv.valorBool ? 'Sí' : 'No';
-    if (tipo === 'texto')    return fv.valorTexto;
-    return fv.valorNum?.toString() ?? '—';
+    const ult = fv.ultimoValor;
+    if (!ult) return '—';
+    if (tipo === 'booleano') return ult.valorBool ? 'Sí' : 'No';
+    if (tipo === 'texto')    return ult.valorTexto ?? '—';
+    return ult.valorNum?.toString() ?? '—';
+  }
+
+  /** Agrupa el historial por variable, más reciente primero dentro de cada grupo. */
+  historialAgrupado(): HistorialGrupo[] {
+    const grupos = new Map<string, HistorialGrupo>();
+    for (const r of this.registros) {
+      let g = grupos.get(r.variableId);
+      if (!g) {
+        g = { variableId: r.variableId, variableNombre: r.variableNombre, registros: [] };
+        grupos.set(r.variableId, g);
+      }
+      g.registros.push(r);
+    }
+    const lista = Array.from(grupos.values());
+    for (const g of lista) {
+      g.registros.sort((a, b) => new Date(b.registradoAt).getTime() - new Date(a.registradoAt).getTime());
+    }
+    return lista;
+  }
+
+  /** Muestra el campo vacío para capturar un nuevo valor (no reutiliza el último). */
+  mostrarNuevoRegistro(fv: FormValor): void {
+    fv.valorNum = null;
+    fv.valorTexto = '';
+    fv.valorBool = null;
+    fv.observacion = '';
+    fv.mostrandoInput = true;
+  }
+
+  /** Cancela la captura de un nuevo valor y vuelve a mostrar el último valor registrado. */
+  cancelarNuevoRegistro(fv: FormValor): void {
+    fv.valorNum = null;
+    fv.valorTexto = '';
+    fv.valorBool = null;
+    fv.observacion = '';
+    fv.mostrandoInput = false;
   }
 
   ngOnInit(): void {
@@ -603,11 +687,17 @@ export class EjecucionComponent implements OnInit {
 
   private construirForms(registros: RegistroValorDto[]): void {
     const userId = this.auth.currentUser()?.userId ?? '';
+    const ultimoDe = (v: VariableDto, filtro?: (r: RegistroValorDto) => boolean): RegistroValorDto | null => {
+      const candidatos = registros.filter(filtro ?? (r => r.variableId === v.id));
+      if (candidatos.length === 0) return null;
+      return candidatos.reduce((a, b) =>
+        new Date(b.registradoAt).getTime() > new Date(a.registradoAt).getTime() ? b : a);
+    };
     const mkForm = (v: VariableDto, filtro?: (r: RegistroValorDto) => boolean): FormValor => {
-      const ex = registros.find(filtro ?? (r => r.variableId === v.id));
+      const ultimo = ultimoDe(v, filtro);
       return {
-        variableId: v.id, valorNum: ex?.valorNum ?? null, valorTexto: ex?.valorTexto ?? '',
-        valorBool: ex?.valorBool ?? null, observacion: ex?.observacion ?? '', yaRegistrado: !!ex
+        variableId: v.id, valorNum: null, valorTexto: '', valorBool: null, observacion: '',
+        yaRegistrado: !!ultimo, ultimoValor: ultimo, mostrandoInput: !ultimo
       };
     };
     this.formsGrupal     = this.variablesGrupales.map(v => mkForm(v));
@@ -615,8 +705,8 @@ export class EjecucionComponent implements OnInit {
       mkForm(v, r => r.variableId === v.id && r.userId === userId));
   }
 
-  guardarGrupal():     void { this.guardar(this.formsGrupal.filter(f => !f.yaRegistrado)); }
-  guardarIndividual(): void { this.guardar(this.formsIndividual.filter(f => !f.yaRegistrado)); }
+  guardarGrupal():     void { this.guardar(this.formsGrupal.filter(f => f.mostrandoInput)); }
+  guardarIndividual(): void { this.guardar(this.formsIndividual.filter(f => f.mostrandoInput)); }
 
   private guardar(forms: FormValor[]): void {
     if (!this.sprintActual) return;
