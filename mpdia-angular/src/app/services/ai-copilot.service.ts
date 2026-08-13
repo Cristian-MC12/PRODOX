@@ -40,6 +40,9 @@ export class AICopilotService {
         case 403:
           errorMessage = error.error?.error || 'No tienes acceso a este proyecto';
           break;
+        case 429:
+          errorMessage = error.error?.error || 'Has alcanzado el límite de consultas. Intenta nuevamente en unos minutos';
+          break;
         case 500:
           errorMessage = 'El AI Copilot no está disponible en este momento';
           break;

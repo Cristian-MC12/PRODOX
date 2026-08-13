@@ -29,10 +29,10 @@ export class AICopilotComponent implements OnInit, AfterViewChecked {
   private shouldScroll = false;
 
   quickPrompts = [
-    'Analiza el sprint activo',
+    '¿Cómo está mi equipo?',
     '¿Qué riesgos detectas?',
-    'Analiza la productividad',
-    'Compara los últimos sprints'
+    'Analiza las métricas del sprint actual',
+    '¿Qué debería mejorar el equipo?'
   ];
 
   constructor(
@@ -159,7 +159,9 @@ Puedes preguntarme, por ejemplo:
         let errorMessage = err.message || 'Ocurrió un error inesperado';
         
         // Mensajes específicos según el tipo de error
-        if (err.message?.includes('acceso') || err.message?.includes('autorización')) {
+        if (err.message?.includes('límite de consultas') || err.message?.includes('límite')) {
+          errorMessage = '⏱️ Has alcanzado el límite temporal de consultas. Intenta en unos minutos.';
+        } else if (err.message?.includes('acceso') || err.message?.includes('autorización')) {
           errorMessage = '⚠️ No tienes acceso a este proyecto. Selecciona un proyecto válido.';
         } else if (err.message?.includes('no encontrado') || err.message?.includes('encontrado')) {
           errorMessage = '⚠️ El proyecto o sprint seleccionado no existe. Actualiza la página.';

@@ -173,9 +173,26 @@
 /* Preguntas rápidas */
 .quick-prompts {
   margin-top: 16px;
-  padding: 12px;
-  background: white;
+  padding: 16px;
+  background: rgba(102, 126, 234, 0.05);
   border-radius: 12px;
+  border: 1px dashed rgba(102, 126, 234, 0.3);
+}
+
+.quick-prompt-btn {
+  font-size: 0.85rem;
+  transition: all 0.2s ease;
+  border-radius: 20px;
+}
+
+.quick-prompt-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+}
+
+.quick-prompt-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 /* Input */

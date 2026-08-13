@@ -1,0 +1,198 @@
+<app-shell title="AI Insights — Análisis Agile">
+
+  @if (!proyecto) {
+    <div class="text-center py-5 text-muted">
+      <i class="bi bi-folder-x fs-1 d-block mb-3 opacity-25"></i>
+      <p>Seleccioná un proyecto primero.</p>
+      <button class="btn btn-primary btn-sm" (click)="router.navigate(['/proyectos'])">
+        Ir a Proyectos
+      </button>
+    </div>
+  } @else {
+
+    <p class="text-muted small mb-4">
+      Los <strong>AI Insights</strong> son observaciones generadas automáticamente mediante análisis
+      de métricas Agile y asistencia de IA. Identifican tendencias, anomalías y riesgos basándose
+      en datos reales del proyecto.
+    </p>
+
+    @if (alertMsg()) {
+      <div class="alert py-2 small mb-3" [class]="alertClass()">{{ alertMsg() }}</div>
+    }
+
+    <!-- Acciones -->
+    <div class="d-flex gap-2 mb-4">
+      <button 
+        class="btn btn-primary btn-sm"
+        (click)="generateInsights()"
+        [disabled]="generating() || loading()">
+        @if (generating()) {
+          <span class="spinner-border spinner-border-sm me-1"></span>
+          Generando...
+        } @else {
+          <i class="bi bi-stars me-1"></i>
+          Generar Insights
+        }
+      </button>
+      
+      <button 
+        class="btn btn-outline-secondary btn-sm"
+        (click)="loadInsights()"
+        [disabled]="loading() || generating()">
+        <i class="bi bi-arrow-clockwise me-1"></i>
+        Actualizar
+      </button>
+    </div>
+
+    <!-- Loading state -->
+    @if (loading()) {
+      <div class="text-center py-5">
+        <div class="spinner-border text-primary" role="status">
+          <span class="visually-hidden">Cargando...</span>
+        </div>
+        <p class="text-muted small mt-3">Cargando insights...</p>
+      </div>
+    } @else {
+      <!-- Empty state -->
+      @if (insights.length === 0 && !generating()) {
+        <div class="card text-center py-5">
+          <div class="card-body">
+            <i class="bi bi-lightbulb fs-1 text-muted opacity-50 mb-3"></i>
+            <h5 class="text-muted">No hay insights disponibles</h5>
+            <p class="text-muted small mb-3">
+              Generá insights para obtener observaciones y recomendaciones sobre el progreso del proyecto.
+            </p>
+            <p class="text-muted small">
+              <strong>Nota:</strong> Se requieren al menos 2 sprints finalizados con datos registrados
+              para generar insights significativos.
+            </p>
+          </div>
+        </div>
+      } @else {
+        <!-- Insights list -->
+        <div class="insights-grid">
+          @for (insight of insights; track insight.id) {
+          <div class="card insight-card mb-3">
+            <!-- Header -->
+            <div class="card-header d-flex justify-content-between align-items-start">
+              <div class="d-flex align-items-start gap-2 flex-grow-1">
+                <i class="bi {{ getTypeIcon(insight.type) }} fs-5" 
+                   [class.text-warning]="insight.type === 'ANOMALY'"
+                   [class.text-danger]="insight.type === 'RISK'"
+                   [class.text-info]="insight.type === 'TREND'"
+                   [class.text-primary]="insight.type === 'COMPARISON'"></i>
+                <div class="flex-grow-1">
+                  <h6 class="mb-1">{{ insight.title }}</h6>
+                  <div class="d-flex flex-wrap gap-2 small">
+                    <span class="badge {{ getSeverityBadgeClass(insight.severity) }}">
+                      {{ getSeverityLabel(insight.severity) }}
+                    </span>
+                    <span class="badge bg-light text-dark">
+                      {{ getTypeLabel(insight.type) }}
+                    </span>
+                    <span class="badge {{ getConfidenceBadgeClass(insight.confidence) }}">
+                      Confianza: {{ getConfidenceLabel(insight.confidence) }}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <button 
+                class="btn btn-sm btn-link text-muted p-0"
+                (click)="dismissInsight(insight)"
+                title="Descartar insight">
+                <i class="bi bi-x-lg"></i>
+              </button>
+            </div>
+
+            <!-- Body -->
+            <div class="card-body">
+              <!-- Descripción -->
+              <div class="mb-3">
+                <h6 class="small fw-semibold mb-1">
+                  <i class="bi bi-info-circle me-1"></i>
+                  Observación
+                </h6>
+                <p class="mb-0 small">{{ insight.description }}</p>
+              </div>
+
+              <!-- Evidencia -->
+              @if (insight.evidence && insight.evidence.length > 0) {
+                <div class="mb-3">
+                  <h6 class="small fw-semibold mb-2">
+                    <i class="bi bi-graph-up me-1"></i>
+                    Evidencia
+                  </h6>
+                  <div class="evidence-table">
+                    @for (evidence of insight.evidence; track $index) {
+                      <div class="evidence-item p-2 mb-2 border rounded bg-light">
+                        <div class="small">
+                          <strong>{{ evidence.categoria }}</strong>
+                        </div>
+                        <div class="row g-2 mt-1 small text-muted">
+                          @if (evidence.valorActual !== null) {
+                            <div class="col-6">
+                              Valor actual: <strong>{{ evidence.valorActual.toFixed(2) }}</strong>
+                            </div>
+                          }
+                          @if (evidence.valorAnterior !== null) {
+                            <div class="col-6">
+                              Valor anterior: {{ evidence.valorAnterior.toFixed(2) }}
+                            </div>
+                          }
+                          @if (evidence.promedioHistorico !== null) {
+                            <div class="col-6">
+                              Promedio: {{ evidence.promedioHistorico.toFixed(2) }}
+                            </div>
+                          }
+                          @if (evidence.variacionPorcentual !== null) {
+                            <div class="col-6">
+                              Variación: 
+                              <span [class.text-success]="evidence.variacionPorcentual > 0"
+                                    [class.text-danger]="evidence.variacionPorcentual < 0">
+                                {{ evidence.variacionPorcentual.toFixed(1) }}%
+                              </span>
+                            </div>
+                          }
+                          @if (evidence.tendencia) {
+                            <div class="col-6">
+                              Tendencia: <strong>{{ evidence.tendencia }}</strong>
+                            </div>
+                          }
+                          @if (evidence.numeroSprints !== null) {
+                            <div class="col-6">
+                              Sprints: {{ evidence.numeroSprints }}
+                            </div>
+                          }
+                        </div>
+                      </div>
+                    }
+                  </div>
+                </div>
+              }
+
+              <!-- Recomendación -->
+              @if (insight.recommendation) {
+                <div class="recommendation-box p-3 border border-primary border-opacity-25 rounded bg-primary bg-opacity-10">
+                  <h6 class="small fw-semibold mb-1">
+                    <i class="bi bi-lightbulb-fill text-primary me-1"></i>
+                    Recomendación
+                  </h6>
+                  <p class="mb-0 small">{{ insight.recommendation }}</p>
+                </div>
+              }
+
+              <!-- Metadata -->
+              <div class="mt-3 pt-2 border-top text-muted small">
+                <i class="bi bi-clock me-1"></i>
+                Generado: {{ insight.createdAt | date:'dd/MM/yyyy HH:mm' }}
+              </div>
+            </div>
+          </div>
+        }
+        </div>
+      }
+    }
+
+  }
+
+</app-shell>

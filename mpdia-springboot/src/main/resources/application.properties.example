@@ -71,3 +71,5 @@ mpdia.ai.rate-limit.window-seconds=60
 
 # AI Copilot - Configuración general
 mpdia.ai.max-history-messages=10
+mpdia.ai.max-tool-iterations=5
+mpdia.ai.max-message-length=4000

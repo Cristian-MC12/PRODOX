@@ -1,0 +1,25 @@
+/* Autor: Cristian Santiago Martinez Cordoba — MPDIA */
+
+.insight-card {
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.insight-card:hover {
+  box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+  transform: translateY(-2px);
+}
+
+.border-start {
+  border-left-width: 4px !important;
+}
+
+.bi-star-fill {
+  color: #ffc107;
+  font-size: 0.8em;
+}
+
+.card-title {
+  font-size: 0.95rem;
+  margin-bottom: 0.75rem;
+}

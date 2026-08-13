@@ -22,6 +22,15 @@ public class ParametrizacionService {
     private final GeminiService geminiService;
     private final ObjectMapper objectMapper;
 
+    /**
+     * Genera UNA propuesta de parametrización usando Gemini.
+     * 
+     * FASE 16.5: Evolucionado de "3 propuestas" a "asistente que propone 1 parametrización".
+     * La IA actúa como asistente experto, no como generador de opciones múltiples.
+     * 
+     * Retorna List con 1 elemento para mantener compatibilidad con frontend.
+     * En caso de error con Gemini, retorna propuesta genérica (nunca falla).
+     */
     public List<PropuestaParametrizacionDto> generarPropuestas(ParametrizacionRequest request) {
         String prompt = buildPrompt(request);
         try {
@@ -38,59 +47,54 @@ public class ParametrizacionService {
     private List<PropuestaParametrizacionDto> fallbackPropuestas(ParametrizacionRequest r) {
         return List.of(
             new PropuestaParametrizacionDto(
-                "Conteo directo por sprint",
-                "Medir la cantidad total de " + r.metricaNombre() + " registrados durante el sprint.",
-                "Al cierre del sprint, el Scrum Master recopila y suma el valor de todos los miembros.",
-                r.metricaNombre() + " = suma de ocurrencias registradas en el sprint",
-                "Numérica entera ≥ 0",
-                "Propuesta estándar de medición directa."
-            ),
-            new PropuestaParametrizacionDto(
-                "Promedio por iteración",
-                "Calcular el promedio de " + r.metricaNombre() + " a lo largo de los sprints.",
-                "Suma de valores individuales dividido por el número de participantes.",
-                r.metricaNombre() + " promedio = Σ valores / n participantes",
-                "Decimal con 2 cifras, rango 0-100",
-                "Permite comparar tendencias entre sprints."
-            ),
-            new PropuestaParametrizacionDto(
-                "Escala de valoración",
-                "Evaluar " + r.metricaNombre() + " en una escala ordinal acordada por el equipo.",
-                "Cada miembro asigna un valor al finalizar el sprint según criterios definidos.",
-                r.metricaNombre() + " = valoración subjetiva del equipo",
-                "Escala ordinal 1-5 (1=muy bajo, 5=muy alto)",
-                "Útil para métricas cualitativas o de percepción."
+                "Medición directa por sprint",
+                "Medir " + r.metricaNombre() + " de forma directa y práctica durante el sprint.",
+                "Al cierre del sprint, el Scrum Master o equipo recopila el valor observado según criterios definidos por el equipo.",
+                r.metricaNombre() + " (valor registrado según ocurrencia durante el sprint)",
+                "Escala numérica (definir rango según contexto del equipo)",
+                "PROPUESTA de IA generada automáticamente. Requiere validación y ajuste del equipo según su contexto específico. Esta es una parametrización genérica que debe adaptarse."
             )
         );
     }
 
     private String buildPrompt(ParametrizacionRequest r) {
         return """
-            Eres un experto en métricas de productividad para equipos Scrum y metodologías ágiles.
+            Eres un asistente experto en métricas de productividad para equipos Scrum y metodologías ágiles.
             
-            El equipo Scrum necesita parametrizar la siguiente métrica de medición de productividad:
+            Tu objetivo es AYUDAR al equipo a parametrizar la siguiente métrica:
             
             Factor:      %s (Categoría: %s)
             Métrica:     %s
             Descripción: %s
             
-            Genera EXACTAMENTE 3 propuestas diferentes de parametrización para esta métrica.
-            Cada propuesta debe ser una forma distinta y válida de medir este atributo en un sprint.
+            Genera UNA propuesta estructurada de parametrización basándote en:
+            - La definición de la métrica
+            - Buenas prácticas de Scrum/Agile
+            - Simplicidad y practicidad para el equipo
             
-            Responde ÚNICAMENTE con un array JSON válido con EXACTAMENTE este formato,
+            REGLAS IMPORTANTES:
+            1. NO inventes datos, resultados históricos o benchmarks
+            2. NO afirmes que una escala es "oficial" sin fundamento
+            3. Si algo no está definido claramente, propón algo razonable pero indica que es una PROPUESTA
+            4. Prioriza la SIMPLICIDAD sobre la complejidad
+            5. La parametrización debe ser PRÁCTICA y APLICABLE
+            6. Diferencia claramente entre información existente y propuesta
+            
+            Responde ÚNICAMENTE con un array JSON con UN objeto (para compatibilidad), 
             sin texto adicional, sin markdown, sin explicaciones fuera del JSON:
             [
               {
-                "titulo": "Nombre corto de la propuesta (máx 8 palabras)",
+                "titulo": "Nombre descriptivo de la parametrización (máx 8 palabras)",
                 "objetivo": "Qué se quiere lograr midiendo esta métrica en el sprint",
-                "procedimiento": "Fórmula o procedimiento paso a paso para calcular el valor",
-                "indicadorVariable": "Indicador principal y variables que intervienen en el cálculo",
-                "escala": "Escala de medición: numérica, porcentual, ordinal, etc. con rango",
-                "justificacion": "Por qué esta propuesta es adecuada para equipos Scrum"
+                "procedimiento": "Fórmula o procedimiento paso a paso claro y específico para medir",
+                "indicadorVariable": "Indicador principal y variables necesarias para el cálculo",
+                "escala": "Escala de medición: numérica, porcentual, ordinal, etc. con rango específico",
+                "justificacion": "Por qué esta propuesta es adecuada para equipos Scrum (menciona que es una PROPUESTA que requiere validación del equipo)"
               }
             ]
             
-            IMPORTANTE: genera exactamente 3 objetos en el array. Todos los campos son obligatorios.
+            IMPORTANTE: Genera EXACTAMENTE 1 objeto en el array. Todos los campos son obligatorios.
+            La justificación debe dejar claro que es una propuesta de IA que requiere validación humana.
             """.formatted(
                 r.factorNombre(), r.factorCategoria(),
                 r.metricaNombre(), r.metricaDescripcion()

@@ -1,0 +1,139 @@
+<!-- Autor: Cristian Santiago Martinez Cordoba — MPDIA -->
+<app-shell title="Dashboard">
+  <div class="container-fluid p-4">
+    
+    <!-- Alertas -->
+    @if (alertMsg()) {
+      <div class="alert {{alertClass()}} alert-dismissible fade show" role="alert">
+        {{alertMsg()}}
+        <button type="button" class="btn-close" (click)="alertMsg.set('')"></button>
+      </div>
+    }
+
+    <!-- Loading State -->
+    @if (state() === 'loading') {
+      <div class="text-center py-5">
+        <div class="spinner-border text-primary" role="status">
+          <span class="visually-hidden">Cargando dashboard...</span>
+        </div>
+        <p class="mt-3 text-muted">Cargando información del proyecto...</p>
+      </div>
+    }
+
+    <!-- Error State -->
+    @if (state() === 'error') {
+      <div class="text-center py-5">
+        <i class="bi bi-exclamation-triangle display-1 text-danger"></i>
+        <h4 class="mt-3">Error cargando dashboard</h4>
+        <p class="text-muted">No se pudo obtener la información del proyecto.</p>
+        <button class="btn btn-primary" (click)="retry()">
+          <i class="bi bi-arrow-clockwise me-2"></i>
+          Reintentar
+        </button>
+      </div>
+    }
+
+    <!-- Empty State - No sprints finalizados -->
+    @if (state() === 'empty') {
+      <div class="text-center py-5">
+        <i class="bi bi-graph-up display-1 text-info"></i>
+        <h4 class="mt-3">Proyecto recién creado</h4>
+        <p class="text-muted mb-4">
+          No hay sprints finalizados todavía. Completa tu primer sprint para comenzar a ver métricas.
+        </p>
+        @if (sprintActivo) {
+          <div class="alert alert-info d-inline-block">
+            <strong>Sprint activo:</strong> Sprint {{sprintActivo.numero}}
+            @if (sprintActivo.sprintGoal) {
+              - {{sprintActivo.sprintGoal}}
+            }
+          </div>
+        }
+      </div>
+    }
+
+    <!-- Insufficient Data State -->
+    @if (state() === 'insufficient-data') {
+      <div class="text-center py-5">
+        <i class="bi bi-bar-chart display-1 text-warning"></i>
+        <h4 class="mt-3">Datos insuficientes</h4>
+        <p class="text-muted mb-4">
+          Completa al menos un sprint para comenzar a ver métricas y análisis.
+        </p>
+        @if (projectOverview) {
+          <div class="row justify-content-center">
+            <div class="col-md-6">
+              <div class="card">
+                <div class="card-body">
+                  <h6 class="card-title">Estado del proyecto</h6>
+                  <p class="mb-1"><strong>Total sprints:</strong> {{projectOverview.totalSprints}}</p>
+                  <p class="mb-1"><strong>Finalizados:</strong> {{projectOverview.sprintsFinalizados}}</p>
+                  @if (projectOverview.sprintActualNumero) {
+                    <p class="mb-0"><strong>Sprint actual:</strong> {{projectOverview.sprintActualNumero}}</p>
+                  }
+                </div>
+              </div>
+            </div>
+          </div>
+        }
+      </div>
+    }
+
+    <!-- Success State - Dashboard completo -->
+    @if (state() === 'success' && projectOverview) {
+      <div class="dashboard-content">
+        
+        <!-- Resumen del proyecto -->
+        <div class="row mb-4">
+          <div class="col-12">
+            <app-project-summary-card [overview]="projectOverview" />
+          </div>
+        </div>
+
+        <!-- Métricas promedio -->
+        @if (Object.keys(projectOverview.promedioHistorico).length > 0) {
+          <div class="row mb-4">
+            <div class="col-12">
+              <app-metrics-overview-card [metricas]="projectOverview.promedioHistorico" />
+            </div>
+          </div>
+        }
+
+        <!-- Riesgos detectados -->
+        <div class="row mb-4">
+          <div class="col-12">
+            <app-risks-alerts-card [risks]="risks" />
+          </div>
+        </div>
+
+        <!-- Insights recientes -->
+        <div class="row mb-4">
+          <div class="col-12">
+            <app-insights-quick-view 
+              [insights]="recentInsights"
+              (viewAllClick)="navigateToInsights()" />
+          </div>
+        </div>
+
+        <!-- Acciones rápidas -->
+        <div class="row mb-4">
+          <div class="col-12">
+            <app-quick-actions-panel
+              (generateInsightsClick)="generateInsights()"
+              (viewReportsClick)="navigateToReports()"
+              (viewRetrospectivesClick)="navigateToRetrospectives()"
+              (viewInsightsClick)="navigateToInsights()" />
+          </div>
+        </div>
+
+        <!-- Info sobre datos insuficientes para trends -->
+        @if (!hasTrends() && projectOverview.sprintsFinalizados < 3) {
+          <div class="alert alert-info">
+            <i class="bi bi-info-circle me-2"></i>
+            <strong>Análisis de tendencias:</strong> Se habilitará cuando completes 3 o más sprints.
+          </div>
+        }
+      </div>
+    }
+  </div>
+</app-shell>

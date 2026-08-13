@@ -1,16 +1,16 @@
 package com.mpdia.entity;
 
 import jakarta.persistence.*;
-import lombok.Getter;
+import lombok.Data;
 import lombok.NoArgsConstructor;
-import lombok.Setter;
 
 import java.time.Instant;
 import java.util.UUID;
 
 @Entity
 @Table(name = "factors")
-@Getter @Setter @NoArgsConstructor
+@Data
+@NoArgsConstructor
 public class Factor {
 
     @Id

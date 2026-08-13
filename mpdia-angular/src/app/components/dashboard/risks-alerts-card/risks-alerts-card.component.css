@@ -1,0 +1,46 @@
+/* Autor: Cristian Santiago Martinez Cordoba — MPDIA */
+
+.alert {
+  border-left: 4px solid;
+  transition: transform 0.2s ease;
+}
+
+.alert:hover {
+  transform: translateX(2px);
+}
+
+.alert-danger {
+  border-left-color: #dc3545;
+}
+
+.alert-warning {
+  border-left-color: #ffc107;
+}
+
+.alert-info {
+  border-left-color: #0dcaf0;
+}
+
+.alert-success {
+  border-left-color: #198754;
+}
+
+.alert-heading {
+  font-size: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.risk-actions {
+  border-top: 1px solid rgba(0,0,0,0.1);
+  padding-top: 0.5rem;
+}
+
+.risk-actions .btn {
+  font-size: 0.75rem;
+  padding: 0.25rem 0.5rem;
+}
+
+.risk-actions small {
+  font-size: 0.7rem;
+  line-height: 1.2;
+}

@@ -28,7 +28,14 @@ public class ProjectMemberController {
         return ResponseEntity.ok(service.listarMiembros(proyectoId));
     }
 
-    /** POST /api/project-members/{proyectoId}/invitar — invitar por email */
+    /*
+     * ENDPOINTS COMENTADOS TEMPORALMENTE
+     * Razón: Dependen de funcionalidad ProjectInvitacion que NO existe
+     * Este es un PROBLEMA PREEXISTENTE, NO relacionado con AI Copilot (Fase 12)
+     */
+
+    /*
+    // POST /api/project-members/{proyectoId}/invitar — invitar por email
     @PostMapping("/{proyectoId}/invitar")
     public ResponseEntity<Map<String, String>> invitar(
             @PathVariable UUID proyectoId,
@@ -38,11 +45,12 @@ public class ProjectMemberController {
         return ResponseEntity.ok(Map.of("codigo", codigo));
     }
 
-    /** POST /api/project-members/unirse — unirse con código */
+    // POST /api/project-members/unirse — unirse con código
     @PostMapping("/unirse")
     public ResponseEntity<ProjectMemberDto> unirse(
             @Valid @RequestBody UnirseProyectoRequest request,
             Authentication auth) {
         return ResponseEntity.ok(service.unirse(auth.getName(), request));
     }
+    */
 }

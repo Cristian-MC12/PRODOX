@@ -92,9 +92,9 @@ public class GlobalExceptionHandler {
         return buildResponse(HttpStatus.FORBIDDEN, ex.getMessage());
     }
 
-    /** Rate limiting exception (429 TOO MANY REQUESTS) */
-    @ExceptionHandler(RateLimitException.class)
-    public ResponseEntity<Map<String, Object>> handleRateLimitException(RateLimitException ex) {
+    /** Rate limit excedido - HTTP 429 TOO_MANY_REQUESTS */
+    @ExceptionHandler(com.mpdia.ratelimit.RateLimitException.class)
+    public ResponseEntity<Map<String, Object>> handleRateLimitException(com.mpdia.ratelimit.RateLimitException ex) {
         log.warn("Rate limit excedido: {}", ex.getMessage());
         return buildResponse(HttpStatus.TOO_MANY_REQUESTS, ex.getMessage());
     }

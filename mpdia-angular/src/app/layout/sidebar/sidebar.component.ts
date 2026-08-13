@@ -83,6 +83,41 @@ import { filter, Subscription } from 'rxjs';
             </a>
           </li>
 
+          <!-- Separador IA -->
+          <li class="nav-item px-3 pt-2">
+            <small class="text-muted text-uppercase" style="font-size:0.65rem;letter-spacing:.05em">
+              Análisis IA
+            </small>
+          </li>
+
+          <li class="nav-item">
+            <a class="nav-link" routerLink="/dashboard" routerLinkActive="active" (click)="close()">
+              <i class="bi bi-speedometer2"></i>
+              <span>Dashboard</span>
+            </a>
+          </li>
+
+          <li class="nav-item">
+            <a class="nav-link" routerLink="/ai-insights" routerLinkActive="active" (click)="close()">
+              <i class="bi bi-stars"></i>
+              <span>AI Insights</span>
+            </a>
+          </li>
+
+          <li class="nav-item">
+            <a class="nav-link" routerLink="/ai-report" routerLinkActive="active" (click)="close()">
+              <i class="bi bi-file-earmark-bar-graph"></i>
+              <span>Reportes</span>
+            </a>
+          </li>
+
+          <li class="nav-item">
+            <a class="nav-link" routerLink="/ai-retrospective" routerLinkActive="active" (click)="close()">
+              <i class="bi bi-arrow-repeat"></i>
+              <span>Retrospectivas</span>
+            </a>
+          </li>
+
           <!-- Separador general -->
           <li class="nav-item px-3 pt-2">
             <small class="text-muted text-uppercase" style="font-size:0.65rem;letter-spacing:.05em">

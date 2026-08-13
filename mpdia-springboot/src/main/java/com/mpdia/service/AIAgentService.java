@@ -32,6 +32,9 @@ public class AIAgentService {
 
     private final GeminiService geminiService;
 
+    @org.springframework.beans.factory.annotation.Value("${mpdia.ai.max-tool-iterations:5}")
+    private int maxToolIterations;
+
     /**
      * Procesa un mensaje del usuario utilizando tools disponibles.
      * 
@@ -57,10 +60,9 @@ public class AIAgentService {
         conversationHistory.add(Message.user(userMessage));
 
         // 2. Iniciar conversación con la IA
-        int maxIterations = 5; // Límite de seguridad para evitar loops infinitos
         int iteration = 0;
 
-        while (iteration < maxIterations) {
+        while (iteration < maxToolIterations) {
             iteration++;
             log.debug("Iteración {} de conversación con IA", iteration);
 
@@ -122,7 +124,7 @@ public class AIAgentService {
         }
 
         // Si llegamos al límite de iteraciones
-        log.warn("Se alcanzó el límite de iteraciones ({}) sin respuesta final", maxIterations);
+        log.warn("Se alcanzó el límite de iteraciones ({}) sin respuesta final", maxToolIterations);
         return new AgentResponse(
             "Lo siento, no pude procesar tu solicitud completamente.",
             toolsUsed,

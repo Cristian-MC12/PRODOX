@@ -1,0 +1,39 @@
+<!-- Autor: Cristian Santiago Martinez Cordoba — MPDIA -->
+<div class="metrics-section">
+  <h5 class="mb-3">
+    <i class="bi bi-graph-up me-2"></i>
+    Métricas Promedio
+  </h5>
+  
+  @if (getMetricasArray().length > 0) {
+    <div class="row">
+      @for (metrica of getMetricasArray(); track metrica.categoria) {
+        <div class="col-lg-3 col-md-4 col-6 mb-3">
+          <div class="card metric-card bg-light">
+            <div class="card-body text-center">
+              <h6 class="text-muted mb-1 text-truncate" [title]="metrica.categoria">
+                {{metrica.categoria}}
+                <i class="bi bi-info-circle ms-1 text-info" 
+                   [title]="'Promedio histórico de ' + metrica.categoria + ': ' + (metrica.valor | number:'1.1-1')"
+                   style="font-size: 0.8em; cursor: help;"></i>
+              </h6>
+              <h3 class="mb-0 metric-value d-flex align-items-center justify-content-center">
+                {{metrica.valor | number:'1.1-1'}}
+              </h3>
+              <div class="metric-interpretation">
+                <small class="text-muted">
+                  {{getMetricInterpretation(metrica.valor)}}
+                </small>
+              </div>
+            </div>
+          </div>
+        </div>
+      }
+    </div>
+  } @else {
+    <div class="alert alert-info">
+      <i class="bi bi-info-circle me-2"></i>
+      No hay métricas disponibles. Completa al menos un sprint para ver datos.
+    </div>
+  }
+</div>

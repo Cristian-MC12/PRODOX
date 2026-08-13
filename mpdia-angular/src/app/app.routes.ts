@@ -79,6 +79,33 @@ export const routes: Routes = [
     loadComponent: () => import('./pages/equipo/equipo.component').then(m => m.EquipoComponent),
     title: 'Equipo — MPDIA'
   },
+  // ── Dashboard Inteligente ─────────────────────────────────────────────
+  {
+    path: 'dashboard',
+    canActivate: [authGuard, proyectoGuard],
+    loadComponent: () => import('./pages/dashboard/dashboard.component').then(m => m.DashboardComponent),
+    title: 'Dashboard — MPDIA'
+  },
+  // ── AI Insights ───────────────────────────────────────────────────────
+  {
+    path: 'ai-insights',
+    canActivate: [authGuard, proyectoGuard],
+    loadComponent: () => import('./pages/ai-insights/ai-insights.component').then(m => m.AIInsightsComponent),
+    title: 'AI Insights — MPDIA'
+  },
+  // ── AI Reports & Retrospectives ───────────────────────────────────────
+  {
+    path: 'ai-report',
+    canActivate: [authGuard, proyectoGuard],
+    loadComponent: () => import('./pages/ai-report/ai-report.component').then(m => m.AIReportComponent),
+    title: 'Reporte Ejecutivo — MPDIA'
+  },
+  {
+    path: 'ai-retrospective',
+    canActivate: [authGuard, proyectoGuard],
+    loadComponent: () => import('./pages/ai-retrospective/ai-retrospective.component').then(m => m.AIRetrospectiveComponent),
+    title: 'Retrospectiva Inteligente — MPDIA'
+  },
   // ── Configuración copiloto ────────────────────────────────────────────
   {
     path: 'configuracion',

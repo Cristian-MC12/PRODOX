@@ -1,0 +1,58 @@
+<!-- Autor: Cristian Santiago Martinez Cordoba — MPDIA -->
+<div class="insights-section">
+  <h5 class="mb-3">
+    <i class="bi bi-lightbulb text-info me-2"></i>
+    Insights Recientes
+    @if (insights.length > 0) {
+      <span class="badge bg-info text-dark ms-2">{{insights.length}}</span>
+      <button 
+        class="btn btn-outline-primary btn-sm ms-2"
+        (click)="onViewAllClick()"
+        aria-label="Ver todos los insights">
+        Ver todos
+      </button>
+    }
+  </h5>
+  
+  @if (insights.length > 0) {
+    <div class="row">
+      @for (insight of insights; track insight.id) {
+        <div class="col-md-6 mb-3">
+          <div class="card border-start border-4 {{getTypeClass(insight.type)}} insight-card">
+            <div class="card-body">
+              <h6 class="card-title d-flex align-items-center justify-content-between">
+                <span>
+                  <i class="bi {{getTypeIcon(insight.type)}} me-2" [attr.aria-label]="getTypeLabel(insight.type)"></i>
+                  <span class="badge {{getSeverityBadge(insight.severity)}} me-2">
+                    {{getTypeLabel(insight.type)}}
+                  </span>
+                </span>
+                <small class="text-muted">
+                  <i class="bi bi-star-fill me-1" [attr.aria-label]="'Confianza: ' + insight.confidence"></i>
+                  {{insight.confidence}}
+                </small>
+              </h6>
+              <p class="card-text mb-1">
+                <strong>{{insight.title}}</strong>
+              </p>
+              <p class="card-text small text-muted mb-0">
+                {{insight.description}}
+              </p>
+            </div>
+          </div>
+        </div>
+      }
+    </div>
+  } @else {
+    <div class="alert alert-info">
+      <i class="bi bi-info-circle me-2"></i>
+      No hay insights disponibles.
+      <button 
+        class="btn btn-sm btn-primary ms-2"
+        (click)="onViewAllClick()"
+        aria-label="Generar nuevos insights">
+        Generar Insights
+      </button>
+    </div>
+  }
+</div>

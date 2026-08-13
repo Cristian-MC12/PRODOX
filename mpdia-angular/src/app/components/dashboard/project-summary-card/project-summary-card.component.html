@@ -1,0 +1,35 @@
+<!-- Autor: Cristian Santiago Martinez Cordoba — MPDIA -->
+<div class="card">
+  <div class="card-body">
+    <h5 class="card-title mb-3">
+      <i class="bi bi-speedometer2 me-2"></i>
+      Resumen del Proyecto
+    </h5>
+    <div class="row">
+      <div class="col-md-3 col-6 mb-3 mb-md-0">
+        <h6 class="text-muted mb-1">Total Sprints</h6>
+        <h4 class="mb-0">{{overview.totalSprints}}</h4>
+      </div>
+      <div class="col-md-3 col-6 mb-3 mb-md-0">
+        <h6 class="text-muted mb-1">Finalizados</h6>
+        <h4 class="mb-0 text-success">{{overview.sprintsFinalizados}}</h4>
+      </div>
+      @if (overview.sprintActualNumero) {
+        <div class="col-md-3 col-6">
+          <h6 class="text-muted mb-1">Sprint Actual</h6>
+          <h4 class="mb-0 text-primary">{{overview.sprintActualNumero}}</h4>
+        </div>
+      }
+      @if (overview.mejorSprint) {
+        <div class="col-md-3 col-6">
+          <h6 class="text-muted mb-1">Mejor Sprint</h6>
+          <h4 class="mb-0 text-warning">
+            <i class="bi bi-trophy-fill me-1"></i>
+            {{overview.mejorSprint.numero}}
+          </h4>
+          <small class="text-muted">{{overview.mejorSprint.razon}}</small>
+        </div>
+      }
+    </div>
+  </div>
+</div>

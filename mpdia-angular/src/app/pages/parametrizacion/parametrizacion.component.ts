@@ -143,15 +143,15 @@ import { environment } from '../../../environments/environment';
           </div>
         }
 
-        <!-- Botón GenAI -->
+        <!-- Asistente GenAI -->
         <div class="card mb-4">
           <div class="card-header d-flex align-items-center gap-2">
             <i class="bi bi-robot text-primary fs-5"></i>
-            <div>
-              <div class="fw-semibold small">GenAI — Proponer proceso de medición</div>
+            <div class="flex-grow-1">
+              <div class="fw-semibold small">AI — Asistente de parametrización</div>
               <div class="text-muted" style="font-size:0.75rem">
-                La IA generará 3 propuestas de parametrización para esta métrica.
-                Elegí la que mejor se adapte a tu equipo.
+                La IA puede ayudarte a construir una parametrización para esta métrica
+                a partir de su definición y buenas prácticas de Scrum.
               </div>
             </div>
           </div>
@@ -161,60 +161,83 @@ import { environment } from '../../../environments/environment';
                     (click)="generarPropuestas()">
               @if (generando) {
                 <span class="spinner-border spinner-border-sm me-2"></span>
-                Generando propuestas...
+                Generando parametrización...
               } @else {
                 <i class="bi bi-stars me-2"></i>
-                Generar 3 propuestas con GenAI
+                Generar parametrización con GenAI
               }
             </button>
             @if (errorGenAI) {
-              <div class="alert alert-danger small mt-2 mb-0 py-2">{{ errorGenAI }}</div>
+              <div class="alert alert-danger small mt-3 mb-0 py-2">
+                <i class="bi bi-exclamation-triangle me-1"></i>{{ errorGenAI }}
+              </div>
             }
           </div>
         </div>
 
-        <!-- 3 Propuestas de GenAI -->
-        @if (propuestas.length > 0) {
-          <h6 class="fw-semibold mb-3">
-            <i class="bi bi-list-ol me-1"></i>Propuestas generadas — elegí una:
-          </h6>
-          <div class="row g-3 mb-4">
-            @for (p of propuestas; track $index) {
-              <div class="col-lg-4">
-                <div class="card h-100 propuesta-card"
-                     [class.border-primary]="propuestaElegida === $index"
-                     [class.bg-primary]="propuestaElegida === $index"
-                     [class.bg-opacity-10]="propuestaElegida === $index"
-                     style="cursor:pointer"
-                     (click)="elegirPropuesta($index, p)">
-                  <div class="card-header d-flex justify-content-between align-items-center py-2">
-                    <span class="fw-semibold small">
-                      <span class="badge bg-primary me-1">{{ $index + 1 }}</span>
-                      {{ p.titulo }}
-                    </span>
-                    @if (propuestaElegida === $index) {
-                      <i class="bi bi-check-circle-fill text-primary"></i>
-                    }
-                  </div>
-                  <div class="card-body py-2">
-                    <dl class="mb-0" style="font-size:0.78rem">
-                      <dt class="text-muted">Objetivo</dt>
-                      <dd>{{ p.objetivo }}</dd>
-                      <dt class="text-muted">Procedimiento</dt>
-                      <dd>{{ p.procedimiento }}</dd>
-                      <dt class="text-muted">Indicador / Variables</dt>
-                      <dd>{{ p.indicadorVariable }}</dd>
-                      <dt class="text-muted">Escala</dt>
-                      <dd class="mb-0">{{ p.escala }}</dd>
-                    </dl>
-                  </div>
-                  <div class="card-footer py-2" style="font-size:0.72rem">
-                    <i class="bi bi-info-circle me-1 text-muted"></i>
-                    {{ p.justificacion }}
+        <!-- Propuesta generada por IA -->
+        @if (propuestas.length > 0 && propuestas[0]) {
+          <div class="card mb-4 border-primary">
+            <div class="card-header bg-primary bg-opacity-10 d-flex align-items-center justify-content-between py-2">
+              <div class="d-flex align-items-center gap-2">
+                <i class="bi bi-stars text-primary fs-5"></i>
+                <div>
+                  <div class="fw-semibold small">Propuesta generada por IA</div>
+                  <div class="text-muted" style="font-size:0.72rem">
+                    <i class="bi bi-exclamation-circle me-1"></i>
+                    <strong>Requiere validación humana</strong> — Revisá y ajustá según el contexto de tu equipo
                   </div>
                 </div>
               </div>
-            }
+              <button class="btn btn-sm btn-outline-primary"
+                      [disabled]="generando"
+                      (click)="generarPropuestas()"
+                      title="Generar nueva propuesta">
+                <i class="bi bi-arrow-clockwise me-1"></i>Regenerar
+              </button>
+            </div>
+            <div class="card-body">
+              <h6 class="text-primary fw-semibold mb-3">
+                <i class="bi bi-tag me-1"></i>{{ propuestas[0].titulo }}
+              </h6>
+              <dl class="row mb-0 small">
+                <dt class="col-sm-3 text-muted">
+                  <i class="bi bi-bullseye me-1"></i>Objetivo
+                </dt>
+                <dd class="col-sm-9">{{ propuestas[0].objetivo }}</dd>
+
+                <dt class="col-sm-3 text-muted">
+                  <i class="bi bi-list-ol me-1"></i>Procedimiento
+                </dt>
+                <dd class="col-sm-9">{{ propuestas[0].procedimiento }}</dd>
+
+                <dt class="col-sm-3 text-muted">
+                  <i class="bi bi-speedometer2 me-1"></i>Indicador / Variables
+                </dt>
+                <dd class="col-sm-9">{{ propuestas[0].indicadorVariable }}</dd>
+
+                <dt class="col-sm-3 text-muted">
+                  <i class="bi bi-bar-chart-steps me-1"></i>Escala
+                </dt>
+                <dd class="col-sm-9 mb-3">{{ propuestas[0].escala }}</dd>
+
+                <dt class="col-sm-12">
+                  <div class="alert alert-info py-2 mb-0">
+                    <i class="bi bi-info-circle me-1"></i>
+                    <strong>Justificación:</strong> {{ propuestas[0].justificacion }}
+                  </div>
+                </dt>
+              </dl>
+            </div>
+            <div class="card-footer py-2 d-flex justify-content-between align-items-center">
+              <span class="small text-muted">
+                <i class="bi bi-robot me-1"></i>Esta es una propuesta de IA, no una configuración oficial
+              </span>
+              <button class="btn btn-success btn-sm"
+                      (click)="usarPropuesta(propuestas[0])">
+                <i class="bi bi-clipboard-check me-1"></i>Usar esta propuesta
+              </button>
+            </div>
           </div>
         }
 
@@ -222,7 +245,7 @@ import { environment } from '../../../environments/environment';
         <div class="card mb-4">
           <div class="card-header fw-semibold small">
             <i class="bi bi-pencil me-1"></i>
-            {{ propuestaElegida !== null ? 'Editar propuesta seleccionada' : 'Parametrización manual' }}
+            {{ propuestas.length > 0 ? 'Revisar y ajustar parametrización' : 'Parametrización manual' }}
           </div>
           <div class="card-body">
             <div class="row g-3">
@@ -296,10 +319,7 @@ import { environment } from '../../../environments/environment';
       }
     </app-shell>
   `,
-  styles: [`
-    .propuesta-card { transition: border-color 0.15s, background-color 0.15s; }
-    .propuesta-card:hover { border-color: var(--bs-primary) !important; }
-  `]
+  styles: [``]
 })
 export class ParametrizacionComponent implements OnInit {
   metrica: MetricaSeleccionada | null       = null;
@@ -395,21 +415,43 @@ export class ParametrizacionComponent implements OnInit {
       metricaNombre:      this.metrica.metricaNombre,
       metricaDescripcion: this.metrica.metricaDescripcion
     }).subscribe({
-      next:  p  => { this.propuestas = p; this.generando = false; },
+      next:  p  => { 
+        this.propuestas = p;
+        this.generando = false;
+        // Si la propuesta tiene solo 1 elemento, no auto-aplicar
+        // Esperar confirmación explícita del usuario
+      },
       error: () => { this.errorGenAI = 'Error al conectar con GenAI.'; this.generando = false; }
     });
   }
 
-  elegirPropuesta(idx: number, p: PropuestaGenAI): void {
-    this.propuestaElegida = idx;
+  /**
+   * Usuario hace click en "Usar esta propuesta" - copia la propuesta al formulario
+   */
+  usarPropuesta(p: PropuestaGenAI): void {
     this.form = {
       objetivo:          p.objetivo,
       procedimiento:     p.procedimiento,
       indicadorVariable: p.indicadorVariable,
       escala:            p.escala,
       frecuenciaCaptura: p.frecuenciaCaptura || 'por_sprint',
-      propuestaElegida:  idx
+      propuestaElegida:  0  // índice 0 ya que ahora solo hay 1 propuesta
     };
+    // Scroll al formulario para que el usuario vea los cambios
+    setTimeout(() => {
+      const formulario = document.querySelector('.card:last-of-type');
+      formulario?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 100);
+  }
+
+  /**
+   * DEPRECATED: Se mantiene por compatibilidad pero ya no se usa
+   * (las 3 tarjetas fueron reemplazadas por 1 propuesta)
+   */
+  elegirPropuesta(idx: number, p: PropuestaGenAI): void {
+    // Este método ya no se llama desde el template pero se mantiene
+    // para no romper si hay referencias en otros lugares
+    this.usarPropuesta(p);
   }
 
   calcularEstado(): 'sin_parametrizar' | 'parcial' | 'completa' {

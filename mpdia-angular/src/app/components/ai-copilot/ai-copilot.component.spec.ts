@@ -130,4 +130,47 @@ describe('AICopilotComponent', () => {
   afterEach(() => {
     localStorage.clear();
   });
+
+  // CO.4 — SUGERENCIAS DE PREGUNTAS
+  describe('CO.4 - Sugerencias de preguntas', () => {
+    it('debería tener lista de quickPrompts', () => {
+      expect(component.quickPrompts).toBeDefined();
+      expect(component.quickPrompts.length).toBeGreaterThan(0);
+    });
+
+    it('debería incluir pregunta "¿Cómo está mi equipo?"', () => {
+      expect(component.quickPrompts).toContain('¿Cómo está mi equipo?');
+    });
+
+    it('debería incluir pregunta "¿Qué riesgos detectas?"', () => {
+      expect(component.quickPrompts).toContain('¿Qué riesgos detectas?');
+    });
+
+    it('debería incluir pregunta "Analiza las métricas del sprint actual"', () => {
+      expect(component.quickPrompts).toContain('Analiza las métricas del sprint actual');
+    });
+
+    it('debería incluir pregunta "¿Qué debería mejorar el equipo?"', () => {
+      expect(component.quickPrompts).toContain('¿Qué debería mejorar el equipo?');
+    });
+
+    it('debería usar quick prompt correctamente', () => {
+      localStorage.setItem('mpdia_proyecto_activo', JSON.stringify({ id: 'test-id', nombre: 'Test' }));
+      component.ngOnInit();
+      spyOn(component, 'sendMessage');
+
+      const prompt = component.quickPrompts[0];
+      component.useQuickPrompt(prompt);
+
+      expect(component.userInput).toBe(prompt);
+      expect(component.sendMessage).toHaveBeenCalled();
+    });
+
+    it('debería desactivar quick prompts si no hay proyecto', () => {
+      localStorage.removeItem('mpdia_proyecto_activo');
+      component.ngOnInit();
+
+      expect(component.proyecto).toBeNull();
+    });
+  });
 });

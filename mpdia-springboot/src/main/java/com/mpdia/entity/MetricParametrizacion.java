@@ -2,9 +2,8 @@
 package com.mpdia.entity;
 
 import jakarta.persistence.*;
-import lombok.Getter;
+import lombok.Data;
 import lombok.NoArgsConstructor;
-import lombok.Setter;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -16,7 +15,8 @@ import java.util.UUID;
  */
 @Entity
 @Table(name = "metric_parametrizaciones")
-@Getter @Setter @NoArgsConstructor
+@Data
+@NoArgsConstructor
 public class MetricParametrizacion {
 
     @Id

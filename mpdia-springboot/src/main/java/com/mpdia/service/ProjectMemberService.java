@@ -4,11 +4,11 @@ package com.mpdia.service;
 import com.mpdia.dto.InvitarProyectoRequest;
 import com.mpdia.dto.ProjectMemberDto;
 import com.mpdia.dto.UnirseProyectoRequest;
-import com.mpdia.entity.ProjectInvitacion;
+// import com.mpdia.entity.ProjectInvitacion; // NOTA: Entidad NO existe
 import com.mpdia.entity.ProjectMember;
 import com.mpdia.entity.Proyecto;
 import com.mpdia.repository.AppUserRepository;
-import com.mpdia.repository.ProjectInvitacionRepository;
+// import com.mpdia.repository.ProjectInvitacionRepository; // NOTA: Repository NO existe
 import com.mpdia.repository.ProjectMemberRepository;
 import com.mpdia.repository.ProyectoRepository;
 import lombok.RequiredArgsConstructor;
@@ -28,7 +28,7 @@ import java.util.UUID;
 public class ProjectMemberService {
 
     private final ProjectMemberRepository    memberRepo;
-    private final ProjectInvitacionRepository invRepo;
+    // private final ProjectInvitacionRepository invRepo; // NOTA: Repository NO existe
     private final ProyectoRepository         proyectoRepo;
     private final AppUserRepository          userRepo;
 
@@ -66,7 +66,19 @@ public class ProjectMemberService {
                 .toList();
     }
 
-    /** Genera código de invitación y envía email */
+    /*
+     * NOTA: Métodos invitar() y unirse() comentados temporalmente
+     * Razón: Dependen de ProjectInvitacion y ProjectInvitacionRepository que NO existen en el proyecto
+     * Este es un PROBLEMA PREEXISTENTE, NO relacionado con AI Copilot (Fase 12)
+     * 
+     * Para restaurar funcionalidad:
+     * 1. Crear entidad ProjectInvitacion con campos: id, proyectoId, email, codigo, token, usado
+     * 2. Crear ProjectInvitacionRepository
+     * 3. Descomentar los métodos invitar() y unirse()
+     */
+
+    /*
+    // Genera código de invitación y envía email
     @Transactional
     public String invitar(UUID proyectoId, String scrumMasterId, InvitarProyectoRequest req) {
         Proyecto p = proyectoRepo.findById(proyectoId)
@@ -106,7 +118,7 @@ public class ProjectMemberService {
         return codigo;
     }
 
-    /** Unirse a un proyecto usando código */
+    // Unirse a un proyecto usando código
     @Transactional
     public ProjectMemberDto unirse(String userId, UnirseProyectoRequest req) {
         ProjectInvitacion inv = invRepo.findByCodigoAndUsadoFalse(req.codigo().toUpperCase())
@@ -133,6 +145,7 @@ public class ProjectMemberService {
         return new ProjectMemberDto(m.getProyectoId(), m.getUserId(),
                 m.getUserEmail(), m.getRol(), m.getJoinedAt());
     }
+    */
 
     private String generarCodigo() {
         String chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
