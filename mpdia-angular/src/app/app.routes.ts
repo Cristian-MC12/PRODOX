@@ -40,6 +40,12 @@ export const routes: Routes = [
     title: 'Parametrización — MPDIA'
   },
   {
+    path: 'captura-variables/:metricaId',
+    canActivate: [authGuard, proyectoGuard],
+    loadComponent: () => import('./pages/captura-variables/captura-variables.component').then(m => m.CapturaVariablesComponent),
+    title: 'Captura de Valores — MPDIA'
+  },
+  {
     path: 'verificacion',
     canActivate: [authGuard, proyectoGuard],
     loadComponent: () => import('./pages/verificacion/verificacion.component').then(m => m.VerificacionComponent),
@@ -64,6 +70,13 @@ export const routes: Routes = [
     canActivate: [authGuard, proyectoGuard],
     loadComponent: () => import('./pages/ejecucion/ejecucion.component').then(m => m.EjecucionComponent),
     title: 'Ejecución — MPDIA'
+  },
+  // ── Métricas Académicas (Fase 16.9.2) ────────────────────────────────
+  {
+    path: 'metrica-academica/:id',
+    canActivate: [authGuard, proyectoGuard],
+    loadComponent: () => import('./pages/metrica-academica/metrica-academica.component').then(m => m.MetricaAcademicaComponent),
+    title: 'Métrica Académica — MPDIA'
   },
   // ── Evaluación ────────────────────────────────────────────────────────
   {

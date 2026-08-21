@@ -292,6 +292,7 @@ public class MetricRankingService {
 
         return new MetricParametrizacionDto(
                 p.getId(),
+                p.getVersion(),
                 fId,
                 fNombre,
                 fCategoria,
@@ -300,13 +301,16 @@ public class MetricRankingService {
                 p.getProcedimiento(),
                 p.getIndicadorVariable(),
                 p.getEscala(),
+                p.getFrecuenciaCaptura(),
                 p.getMetricaBaseId(),
                 p.getStatus(),
                 p.getRevisadoPor(),
                 p.getRevisadoAt(),
                 p.getMotivoRechazo(),
                 p.getProyectoId(),
-                p.getCreatedAt()
+                p.getCreatedAt(),
+                p.getPropuestaIAJson(),
+                p.getConfiguracionAprobadaJson()
         );
     }
 }

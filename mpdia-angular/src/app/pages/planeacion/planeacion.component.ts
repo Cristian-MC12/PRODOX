@@ -549,6 +549,20 @@ export class PlaneacionComponent implements OnInit {
 
   readonly categorias = ['Significado', 'Flexibilidad', 'Impacto', 'Socio-Humano FSH'];
 
+  // FASE 4: catálogo de NUEVAS selecciones limitado a estas 5 métricas.
+  // Las demás siguen existiendo en BD sin ningún cambio; si un proyecto ya
+  // las tiene seleccionadas/aprobadas, siguen apareciendo normalmente en
+  // "Seleccionadas"/"Historial" (esos paneles no usan metricasFiltradas(),
+  // filtran this.metricas directamente) — este filtro solo aplica al
+  // panel de catálogo donde se eligen métricas nuevas.
+  readonly METRICAS_VISIBLES = new Set<string>([
+    'dde97e2b-1b25-493e-9273-a6b59564b053', // Impedimentos por sprint
+    '2ba0cf34-0bec-4e7d-8dc5-40795f050ec9', // Problemas reportados por el cliente
+    '40beffdf-13f4-4772-8820-4df93fae525c', // Deuda técnica gestionada
+    'beb22a94-0e1b-496a-8b9e-a08a8f6d77c3', // Aprendizaje organizacional (FAT)
+    'ec0d74fe-0bf4-4970-af89-dcaa0736c8ed', // Defectos
+  ]);
+
   constructor(
     public  router: Router,
     public  auth: AuthService,
@@ -704,6 +718,7 @@ export class PlaneacionComponent implements OnInit {
   metricasFiltradas(categoria: string): ProyectoMetricaDto[] {
     if (this.categoriaFiltro && this.categoriaFiltro !== categoria) return [];
     return this.metricas.filter(m =>
+      this.METRICAS_VISIBLES.has(m.metricaId) &&
       m.categoria === categoria &&
       (!this.busqueda || m.nombre.toLowerCase().includes(this.busqueda.toLowerCase()) ||
        m.codigo?.toLowerCase().includes(this.busqueda.toLowerCase()))

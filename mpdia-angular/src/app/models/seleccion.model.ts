@@ -22,6 +22,12 @@ export interface Parametrizacion {
   indicadorVariable: string;   // indicador y variables involucradas
   escala: string;              // escala de medición
   frecuenciaCaptura?: string;  // por_sprint | semanal | diaria | ilimitada
+  // Campos académicos
+  fuenteAcademica?: string;    // Fuente académica de referencia
+  formulaAcademica?: string;   // Fórmula matemática formal
+  tipoOperacion?: string;      // SUMA | PROMEDIO | PORCENTAJE | etc.
+  unidadResultado?: string;    // Unidad del resultado
+  nombreVariable?: string;     // Identificador técnico snake_case (Fase 16.10-E)
   // Propuesta elegida de las 3 que da GenAI
   propuestaElegida?: number;   // 0, 1 o 2
 }
@@ -33,5 +39,10 @@ export interface PropuestaGenAI {
   indicadorVariable: string;
   escala: string;
   frecuenciaCaptura?: string;  // Frecuencia recomendada por IA
+  fuenteAcademica?: string;    // Fuente académica de referencia
+  formulaAcademica?: string;   // Fórmula académica formal
+  tipoOperacion?: string;      // Tipo de operación (SUMA, PROMEDIO, etc.)
+  unidadResultado?: string;    // Unidad del resultado (problemas, puntos, etc.)
+  nombreVariable?: string;     // Identificador técnico snake_case (Fase 16.10-E)
   justificacion: string;
 }

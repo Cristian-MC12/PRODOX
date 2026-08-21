@@ -11,7 +11,22 @@ import java.util.UUID;
 /**
  * Parametrización de una métrica creada por un usuario.
  * Es INMUTABLE: nunca se actualiza, solo se inserta.
- * metricaBaseId apunta a la parametrización original si esta es una copia.
+ * 
+ * VERSIONADO (Fase 16.6):
+ * - version: número de versión (1, 2, 3...)
+ * - v1 = parametrización inicial aprobada
+ * - v2+ = modificaciones posteriores
+ * - Una vez aprobada una versión, se marca como INACTIVA si se crea una nueva
+ * 
+ * SNAPSHOT:
+ * - propuestaIAJson: propuesta original de Gemini (auditoría)
+ * - configuracionAprobadaJson: configuración exacta aprobada (reproducibilidad)
+ * 
+ * ESTADOS:
+ * - propuesta: generada/editada, no aprobada
+ * - aprobada: configuración validada y lista para uso en cálculos
+ * - rechazada: rechazada por el usuario
+ * - inactiva: reemplazada por nueva versión
  */
 @Entity
 @Table(name = "metric_parametrizaciones")
@@ -22,6 +37,10 @@ public class MetricParametrizacion {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
+    
+    /** Versión de esta parametrización (1, 2, 3...) */
+    @Column(nullable = false)
+    private Integer version = 1;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = true)
     @JoinColumn(name = "factor_id", nullable = true)
@@ -54,7 +73,7 @@ public class MetricParametrizacion {
     private UUID metricaId;
 
     @Column(nullable = false, length = 30)
-    private String status = "pendiente"; // pendiente | aprobada | rechazada
+    private String status = "propuesta"; // propuesta | aprobada | rechazada | inactiva
 
     @Column(name = "revisado_por")
     private String revisadoPor;
@@ -67,7 +86,49 @@ public class MetricParametrizacion {
 
     @Column(name = "proyecto_id")
     private UUID proyectoId;
+    
+    /** Propuesta original generada por Gemini (inmutable, para auditoría) */
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
+    @Column(name = "propuesta_ia_json", columnDefinition = "jsonb")
+    private String propuestaIAJson;
+    
+    /** Configuración exacta aprobada por el usuario (snapshot para reproducibilidad) */
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
+    @Column(name = "configuracion_aprobada_json", columnDefinition = "jsonb")
+    private String configuracionAprobadaJson;
+    
+    /** Frecuencia de captura recomendada */
+    @Column(name = "frecuencia_captura", length = 20)
+    private String frecuenciaCaptura = "por_sprint";
+    
+    /** Fuente académica completa (Fase 16.9.1) */
+    @Column(name = "fuente_academica", columnDefinition = "TEXT")
+    private String fuenteAcademica;
+    
+    /** Fórmula matemática según fuente académica (Fase 16.9.1) */
+    @Column(name = "formula_academica", length = 500)
+    private String formulaAcademica;
+    
+    /** Tipo de operación: SUMA | PROMEDIO | DIRECTO | FORMULA (Fase 16.9.1) */
+    @Column(name = "tipo_operacion", length = 20)
+    private String tipoOperacion;
+    
+    /** Unidad del resultado: problemas, puntos, %, días (Fase 16.9.1) */
+    @Column(name = "unidad_resultado", length = 50)
+    private String unidadResultado;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
+
+    /**
+     * Identificador técnico snake_case de la variable principal (Fase 16.10-E).
+     * NO se persiste como columna: indicadorVariable es prosa humana y no es
+     * una fuente confiable para derivar un nombre técnico (ver
+     * docs/FASE16_10_... investigación de SIG-VEL-02). Se transporta en la
+     * respuesta de guardar-propuesta para que el frontend lo conserve como
+     * fuente de verdad al aprobar, y queda documentado de forma durable en
+     * propuestaIAJson/configuracionAprobadaJson (JSON ya persistido).
+     */
+    @jakarta.persistence.Transient
+    private String nombreVariable;
 }

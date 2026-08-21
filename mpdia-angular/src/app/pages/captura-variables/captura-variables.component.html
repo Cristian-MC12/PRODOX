@@ -1,0 +1,217 @@
+<app-shell title="Captura de Valores de Métrica">
+
+  <!-- Loading -->
+  @if (estado === 'loading') {
+    <div class="text-center py-5">
+      <div class="spinner-border text-primary" role="status">
+        <span class="visually-hidden">Cargando...</span>
+      </div>
+      <p class="text-muted mt-3">Cargando variables...</p>
+    </div>
+  }
+
+  <!-- Sin Parametrización Aprobada -->
+  @if (estado === 'sin-parametrizacion') {
+    <div class="alert alert-warning">
+      <i class="bi bi-exclamation-triangle me-2"></i>
+      <strong>Parametrización requerida</strong>
+      <p class="mb-0 mt-2">{{ errorMensaje }}</p>
+    </div>
+    <button class="btn btn-secondary" (click)="volver()">
+      <i class="bi bi-arrow-left me-1"></i>Volver
+    </button>
+  }
+
+  <!-- Sin Variables -->
+  @if (estado === 'sin-variables') {
+    <div class="alert alert-info">
+      <i class="bi bi-info-circle me-2"></i>
+      No hay variables definidas para esta métrica.
+    </div>
+    <button class="btn btn-secondary" (click)="volver()">
+      <i class="bi bi-arrow-left me-1"></i>Volver
+    </button>
+  }
+
+  <!-- Error -->
+  @if (estado === 'error') {
+    <div class="alert alert-danger">
+      <i class="bi bi-exclamation-circle me-2"></i>
+      <strong>Error</strong>
+      <p class="mb-0 mt-2">{{ errorMensaje }}</p>
+    </div>
+    <button class="btn btn-secondary" (click)="volver()">
+      <i class="bi bi-arrow-left me-1"></i>Volver
+    </button>
+  }
+
+  <!-- Formulario Dinámico -->
+  @if (estado === 'ready' || estado === 'guardando' || estado === 'guardado' || estado === 'calculando' || estado === 'calculado') {
+    
+    <!-- Información de Parametrización -->
+    <div class="card mb-3">
+      <div class="card-body py-2">
+        <small class="text-muted">
+          Parametrización: <strong>Versión {{ version }}</strong>
+        </small>
+      </div>
+    </div>
+
+    <!-- Mensaje de Éxito -->
+    @if (estado === 'guardado') {
+      <div class="alert alert-success alert-dismissible fade show" role="alert">
+        <i class="bi bi-check-circle me-2"></i>
+        <strong>Valores guardados correctamente</strong>
+        <button type="button" class="btn-close" (click)="estado = 'ready'"></button>
+      </div>
+    }
+    
+    <!-- Resultado del Cálculo (Fase 16.8) -->
+    @if (estado === 'calculado' && resultadoCalculado !== null) {
+      <div class="alert alert-info alert-dismissible fade show" role="alert">
+        <i class="bi bi-calculator me-2"></i>
+        <strong>Métrica Calculada</strong>
+        <p class="mb-0 mt-2">
+          Resultado: <strong class="fs-5">{{ resultadoCalculado | number:'1.2-4' }}</strong>
+          @if (resultadoUnidad) {
+            <span class="text-muted">{{ resultadoUnidad }}</span>
+          }
+        </p>
+        <button type="button" class="btn-close" (click)="estado = 'ready'; resultadoCalculado = null"></button>
+      </div>
+    }
+
+    <!-- Formulario -->
+    <form [formGroup]="form" (ngSubmit)="guardarValores()">
+      
+      <div class="card">
+        <div class="card-header">
+          <h6 class="mb-0">Variables de la Métrica</h6>
+        </div>
+        <div class="card-body">
+          
+          @for (variable of variables; track variable.id) {
+            <div class="mb-4">
+              
+              <!-- Nombre -->
+              <label [for]="'var-' + variable.id" class="form-label">
+                {{ variable.nombre }}
+                @if (variable.obligatorio) {
+                  <span class="text-danger">*</span>
+                }
+              </label>
+
+              <!-- Descripción -->
+              @if (variable.descripcion) {
+                <div class="small text-muted mb-2">
+                  {{ variable.descripcion }}
+                </div>
+              }
+
+              <!-- Escala Info -->
+              @if (variable.escalaMin !== null && variable.escalaMax !== null) {
+                <div class="small text-info mb-2">
+                  <i class="bi bi-info-circle me-1"></i>
+                  Escala: {{ variable.escalaMin }} - {{ variable.escalaMax }}
+                  @if (variable.unidad) {
+                    {{ variable.unidad }}
+                  }
+                </div>
+              }
+
+              <!-- Input según tipo -->
+              @if (variable.tipoDato === 'numerico') {
+                <input
+                  type="number"
+                  [id]="'var-' + variable.id"
+                  [formControlName]="variable.id"
+                  class="form-control"
+                  [class.is-invalid]="form.get(variable.id)?.invalid && form.get(variable.id)?.touched"
+                  step="any"
+                  placeholder="Ingresa un valor numérico"
+                />
+              }
+
+              @if (variable.tipoDato === 'texto') {
+                <textarea
+                  [id]="'var-' + variable.id"
+                  [formControlName]="variable.id"
+                  class="form-control"
+                  [class.is-invalid]="form.get(variable.id)?.invalid && form.get(variable.id)?.touched"
+                  rows="3"
+                  placeholder="Ingresa un valor de texto"
+                ></textarea>
+              }
+
+              @if (variable.tipoDato === 'booleano') {
+                <div class="form-check form-switch">
+                  <input
+                    type="checkbox"
+                    [id]="'var-' + variable.id"
+                    [formControlName]="variable.id"
+                    class="form-check-input"
+                    role="switch"
+                  />
+                  <label [for]="'var-' + variable.id" class="form-check-label">
+                    Sí
+                  </label>
+                </div>
+              }
+
+              <!-- Error -->
+              @if (form.get(variable.id)?.invalid && form.get(variable.id)?.touched) {
+                <div class="invalid-feedback d-block">
+                  {{ getErrorMessage(variable.id) }}
+                </div>
+              }
+
+            </div>
+          }
+
+        </div>
+      </div>
+
+      <!-- Acciones -->
+      <div class="mt-3 d-flex gap-2">
+        <button 
+          type="submit" 
+          class="btn btn-primary"
+          [disabled]="estado === 'guardando' || form.invalid">
+          @if (estado === 'guardando') {
+            <span class="spinner-border spinner-border-sm me-1"></span>
+            Guardando...
+          } @else {
+            <i class="bi bi-save me-1"></i>
+            Guardar valores
+          }
+        </button>
+        
+        <!-- Botón Calcular Métrica (Fase 16.8) -->
+        <button 
+          type="button"
+          class="btn btn-success"
+          (click)="calcularMetrica()"
+          [disabled]="estado === 'calculando' || variables.length === 0">
+          @if (estado === 'calculando') {
+            <span class="spinner-border spinner-border-sm me-1"></span>
+            Calculando...
+          } @else {
+            <i class="bi bi-calculator me-1"></i>
+            Calcular Métrica
+          }
+        </button>
+        
+        <button 
+          type="button" 
+          class="btn btn-secondary"
+          (click)="volver()"
+          [disabled]="estado === 'guardando' || estado === 'calculando'">
+          <i class="bi bi-arrow-left me-1"></i>
+          Volver
+        </button>
+      </div>
+
+    </form>
+  }
+
+</app-shell>

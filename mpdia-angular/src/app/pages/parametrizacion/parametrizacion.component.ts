@@ -58,6 +58,60 @@ import { environment } from '../../../environments/environment';
           </div>
         </div>
 
+        <!-- Estado de parametrización (FASE 16.6) -->
+        @if (estadoActual) {
+          <div class="card mb-4" 
+               [class.border-warning]="estadoActual === 'propuesta'" 
+               [class.border-success]="estadoActual === 'aprobada'">
+            <div class="card-body py-2">
+              <div class="d-flex align-items-center justify-content-between">
+                <div>
+                  <span class="badge me-2" 
+                        [class.bg-warning]="estadoActual === 'propuesta'"
+                        [class.text-dark]="estadoActual === 'propuesta'"
+                        [class.bg-success]="estadoActual === 'aprobada'">
+                    @if (estadoActual === 'propuesta') {
+                      <i class="bi bi-hourglass-split me-1"></i>Propuesta
+                    } @else {
+                      <i class="bi bi-check-circle me-1"></i>Aprobada
+                    }
+                  </span>
+                  <span class="small text-muted">Versión {{ versionActual }}</span>
+                  @if (estadoActual === 'propuesta' && ultimaVersionAprobadaInfo) {
+                    <span class="small text-muted ms-2">
+                      <i class="bi bi-info-circle me-1"></i>
+                      Versión aprobada vigente: v{{ ultimaVersionAprobadaInfo.version }} (se mantiene hasta que apruebes esta propuesta nueva)
+                    </span>
+                  }
+                </div>
+                <div>
+                  @if (estadoActual === 'propuesta') {
+                    <button class="btn btn-success btn-sm" 
+                            [disabled]="aprobando"
+                            (click)="aprobarParametrizacion()">
+                      @if (aprobando) {
+                        <span class="spinner-border spinner-border-sm me-1"></span>
+                        Aprobando...
+                      } @else {
+                        <i class="bi bi-check-lg me-1"></i>Aprobar parametrización
+                      }
+                    </button>
+                  } @else {
+                    <span class="text-success small">
+                      <i class="bi bi-check-circle-fill me-1"></i>Parametrización lista para uso
+                    </span>
+                  }
+                </div>
+              </div>
+              @if (errorAprobar) {
+                <div class="alert alert-danger small mt-2 mb-0 py-1">
+                  <i class="bi bi-exclamation-triangle me-1"></i>{{ errorAprobar }}
+                </div>
+              }
+            </div>
+          </div>
+        }
+
         <!-- Ranking Top 3 de esta métrica -->
         @if (top3.length > 0) {
           <div class="card mb-4">
@@ -219,9 +273,37 @@ import { environment } from '../../../environments/environment';
                 <dt class="col-sm-3 text-muted">
                   <i class="bi bi-bar-chart-steps me-1"></i>Escala
                 </dt>
-                <dd class="col-sm-9 mb-3">{{ propuestas[0].escala }}</dd>
+                <dd class="col-sm-9">{{ propuestas[0].escala }}</dd>
 
-                <dt class="col-sm-12">
+                @if (propuestas[0].formulaAcademica) {
+                  <dt class="col-sm-3 text-muted">
+                    <i class="bi bi-calculator me-1"></i>Fórmula académica
+                  </dt>
+                  <dd class="col-sm-9"><code>{{ propuestas[0].formulaAcademica }}</code></dd>
+                }
+
+                @if (propuestas[0].tipoOperacion) {
+                  <dt class="col-sm-3 text-muted">
+                    <i class="bi bi-gear me-1"></i>Tipo operación
+                  </dt>
+                  <dd class="col-sm-9"><span class="badge bg-secondary">{{ propuestas[0].tipoOperacion }}</span></dd>
+                }
+
+                @if (propuestas[0].unidadResultado) {
+                  <dt class="col-sm-3 text-muted">
+                    <i class="bi bi-rulers me-1"></i>Unidad resultado
+                  </dt>
+                  <dd class="col-sm-9">{{ propuestas[0].unidadResultado }}</dd>
+                }
+
+                @if (propuestas[0].fuenteAcademica) {
+                  <dt class="col-sm-3 text-muted">
+                    <i class="bi bi-book me-1"></i>Fuente académica
+                  </dt>
+                  <dd class="col-sm-9 small text-muted">{{ propuestas[0].fuenteAcademica }}</dd>
+                }
+
+                <dt class="col-sm-12 mt-2">
                   <div class="alert alert-info py-2 mb-0">
                     <i class="bi bi-info-circle me-1"></i>
                     <strong>Justificación:</strong> {{ propuestas[0].justificacion }}
@@ -233,11 +315,33 @@ import { environment } from '../../../environments/environment';
               <span class="small text-muted">
                 <i class="bi bi-robot me-1"></i>Esta es una propuesta de IA, no una configuración oficial
               </span>
-              <button class="btn btn-success btn-sm"
-                      (click)="usarPropuesta(propuestas[0])">
-                <i class="bi bi-clipboard-check me-1"></i>Usar esta propuesta
-              </button>
+              <div class="d-flex gap-2">
+                <button class="btn btn-outline-primary btn-sm"
+                        (click)="usarPropuesta(propuestas[0])">
+                  <i class="bi bi-clipboard-check me-1"></i>Copiar al formulario
+                </button>
+                @if (estadoActual !== 'propuesta') {
+                  <button class="btn btn-success btn-sm"
+                          [disabled]="guardando"
+                          (click)="guardarPropuesta()">
+                    @if (guardando) {
+                      <span class="spinner-border spinner-border-sm me-1"></span>
+                      Guardando...
+                    } @else {
+                      <i class="bi bi-floppy me-1"></i>
+                      {{ estadoActual === 'aprobada' ? 'Guardar como nueva propuesta' : 'Guardar propuesta' }}
+                    }
+                  </button>
+                }
+              </div>
             </div>
+            @if (errorGuardar) {
+              <div class="card-footer pt-0 pb-2">
+                <div class="alert alert-danger small mb-0 py-1">
+                  <i class="bi bi-exclamation-triangle me-1"></i>{{ errorGuardar }}
+                </div>
+              </div>
+            }
           </div>
         }
 
@@ -292,6 +396,60 @@ import { environment } from '../../../environments/environment';
                   <option value="ilimitada">Cuando ocurra el evento</option>
                 </select>
               </div>
+              
+              <!-- Campos académicos opcionales -->
+              <div class="col-12 mt-3">
+                <hr>
+                <h6 class="text-muted small mb-3">
+                  <i class="bi bi-mortarboard me-1"></i>
+                  Campos académicos <span class="text-muted">(opcionales - propuestos por IA)</span>
+                </h6>
+              </div>
+              
+              <div class="col-md-6">
+                <label class="form-label small fw-semibold">
+                  Fórmula académica
+                </label>
+                <input type="text" class="form-control form-control-sm"
+                       placeholder="Ej: Σ(problemas_reportados)"
+                       [(ngModel)]="form.formulaAcademica">
+                <div class="form-text small">Fórmula matemática formal</div>
+              </div>
+              
+              <div class="col-md-6">
+                <label class="form-label small fw-semibold">
+                  Tipo de operación
+                </label>
+                <select class="form-select form-select-sm" [(ngModel)]="form.tipoOperacion">
+                  <option value="">Seleccionar...</option>
+                  <option value="SUMA">Suma (Σ)</option>
+                  <option value="PROMEDIO">Promedio (μ)</option>
+                  <option value="PORCENTAJE">Porcentaje (%)</option>
+                  <option value="CONTEO">Conteo (#)</option>
+                  <option value="RATIO">Ratio (x/y)</option>
+                  <option value="OTRO">Otro</option>
+                </select>
+              </div>
+              
+              <div class="col-md-6">
+                <label class="form-label small fw-semibold">
+                  Unidad del resultado
+                </label>
+                <input type="text" class="form-control form-control-sm"
+                       placeholder="Ej: problemas, puntos, horas, %"
+                       [(ngModel)]="form.unidadResultado">
+                <div class="form-text small">Unidad de medida del resultado</div>
+              </div>
+              
+              <div class="col-md-6">
+                <label class="form-label small fw-semibold">
+                  Fuente académica
+                </label>
+                <input type="text" class="form-control form-control-sm"
+                       placeholder="Ej: Scrum Guide 2020, ISO 9126"
+                       [(ngModel)]="form.fuenteAcademica">
+                <div class="form-text small">Referencia académica o estándar</div>
+              </div>
             </div>
           </div>
           <div class="card-footer d-flex justify-content-between align-items-center">
@@ -330,6 +488,26 @@ export class ParametrizacionComponent implements OnInit {
   generando  = false;
   guardando  = false;
   errorGenAI = '';
+  
+  // FASE 16.6: Aprobación y versionado
+  parametrizacionId: string | null = null;
+  estadoActual: 'propuesta' | 'aprobada' | null = null;
+  versionActual: number = 1;
+  aprobando = false;
+  /**
+   * FASE 16.10-D: respuesta completa de POST /guardar-propuesta (la parametrización
+   * ya persistida). Es la fuente de verdad al aprobar — evita reconstruir el request
+   * desde `this.form`, que puede desincronizarse si el usuario regenera con GenAI o
+   * edita el formulario después de guardar. Si es null (p. ej. la propuesta pendiente
+   * viene de una sesión anterior y no se guardó en este ciclo de vida del componente),
+   * se conserva el comportamiento previo de usar `this.form` como respaldo.
+   */
+  propuestaPendiente: any = null;
+  errorGuardar = '';
+  errorAprobar = '';
+  // FASE 16.10-C: info de la última versión aprobada, se conserva visible
+  // aunque exista una propuesta nueva (aún sin aprobar) en curso.
+  ultimaVersionAprobadaInfo: { version: number } | null = null;
 
   form: Parametrizacion = {
     objetivo: '', procedimiento: '', indicadorVariable: '', escala: '', frecuenciaCaptura: 'por_sprint'
@@ -356,6 +534,14 @@ export class ParametrizacionComponent implements OnInit {
       // Cargar parametrización base del backend si existe
       if (this.metrica) {
         const metricaId = this.metrica.factorId;
+        
+        // FASE 16.6: Cargar estado de parametrización desde backend
+        const proyectoActivo = localStorage.getItem('mpdia_proyecto_activo');
+        const proyectoId = proyectoActivo ? JSON.parse(proyectoActivo)?.id : null;
+        if (proyectoId) {
+          this.cargarEstadoParametrizacion(metricaId, proyectoId);
+        }
+        
         // Buscar primero por metricaId (flujo Planeación), luego por factorId (flujo Selección)
         this.rankingService.getTop3ByMetricaId(metricaId).pipe(
           catchError(() => of([] as TopParametrizacion[]))
@@ -389,6 +575,49 @@ export class ParametrizacionComponent implements OnInit {
     if (this.metrica?.factorId) {
       this.rankingService.incrementarUso(this.metrica.factorId).pipe(catchError(() => of(null))).subscribe();
     }
+  }
+
+  /**
+   * FASE 16.6: Cargar estado de parametrización desde backend
+   * Obtiene la última versión aprobada para mostrar estado/versión/badge
+   */
+  cargarEstadoParametrizacion(metricaId: string, proyectoId: string): void {
+    this.http.get<any>(
+      `${this.apiBase}/parametrizacion/ultima-aprobada?metricaId=${metricaId}&proyectoId=${proyectoId}`
+    ).pipe(
+      catchError(() => of(null))
+    ).subscribe(parametrizacion => {
+      if (parametrizacion) {
+        this.estadoActual = parametrizacion.status;
+        this.versionActual = parametrizacion.version;
+        this.parametrizacionId = parametrizacion.id;
+        // GET /ultima-aprobada solo devuelve versiones con status "aprobada".
+        // Se conserva esta info para mostrarla aunque luego se guarde una
+        // propuesta nueva (siguiente versión, todavía sin aprobar).
+        this.ultimaVersionAprobadaInfo = { version: parametrizacion.version };
+        // Precargar el formulario con la parametrización aprobada vigente
+        // para que el usuario pueda revisarla/modificarla antes de guardar
+        // una nueva propuesta (no se sobreescribe si el usuario ya editó
+        // el formulario manualmente después de esta carga).
+        this.form = {
+          objetivo: parametrizacion.objetivo,
+          procedimiento: parametrizacion.procedimiento,
+          indicadorVariable: parametrizacion.indicadorVariable,
+          escala: parametrizacion.escala,
+          frecuenciaCaptura: parametrizacion.frecuenciaCaptura || 'por_sprint',
+          fuenteAcademica: parametrizacion.fuenteAcademica || '',
+          formulaAcademica: parametrizacion.formulaAcademica || '',
+          tipoOperacion: parametrizacion.tipoOperacion || '',
+          unidadResultado: parametrizacion.unidadResultado || ''
+        };
+      } else {
+        // No existe parametrización aprobada aún
+        this.estadoActual = null;
+        this.versionActual = 1;
+        this.parametrizacionId = null;
+        this.ultimaVersionAprobadaInfo = null;
+      }
+    });
   }
 
   /** Copiar la parametrización base al formulario para editarla */
@@ -435,6 +664,11 @@ export class ParametrizacionComponent implements OnInit {
       indicadorVariable: p.indicadorVariable,
       escala:            p.escala,
       frecuenciaCaptura: p.frecuenciaCaptura || 'por_sprint',
+      fuenteAcademica:   p.fuenteAcademica || '',
+      formulaAcademica:  p.formulaAcademica || '',
+      tipoOperacion:     p.tipoOperacion || '',
+      unidadResultado:   p.unidadResultado || '',
+      nombreVariable:    p.nombreVariable || '',
       propuestaElegida:  0  // índice 0 ya que ahora solo hay 1 propuesta
     };
     // Scroll al formulario para que el usuario vea los cambios
@@ -516,5 +750,127 @@ export class ParametrizacionComponent implements OnInit {
       'Socio-Humano FSH': 'bg-info text-dark'
     };
     return map[cat] ?? 'bg-secondary';
+  }
+  
+  // ========================================
+  // FASE 16.6: APROBACIÓN Y VERSIONADO
+  // ========================================
+  
+  /**
+   * Guarda la propuesta generada por IA con estado "propuesta".
+   * NO aprueba automáticamente - requiere acción explícita del usuario.
+   */
+  guardarPropuesta(): void {
+    if (!this.metrica || !this.propuestas[0]) return;
+    
+    this.guardando = true;
+    this.errorGuardar = '';
+    
+    const proyectoActivo = localStorage.getItem('mpdia_proyecto_activo');
+    const proyectoId = proyectoActivo ? JSON.parse(proyectoActivo)?.id : null;
+    
+    if (!proyectoId) {
+      this.errorGuardar = 'No se pudo identificar el proyecto activo';
+      this.guardando = false;
+      return;
+    }
+    
+    const request = {
+      metricaId: this.metrica.factorId,  // factorId contiene el metricaId en Planeación
+      proyectoId: proyectoId,
+      objetivo: this.form.objetivo,
+      procedimiento: this.form.procedimiento,
+      indicadorVariable: this.form.indicadorVariable,
+      escala: this.form.escala,
+      frecuenciaCaptura: this.form.frecuenciaCaptura || 'por_sprint',
+      fuenteAcademica: this.form.fuenteAcademica || null,
+      formulaAcademica: this.form.formulaAcademica || null,
+      tipoOperacion: this.form.tipoOperacion || null,
+      unidadResultado: this.form.unidadResultado || null,
+      nombreVariable: this.form.nombreVariable || null,
+      propuestaIAJson: JSON.stringify(this.propuestas[0])
+    };
+    
+    this.http.post<any>(`${this.apiBase}/parametrizacion/guardar-propuesta`, request)
+      .pipe(catchError((err) => {
+        this.errorGuardar = err.status === 403 
+          ? 'No tienes permiso para parametrizar en este proyecto'
+          : 'Error al guardar la propuesta';
+        this.guardando = false;
+        return of(null);
+      }))
+      .subscribe(parametrizacion => {
+        if (parametrizacion) {
+          this.parametrizacionId = parametrizacion.id;
+          this.estadoActual = parametrizacion.status;
+          this.versionActual = parametrizacion.version;
+          // FASE 16.10-D: la respuesta de guardar-propuesta es la parametrización
+          // ya persistida (incluye todos los campos académicos) — se conserva como
+          // fuente de verdad para el momento de aprobar.
+          this.propuestaPendiente = parametrizacion;
+          this.guardando = false;
+
+          // Scroll al área de aprobación
+          setTimeout(() => {
+            const estadoCard = document.querySelector('.border-warning');
+            estadoCard?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }, 100);
+        }
+      });
+  }
+  
+  /**
+   * Aprueba formalmente la parametrización.
+   * Cambia el estado de "propuesta" a "aprobada".
+   * Crea snapshot para reproducibilidad de cálculos futuros.
+   */
+  aprobarParametrizacion(): void {
+    if (!this.parametrizacionId) return;
+    
+    this.aprobando = true;
+    this.errorAprobar = '';
+
+    // FASE 16.10-D: usar la propuesta realmente persistida (guardar-propuesta),
+    // NO el estado en memoria de this.form, que puede haberse desincronizado
+    // por una regeneración GenAI o edición posterior sin volver a guardar.
+    const fuente = this.propuestaPendiente ?? this.form;
+    const request = {
+      objetivo: fuente.objetivo,
+      procedimiento: fuente.procedimiento,
+      indicadorVariable: fuente.indicadorVariable,
+      escala: fuente.escala,
+      frecuenciaCaptura: fuente.frecuenciaCaptura || 'por_sprint',
+      fuenteAcademica: fuente.fuenteAcademica || null,
+      formulaAcademica: fuente.formulaAcademica || null,
+      tipoOperacion: fuente.tipoOperacion || null,
+      unidadResultado: fuente.unidadResultado || null,
+      nombreVariable: fuente.nombreVariable || null
+    };
+    
+    this.http.post<any>(`${this.apiBase}/parametrizacion/${this.parametrizacionId}/aprobar`, request)
+      .pipe(catchError((err) => {
+        this.errorAprobar = err.status === 403 
+          ? 'No tienes permiso para aprobar parametrizaciones en este proyecto'
+          : err.status === 404
+          ? 'Parametrización no encontrada'
+          : 'Error al aprobar la parametrización';
+        this.aprobando = false;
+        return of(null);
+      }))
+      .subscribe(parametrizacion => {
+        if (parametrizacion) {
+          this.estadoActual = parametrizacion.status;
+          this.versionActual = parametrizacion.version;
+          this.aprobando = false;
+          
+          // Guardar también en localStorage para compatibilidad con Fase 16.5
+          if (this.metrica) {
+            this.seleccionService.parametrizar(this.metrica.id, {
+              ...this.form,
+              propuestaElegida: this.propuestaElegida ?? undefined
+            });
+          }
+        }
+      });
   }
 }

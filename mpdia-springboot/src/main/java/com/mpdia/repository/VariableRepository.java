@@ -11,4 +11,10 @@ public interface VariableRepository extends JpaRepository<Variable, UUID> {
     List<Variable> findByProyectoIdAndActivaTrue(UUID proyectoId);
     Optional<Variable> findByProyectoIdAndMetrica_Id(UUID proyectoId, UUID metricaId);
     boolean existsByProyectoIdAndMetrica_Id(UUID proyectoId, UUID metricaId);
+    
+    // Fase 16.7: Búsqueda por parametrización
+    List<Variable> findByParametrizacionIdAndParametrizacionVersion(UUID parametrizacionId, Integer version);
+    Optional<Variable> findByProyectoIdAndMetrica_IdAndParametrizacionIdAndParametrizacionVersion(
+        UUID proyectoId, UUID metricaId, UUID parametrizacionId, Integer version);
 }
+

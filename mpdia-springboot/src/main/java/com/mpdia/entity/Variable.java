@@ -79,6 +79,14 @@ public class Variable {
      */
     @Column(name = "frecuencia_captura", nullable = false, length = 20)
     private String frecuenciaCaptura = "por_sprint";
+    
+    /** Parametrización aprobada que generó esta variable (Fase 16.7) */
+    @Column(name = "parametrizacion_id")
+    private UUID parametrizacionId;
+    
+    /** Versión de la parametrización que generó esta variable (Fase 16.7) */
+    @Column(name = "parametrizacion_version")
+    private Integer parametrizacionVersion;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt = Instant.now();

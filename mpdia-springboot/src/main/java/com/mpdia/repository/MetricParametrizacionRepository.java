@@ -70,4 +70,53 @@ public interface MetricParametrizacionRepository extends JpaRepository<MetricPar
 
     /** Verificar si existe parametrización para una métrica en un proyecto */
     boolean existsByMetricaIdAndProyectoId(UUID metricaId, UUID proyectoId);
+    
+    /**
+     * Obtener la última versión aprobada de una parametrización para una métrica y proyecto.
+     * Esencial para cálculos reproducibles.
+     */
+    @Query("""
+        SELECT p FROM MetricParametrizacion p
+        WHERE p.metricaId = :metricaId
+          AND p.proyectoId = :proyectoId
+          AND p.status = 'aprobada'
+        ORDER BY p.version DESC
+        LIMIT 1
+        """)
+    Optional<MetricParametrizacion> findUltimaVersionAprobada(
+        @Param("metricaId") UUID metricaId,
+        @Param("proyectoId") UUID proyectoId
+    );
+    
+    /**
+     * Obtener todas las versiones de una parametrización (historial).
+     */
+    @Query("""
+        SELECT p FROM MetricParametrizacion p
+        WHERE p.metricaId = :metricaId
+          AND p.proyectoId = :proyectoId
+        ORDER BY p.version DESC
+        """)
+    List<MetricParametrizacion> findHistorialVersiones(
+        @Param("metricaId") UUID metricaId,
+        @Param("proyectoId") UUID proyectoId
+    );
+    
+    /**
+     * Obtener una versión específica de una parametrización.
+     */
+    Optional<MetricParametrizacion> findByMetricaIdAndProyectoIdAndVersion(
+        UUID metricaId,
+        UUID proyectoId,
+        Integer version
+    );
+    
+    /**
+     * Verificar si existe una versión aprobada para una métrica en un proyecto.
+     */
+    boolean existsByMetricaIdAndProyectoIdAndStatus(
+        UUID metricaId,
+        UUID proyectoId,
+        String status
+    );
 }

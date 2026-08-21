@@ -6,6 +6,7 @@ import java.util.UUID;
 
 public record MetricParametrizacionDto(
     UUID    id,
+    Integer version,
     UUID    factorId,
     String  factorNombre,
     String  factorCategoria,
@@ -14,11 +15,14 @@ public record MetricParametrizacionDto(
     String  procedimiento,
     String  indicadorVariable,
     String  escala,
+    String  frecuenciaCaptura,
     UUID    metricaBaseId,
     String  status,
     String  revisadoPor,
     Instant revisadoAt,
     String  motivoRechazo,
     UUID    proyectoId,
-    Instant createdAt
+    Instant createdAt,
+    String  propuestaIAJson,
+    String  configuracionAprobadaJson
 ) {}
