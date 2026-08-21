@@ -64,9 +64,17 @@ const FRECUENCIA_LABEL: Record<string, string> = {
             {{ proyecto.metodo | uppercase }}
           </span>
           <span class="text-muted small">{{ sprintsDisponibles.length }} sprint(s) con datos</span>
-          <button class="btn btn-sm btn-outline-primary ms-auto" (click)="cargar()" [disabled]="cargando">
-            <i class="bi bi-arrow-clockwise me-1"></i>Actualizar
-          </button>
+          <div class="ms-auto d-flex gap-2">
+            <button class="btn btn-sm btn-outline-primary" (click)="cargar()" [disabled]="cargando">
+              <i class="bi bi-arrow-clockwise me-1"></i>Actualizar
+            </button>
+            @if (datos.length > 0) {
+              <button class="btn btn-sm btn-success" (click)="router.navigate(['/ai-retrospective'])"
+                      title="Interpretar estos resultados y preparar la mejora del siguiente sprint">
+                <i class="bi bi-arrow-repeat me-1"></i>Continuar con Retrospectiva
+              </button>
+            }
+          </div>
         </div>
 
         <!-- Tabs -->

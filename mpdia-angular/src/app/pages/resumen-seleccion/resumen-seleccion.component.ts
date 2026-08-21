@@ -3,7 +3,7 @@ import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
-import { catchError, forkJoin, of } from 'rxjs';
+import { catchError, forkJoin, map, of } from 'rxjs';
 import { ShellComponent } from '../../layout/shell/shell.component';
 import { SeleccionService } from '../../services/seleccion.service';
 import { MetricRankingService } from '../../services/metric-ranking.service';
@@ -313,7 +313,15 @@ export class ResumenSeleccionComponent implements OnInit {
     }
   }
 
-  /** Guarda todas las parametrizaciones completas en el backend y navega a verificación */
+  /**
+   * Guarda todas las parametrizaciones completas en el backend y navega a verificación.
+   *
+   * FASE 10: solo se limpia la selección local y se navega si TODAS las operaciones
+   * terminan correctamente. Si alguna falla, el usuario permanece en Resumen, ve
+   * exactamente qué métrica falló y puede reintentar sin perder su selección
+   * (ver diagnóstico FASE 9, bloque 7 — antes, catchError(() => of(null)) ocultaba
+   * cualquier error HTTP y navegaba a Verificación como si todo hubiera salido bien).
+   */
   aceptar(): void {
     const proyectoActivo = localStorage.getItem('mpdia_proyecto_activo');
     const proyectoId: string | null = proyectoActivo ? (JSON.parse(proyectoActivo)?.id ?? null) : null;
@@ -336,16 +344,37 @@ export class ResumenSeleccionComponent implements OnInit {
         escala:            s.parametrizacion!.escala,
         metricaBaseId:     null,
         proyectoId,
-        metricaId:         s.factorId   // desde Planeación, factorId contiene el metricaId
-      }).pipe(catchError(err => { this.errorMsg = 'Error al guardar: ' + (err?.error?.error ?? err?.message ?? 'desconocido'); return of(null); }))
+        metricaId:         s.factorId,  // desde Planeación, factorId contiene el metricaId
+        // FASE 11: propagar los campos académicos completados en Parametrización — antes se
+        // descartaban aquí, dejando la parametrización sin tipoOperacion tras aprobarse.
+        tipoOperacion:     s.parametrizacion!.tipoOperacion ?? null,
+        formulaAcademica:  s.parametrizacion!.formulaAcademica ?? null,
+        unidadResultado:   s.parametrizacion!.unidadResultado ?? null,
+        fuenteAcademica:   s.parametrizacion!.fuenteAcademica ?? null
+      }).pipe(
+        map(() => ({ ok: true as const, nombre: s.metricaNombre })),
+        catchError(err => of({
+          ok: false as const,
+          nombre: s.metricaNombre,
+          error: (err?.error?.error ?? err?.message ?? 'error desconocido') as string
+        }))
+      )
     );
 
-    forkJoin(guardados$).subscribe(() => {
+    forkJoin(guardados$).subscribe(resultados => {
       this.enviando = false;
+      const fallidas = resultados.filter(r => !r.ok) as { ok: false; nombre: string; error: string }[];
+
+      if (fallidas.length > 0) {
+        const detalle = fallidas.map(f => `${f.nombre} (${f.error})`).join('; ');
+        this.errorMsg = fallidas.length === resultados.length
+          ? `No se pudo enviar ninguna métrica al Scrum Master: ${detalle}. Tu selección se mantuvo intacta, podés reintentar.`
+          : `${fallidas.length} de ${resultados.length} métrica(s) no se pudieron enviar: ${detalle}. Tu selección se mantuvo intacta, podés reintentar.`;
+        return; // permanece en Resumen: no se limpia la selección ni se navega
+      }
+
+      // Todas las operaciones terminaron correctamente.
       this.seleccionService.limpiar(); // Limpiar localStorage
-      
-      // Redirigir según el rol del usuario
-      // Scrum Master va a verificación, otros usuarios a planeación
       this.router.navigate(['/verificacion']);
     });
   }

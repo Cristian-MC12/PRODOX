@@ -125,8 +125,11 @@ public class PlaneacionService {
         if (!variableRepo.existsByProyectoIdAndMetrica_Id(proyectoId, metricaId)) {
             return generarVariable(proyectoId, pm.getMetrica());
         }
-        return toVariableDto(variableRepo.findByProyectoIdAndMetrica_Id(proyectoId, metricaId)
-                .orElseThrow());
+        // FASE 11: una métrica FORMULA con varias variables (FAT, Deuda técnica) tiene más
+        // de una fila para el mismo proyecto+métrica — devolver la primera como
+        // representativa (el contrato de este método sigue siendo "una VariableDto").
+        List<Variable> existentes = variableRepo.findAllByProyectoIdAndMetrica_Id(proyectoId, metricaId);
+        return toVariableDto(existentes.get(0));
     }
 
     @Transactional
@@ -142,9 +145,10 @@ public class PlaneacionService {
         pm.setAprobadaAt(null);
         pmRepo.save(pm);
 
-        // Desactivar variable si existía
-        variableRepo.findByProyectoIdAndMetrica_Id(proyectoId, metricaId)
-                .ifPresent(v -> { v.setActiva(false); variableRepo.save(v); });
+        // Desactivar todas las variables de esta métrica+proyecto (puede haber más de una
+        // si la métrica es FORMULA con varias variables — FASE 11).
+        variableRepo.findAllByProyectoIdAndMetrica_Id(proyectoId, metricaId)
+                .forEach(v -> { v.setActiva(false); variableRepo.save(v); });
     }
 
     // ── Variables generadas ───────────────────────────────────────────────
@@ -172,9 +176,9 @@ public class PlaneacionService {
             if (!existe) {
                 generarVariable(proyectoId, pm.getMetrica());
             } else {
-                variableRepo.findByProyectoIdAndMetrica_Id(proyectoId, metricaId)
+                variableRepo.findAllByProyectoIdAndMetrica_Id(proyectoId, metricaId).stream()
                         .filter(v -> !v.getActiva())
-                        .ifPresent(v -> { v.setActiva(true); variableRepo.save(v); });
+                        .forEach(v -> { v.setActiva(true); variableRepo.save(v); });
             }
         }
         return listarVariables(proyectoId);
@@ -200,10 +204,10 @@ public class PlaneacionService {
                     if (!variableRepo.existsByProyectoIdAndMetrica_Id(proyectoId, metricaId)) {
                         generarVariable(proyectoId, pm.getMetrica());
                     } else {
-                        // Reactivar si existe pero está inactiva
-                        variableRepo.findByProyectoIdAndMetrica_Id(proyectoId, metricaId)
+                        // Reactivar todas las que existan pero estén inactivas
+                        variableRepo.findAllByProyectoIdAndMetrica_Id(proyectoId, metricaId).stream()
                                 .filter(v -> !v.getActiva())
-                                .ifPresent(v -> { v.setActiva(true); variableRepo.save(v); });
+                                .forEach(v -> { v.setActiva(true); variableRepo.save(v); });
                     }
                 }
             }

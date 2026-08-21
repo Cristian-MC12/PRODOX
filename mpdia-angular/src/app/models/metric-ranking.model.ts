@@ -31,6 +31,12 @@ export interface GuardarParametrizacionRequest {
   metricaBaseId:     string | null;
   proyectoId:        string | null;
   metricaId?:        string | null;
+  // FASE 11: campos académicos opcionales — sin ellos, Ejecución no puede calcular
+  // la métrica aprobada por el flujo "Enviar al Scrum Master".
+  tipoOperacion?:    string | null;
+  formulaAcademica?: string | null;
+  unidadResultado?:  string | null;
+  fuenteAcademica?:  string | null;
 }
 
 export interface TopParametrizacion {

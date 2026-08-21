@@ -31,6 +31,16 @@ public class MetricRankingController {
         return ResponseEntity.ok(service.getPendientesPorProyecto(proyectoId));
     }
 
+    /**
+     * GET /api/metric-ranking/resumen — cuenta pendientes/aprobadas/rechazadas de un
+     * proyecto directamente en BD (Fase 10, ver VerificacionComponent).
+     */
+    @GetMapping("/resumen")
+    public ResponseEntity<com.mpdia.dto.ResumenVerificacionDto> resumen(
+            @RequestParam UUID proyectoId) {
+        return ResponseEntity.ok(service.getResumenPorProyecto(proyectoId));
+    }
+
     /** POST /api/metric-ranking/verificar — aprobar o rechazar (solo Scrum Master) */
     @PostMapping("/verificar")
     public ResponseEntity<com.mpdia.dto.MetricParametrizacionDto> verificar(

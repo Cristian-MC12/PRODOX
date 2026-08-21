@@ -37,6 +37,13 @@ export class MetricRankingService {
     return this.http.post<MetricParametrizacionBase>(`${this.base}/parametrizacion`, request);
   }
 
+  /** Resumen persistente (BD) de pendientes/aprobadas/rechazadas de un proyecto. */
+  getResumen(proyectoId: string): Observable<{ pendientes: number; aprobadas: number; rechazadas: number }> {
+    return this.http.get<{ pendientes: number; aprobadas: number; rechazadas: number }>(
+      `${this.base}/resumen?proyectoId=${proyectoId}`
+    );
+  }
+
   /** Top 3 parametrizaciones más usadas de un factor */
   getTop3(factorId: string): Observable<TopParametrizacion[]> {
     return this.http.get<TopParametrizacion[]>(`${this.base}/${factorId}/top3`);

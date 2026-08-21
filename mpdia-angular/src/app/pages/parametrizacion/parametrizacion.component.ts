@@ -427,6 +427,10 @@ import { environment } from '../../../environments/environment';
                   <option value="PORCENTAJE">Porcentaje (%)</option>
                   <option value="CONTEO">Conteo (#)</option>
                   <option value="RATIO">Ratio (x/y)</option>
+                  <!-- FASE 11: sin esta opción, una métrica FORMULA (FAT, Deuda técnica) no podía
+                       parametrizarse manualmente desde esta pantalla — el backend (MetricaAcademicaService)
+                       ya soportaba "FORMULA", solo faltaba poder elegirlo aquí. -->
+                  <option value="FORMULA">Fórmula (expresión matemática)</option>
                   <option value="OTRO">Otro</option>
                 </select>
               </div>
@@ -729,7 +733,13 @@ export class ParametrizacionComponent implements OnInit {
       escala:            this.form.escala,
       metricaBaseId:     this.parametrizacionBase?.id ?? null,
       proyectoId:        proyectoId,
-      metricaId:         this.metrica.factorId  // desde Planeación, factorId contiene el metricaId
+      metricaId:         this.metrica.factorId,  // desde Planeación, factorId contiene el metricaId
+      // FASE 11: propagar los campos académicos completados en este formulario — antes se
+      // descartaban al llegar a MetricRankingService.guardar().
+      tipoOperacion:     this.form.tipoOperacion ?? null,
+      formulaAcademica:  this.form.formulaAcademica ?? null,
+      unidadResultado:   this.form.unidadResultado ?? null,
+      fuenteAcademica:   this.form.fuenteAcademica ?? null
     }).pipe(
       catchError(() => of(null))
     ).subscribe(() => {

@@ -14,5 +14,11 @@ public record GuardarParametrizacionRequest(
     @NotBlank String escala,
     UUID metricaBaseId,
     UUID proyectoId,
-    UUID metricaId
+    UUID metricaId,
+    // FASE 11: campos académicos opcionales — sin ellos, MetricaAcademicaService no puede
+    // calcular la métrica aprobada por este flujo (ver diagnóstico FASE 10, bloque E2E).
+    String tipoOperacion,
+    String formulaAcademica,
+    String unidadResultado,
+    String fuenteAcademica
 ) {}

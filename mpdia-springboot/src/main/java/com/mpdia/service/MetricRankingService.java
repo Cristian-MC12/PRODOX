@@ -36,6 +36,7 @@ public class MetricRankingService {
     private final FactorRepository                factorRepo;
     private final MetricaRepository               metricaRepo;
     private final PlaneacionService               planeacionService;
+    private final VariableDinamicaService         variableDinamicaService;
 
     /**
      * Scrum Master aprueba o rechaza una parametrización.
@@ -48,16 +49,35 @@ public class MetricRankingService {
                 .orElseThrow(() -> new IllegalArgumentException("Parametrización no encontrada."));
 
         if ("aprobar".equals(req.accion())) {
+            // FASE 10: antes de aprobar esta versión, desactivar la versión previamente
+            // aprobada de la MISMA métrica+proyecto (igual que
+            // ParametrizacionService.aprobarParametrizacion()), para que nunca coexistan
+            // dos filas 'aprobada' de la misma métrica en el mismo proyecto.
+            if (p.getMetricaId() != null && p.getProyectoId() != null) {
+                parametrizacionRepo.findUltimaVersionAprobada(p.getMetricaId(), p.getProyectoId())
+                        .filter(anterior -> !anterior.getId().equals(p.getId()))
+                        .ifPresent(anterior -> {
+                            anterior.setStatus("inactiva");
+                            parametrizacionRepo.save(anterior);
+                        });
+            }
             p.setStatus("aprobada");
             // Si la parametrización tiene metricaId y proyectoId, aprobar la métrica
             // en Planeación para generar la variable de Ejecución
             if (p.getMetricaId() != null && p.getProyectoId() != null) {
                 try {
+                    // FASE 10: materializar PRIMERO la variable versionada (parametrizacion_id +
+                    // version) de esta parametrización concreta. planeacionService.aprobar()
+                    // (más abajo) solo crea su variable genérica si NINGUNA variable existe
+                    // todavía para la métrica+proyecto — al crear la versionada primero, ese
+                    // camino queda cerrado y no se duplica (ver diagnóstico FASE 9, bloques 3/9).
+                    variableDinamicaService.materializarVariables(p);
+
                     // Verificar si ya está aprobada antes de intentar aprobar
                     var existing = planeacionService.listarSeleccionadas(p.getProyectoId()).stream()
                             .filter(m -> m.metricaId().equals(p.getMetricaId()))
                             .findFirst();
-                    
+
                     if (existing.isEmpty() || !existing.get().aprobada()) {
                         planeacionService.aprobar(p.getProyectoId(), p.getMetricaId(), revisadoPor);
                     }
@@ -103,30 +123,100 @@ public class MetricRankingService {
     }
 
     /**
-     * Guarda o actualiza la parametrización del usuario para una métrica+proyecto.
-     * Si el mismo usuario ya guardó una para la misma métrica en el mismo proyecto,
-     * se actualiza en lugar de insertar (evita duplicados en el Top 3).
+     * Resumen persistente (consultado en BD) de pendientes/aprobadas/rechazadas de un
+     * proyecto. FASE 10: para que los contadores de Verificación reflejen el estado real
+     * al entrar o recargar la pantalla, en vez de depender solo de la memoria de sesión
+     * del componente (ver diagnóstico FASE 9, bloque 4).
+     */
+    public com.mpdia.dto.ResumenVerificacionDto getResumenPorProyecto(UUID proyectoId) {
+        return new com.mpdia.dto.ResumenVerificacionDto(
+                parametrizacionRepo.countByProyectoIdAndStatus(proyectoId, "pendiente"),
+                parametrizacionRepo.countByProyectoIdAndStatus(proyectoId, "aprobada"),
+                parametrizacionRepo.countByProyectoIdAndStatus(proyectoId, "rechazada")
+        );
+    }
+
+    /**
+     * Guarda la parametrización de una métrica para un proyecto (flujo "Enviar al Scrum Master").
+     *
+     * FASE 10: la parametrización es INMUTABLE (ver MetricParametrizacion, comentario de clase):
+     * cada envío crea una versión NUEVA para metricaId+proyectoId, igual que
+     * ParametrizacionService.guardarPropuesta() hace para el flujo académico. Nunca se busca
+     * "la parametrización existente del usuario" de forma global (eso permitía que reenviar la
+     * misma métrica sobrescribiera en el sitio una fila de OTRO proyecto, o degradara a
+     * "pendiente" una versión ya aprobada — ver diagnóstico FASE 9, bloque 1).
      */
     @Transactional
     public MetricParametrizacionDto guardar(GuardarParametrizacionRequest req,
                                             String userId, String userEmail) {
-        final Factor factor;
-        if (req.factorId() != null) {
-            factor = factorRepo.findById(req.factorId()).orElse(null);
-        } else {
-            factor = null;
+        if (req.metricaId() != null) {
+            return guardarPorMetrica(req, userId, userEmail);
+        } else if (req.factorId() != null) {
+            return guardarPorFactor(req, userId, userEmail);
+        }
+        throw new IllegalArgumentException("Debe especificar metricaId o factorId.");
+    }
+
+    /**
+     * Crea una nueva versión de parametrización para metricaId+proyectoId. La siguiente versión
+     * se calcula sobre el máximo histórico real (cualquier status), igual que
+     * ParametrizacionService.guardarPropuesta(), para no colisionar con la restricción de
+     * unicidad (proyecto+métrica+versión) ni pisar una propuesta/aprobada existente.
+     */
+    private MetricParametrizacionDto guardarPorMetrica(GuardarParametrizacionRequest req,
+                                                        String userId, String userEmail) {
+        if (req.proyectoId() == null) {
+            throw new IllegalArgumentException("proyectoId es obligatorio para parametrizar una métrica.");
         }
 
-        // Buscar parametrización existente del mismo usuario para la misma métrica (global, sin filtro por proyecto)
-        MetricParametrizacion p = null;
-        if (req.metricaId() != null) {
-            p = parametrizacionRepo
-                    .findByUserIdAndMetricaId(userId, req.metricaId())
-                    .orElse(null);
-        } else if (req.factorId() != null) {
-            p = parametrizacionRepo
-                    .findByUserIdAndFactor_Id(userId, req.factorId())
-                    .orElse(null);
+        Integer siguienteVersion = 1;
+        var historial = parametrizacionRepo.findHistorialVersiones(req.metricaId(), req.proyectoId());
+        if (!historial.isEmpty()) {
+            siguienteVersion = historial.get(0).getVersion() + 1;
+        }
+
+        MetricParametrizacion p = new MetricParametrizacion();
+        p.setVersion(siguienteVersion);
+        p.setUserId(userId);
+        p.setUserEmail(userEmail);
+        p.setProyectoId(req.proyectoId());
+        // Solo asignar metricaId si realmente existe en la tabla metricas
+        p.setMetricaId(metricaRepo.existsById(req.metricaId()) ? req.metricaId() : null);
+        p.setObjetivo(req.objetivo());
+        p.setProcedimiento(req.procedimiento());
+        p.setIndicadorVariable(req.indicadorVariable());
+        p.setEscala(req.escala());
+        p.setMetricaBaseId(req.metricaBaseId());
+        // FASE 11: propagar los campos académicos que el usuario completó en el formulario
+        // (nunca copiados de otra parametrización) — sin esto, MetricaAcademicaService
+        // rechaza el cálculo con 409 "no tiene tipo de operación definido" aun aprobada.
+        p.setTipoOperacion(req.tipoOperacion());
+        p.setFormulaAcademica(req.formulaAcademica());
+        p.setUnidadResultado(req.unidadResultado());
+        p.setFuenteAcademica(req.fuenteAcademica());
+        p.setStatus("pendiente");
+
+        MetricParametrizacion saved = parametrizacionRepo.save(p);
+        return toDto(saved, null);
+    }
+
+    /**
+     * Legacy: parametrización "base" de un factor (sin versionado por métrica/proyecto,
+     * usada por el Top 3 / ranking). Se mantiene aislada por proyecto y nunca degrada una
+     * fila ya aprobada — si la existente está aprobada, se crea una fila nueva en su lugar
+     * en vez de sobrescribirla.
+     */
+    private MetricParametrizacionDto guardarPorFactor(GuardarParametrizacionRequest req,
+                                                       String userId, String userEmail) {
+        Factor factor = factorRepo.findById(req.factorId()).orElse(null);
+
+        MetricParametrizacion p = req.proyectoId() != null
+                ? parametrizacionRepo.findByUserIdAndFactor_IdAndProyectoId(userId, req.factorId(), req.proyectoId())
+                        .orElse(null)
+                : null;
+
+        if (p != null && "aprobada".equals(p.getStatus())) {
+            p = null;
         }
 
         if (p == null) {
@@ -135,13 +225,8 @@ public class MetricRankingService {
             p.setUserId(userId);
             p.setUserEmail(userEmail);
             p.setProyectoId(req.proyectoId());
-            // Solo asignar metricaId si realmente existe en la tabla metricas
-            UUID metricaId = req.metricaId() != null && metricaRepo.existsById(req.metricaId())
-                    ? req.metricaId() : null;
-            p.setMetricaId(metricaId);
         }
 
-        // Actualizar campos (upsert)
         p.setObjetivo(req.objetivo());
         p.setProcedimiento(req.procedimiento());
         p.setIndicadorVariable(req.indicadorVariable());
@@ -154,7 +239,7 @@ public class MetricRankingService {
 
         MetricParametrizacion saved = parametrizacionRepo.save(p);
 
-        // Actualizar ranking solo si hay factor y evitar conflictos
+        // Actualizar ranking (solo aplica a la parametrización "base" por factor)
         if (factor != null) {
             try {
                 MetricUsoRanking ranking = rankingRepo.findById(factor.getId())

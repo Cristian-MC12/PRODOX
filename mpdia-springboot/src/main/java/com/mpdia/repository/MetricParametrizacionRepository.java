@@ -119,4 +119,10 @@ public interface MetricParametrizacionRepository extends JpaRepository<MetricPar
         UUID proyectoId,
         String status
     );
+
+    /**
+     * Cuenta parametrizaciones de un proyecto por status (persistente en BD, no en
+     * memoria de sesión). Usado por el resumen de Verificación (Fase 10).
+     */
+    long countByProyectoIdAndStatus(UUID proyectoId, String status);
 }

@@ -135,18 +135,25 @@ class ParametrizacionUnicidadV25Test {
             "Numérica",
             null, // metricaBaseId
             PROYECTO_1,
-            METRICA_VEL
+            METRICA_VEL,
+            "SUMA", "SUMA(indicador_ranking_v25)", "unidades", "fuente test"
         );
 
         var dto = rankingService.guardar(req, userId, userId + "@test.mpdia.com");
         assertThat(dto).isNotNull();
         assertThat(dto.status()).isEqualTo("pendiente");
 
-        // Guardar una segunda vez para el mismo usuario/métrica debe actualizar
-        // (upsert), no fallar ni duplicar — confirma que el patrón find-or-update
-        // sigue protegiendo a Sistema A sin el índice viejo.
+        // FASE 10: guardar() ya NO reutiliza/actualiza la fila existente del mismo
+        // usuario+métrica — ese patrón "find-or-update" era exactamente el bug crítico
+        // confirmado en FASE 9 (bloque 1): degradaba una parametrización ya aprobada
+        // de vuelta a "pendiente" al reenviar, y podía pisar una fila de otro proyecto.
+        // Ahora cada envío crea una versión NUEVA para metricaId+proyectoId, igual que
+        // ParametrizacionService.guardarPropuesta() (índice único ux_parametrizacion_
+        // proyecto_metrica_version sigue protegiendo la unicidad por versión, no por
+        // "una fila por usuario").
         var dto2 = rankingService.guardar(req, userId, userId + "@test.mpdia.com");
-        assertThat(dto2.id()).isEqualTo(dto.id());
+        assertThat(dto2.id()).isNotEqualTo(dto.id());
+        assertThat(dto2.version()).isEqualTo(dto.version() + 1);
 
         var top3 = rankingService.getTop3ByMetricaId(METRICA_VEL);
         assertThat(top3).isNotNull(); // no debe lanzar excepción

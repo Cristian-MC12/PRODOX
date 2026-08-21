@@ -211,6 +211,14 @@
             Las observaciones y preguntas son sugerencias para facilitar la discusión del equipo.
             Los insights sobre causas raíz deben ser explorados en la retrospectiva presencial.
           </div>
+
+          <!-- Cierre del ciclo: siguiente paso -->
+          <div class="d-flex justify-content-end mt-4 pt-3 border-top">
+            <button class="btn btn-outline-secondary" (click)="router.navigate(['/planeacion'])"
+                    title="Aplicar las mejoras discutidas y planificar el siguiente sprint">
+              <i class="bi bi-arrow-right-circle me-1"></i>Continuar con el siguiente Sprint en Planeación
+            </button>
+          </div>
         </div>
       </div>
     }

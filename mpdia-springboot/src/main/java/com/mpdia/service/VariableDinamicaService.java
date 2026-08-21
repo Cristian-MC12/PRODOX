@@ -76,6 +76,20 @@ public class VariableDinamicaService {
     }
 
     /**
+     * Materializa (obtiene o crea) las variables versionadas de una parametrización ya
+     * aprobada. Reutilizado por el flujo de Verificación (MetricRankingService.verificar())
+     * para que, al aprobar, se cree exactamente la variable vinculada a
+     * parametrizacion_id+version — nunca una variable genérica paralela (ver diagnóstico
+     * FASE 9, bloques 3 y 9).
+     */
+    @Transactional
+    public List<Variable> materializarVariables(MetricParametrizacion parametrizacion) {
+        Proyecto proyecto = proyectoRepo.findById(parametrizacion.getProyectoId())
+            .orElseThrow(() -> new IllegalArgumentException("Proyecto no encontrado"));
+        return obtenerOCrearVariables(parametrizacion, proyecto);
+    }
+
+    /**
      * Obtiene variables existentes o las crea on-demand desde la parametrización.
      */
     private List<Variable> obtenerOCrearVariables(MetricParametrizacion parametrizacion, Proyecto proyecto) {
@@ -94,48 +108,76 @@ public class VariableDinamicaService {
     }
 
     /**
-     * Crea variables automáticamente desde configuracionAprobadaJson.
-     * Parser simple: por ahora crea UNA variable principal.
+     * Crea variables automáticamente desde configuracionAprobadaJson (o, si no existe, desde
+     * las columnas planas — FASE 10). FASE 11: indicadorVariable admite una lista separada por
+     * comas ("acat, acr"), igual que ParametrizacionService.crearVariablesDesdeParametrizacion()
+     * — antes esta versión creaba una única variable con ese texto completo como nombre, lo que
+     * impedía calcular métricas FORMULA de más de una variable (FAT, Deuda técnica) cuando se
+     * aprobaban por el flujo de Verificación.
      */
     private List<Variable> crearVariablesDesdeParametrizacion(MetricParametrizacion parametrizacion, Proyecto proyecto) {
         try {
-            // Parsear JSON
-            JsonNode json = objectMapper.readTree(parametrizacion.getConfiguracionAprobadaJson());
-            
-            String indicadorVariable = json.get("indicadorVariable").asText();
-            String procedimiento = json.get("procedimiento").asText();
-            String escala = json.get("escala").asText();
-            String frecuenciaCaptura = json.has("frecuenciaCaptura") 
-                ? json.get("frecuenciaCaptura").asText() 
-                : "por_sprint";
-            
+            String indicadorVariable;
+            String procedimiento;
+            String escala;
+            String frecuenciaCaptura;
+
+            String snapshotJson = parametrizacion.getConfiguracionAprobadaJson();
+            if (snapshotJson != null && !snapshotJson.isBlank()) {
+                // Parametrización aprobada por el flujo académico (ParametrizacionService):
+                // usar el snapshot de reproducibilidad.
+                JsonNode json = objectMapper.readTree(snapshotJson);
+                indicadorVariable = json.get("indicadorVariable").asText();
+                procedimiento = json.get("procedimiento").asText();
+                escala = json.get("escala").asText();
+                frecuenciaCaptura = json.has("frecuenciaCaptura")
+                    ? json.get("frecuenciaCaptura").asText()
+                    : "por_sprint";
+            } else {
+                // FASE 10: parametrizaciones aprobadas por el flujo de Verificación
+                // (MetricRankingService) no generan snapshot JSON — usar las mismas
+                // columnas planas (idéntico significado y nombre que el snapshot).
+                indicadorVariable = parametrizacion.getIndicadorVariable();
+                procedimiento = parametrizacion.getProcedimiento();
+                escala = parametrizacion.getEscala();
+                frecuenciaCaptura = parametrizacion.getFrecuenciaCaptura() != null
+                    ? parametrizacion.getFrecuenciaCaptura()
+                    : "por_sprint";
+            }
+
             // Buscar métrica
             Metrica metrica = metricaRepo.findById(parametrizacion.getMetricaId())
                 .orElseThrow(() -> new IllegalArgumentException("Métrica no encontrada"));
-            
-            // Crear variable principal
-            Variable variable = new Variable();
-            variable.setProyectoId(proyecto.getId());
-            variable.setMetrica(metrica);
-            variable.setNombre(indicadorVariable);
-            variable.setDescripcion(procedimiento);  // Usar procedimiento como descripción
-            variable.setTipoAlcance("grupal");
-            variable.setTipoDato("numerico");  // Por defecto numérico
-            variable.setActiva(true);
-            variable.setFrecuenciaCaptura(frecuenciaCaptura);
-            variable.setParametrizacionId(parametrizacion.getId());
-            variable.setParametrizacionVersion(parametrizacion.getVersion());
-            
-            // Intentar extraer escala si existe
-            parseEscala(escala, variable);
-            
-            // Guardar
-            Variable guardada = variableRepo.save(variable);
-            
+
+            String[] nombresVariables = java.util.Arrays.stream(indicadorVariable.split(",", -1))
+                .map(String::trim)
+                .filter(n -> !n.isBlank())
+                .toArray(String[]::new);
+            if (nombresVariables.length == 0) {
+                throw new IllegalStateException("indicadorVariable no está definido en la parametrización");
+            }
+
             List<Variable> resultado = new ArrayList<>();
-            resultado.add(guardada);
+            for (String nombreVar : nombresVariables) {
+                Variable variable = new Variable();
+                variable.setProyectoId(proyecto.getId());
+                variable.setMetrica(metrica);
+                variable.setNombre(nombreVar);
+                variable.setDescripcion(procedimiento);  // Usar procedimiento como descripción
+                variable.setTipoAlcance("grupal");
+                variable.setTipoDato("numerico");  // Por defecto numérico
+                variable.setActiva(true);
+                variable.setFrecuenciaCaptura(frecuenciaCaptura);
+                variable.setParametrizacionId(parametrizacion.getId());
+                variable.setParametrizacionVersion(parametrizacion.getVersion());
+
+                // Intentar extraer escala si existe
+                parseEscala(escala, variable);
+
+                resultado.add(variableRepo.save(variable));
+            }
             return resultado;
-            
+
         } catch (Exception e) {
             throw new RuntimeException("Error parseando configuración aprobada: " + e.getMessage(), e);
         }

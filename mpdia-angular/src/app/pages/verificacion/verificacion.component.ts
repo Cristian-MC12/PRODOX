@@ -291,7 +291,8 @@ export class VerificacionComponent implements OnInit {
     public  auth: AuthService,
     public  router: Router,
     private http: HttpClient,
-    private seleccionService: SeleccionService
+    private seleccionService: SeleccionService,
+    private rankingService: MetricRankingService
   ) {}
 
   get esScrumMaster(): boolean {
@@ -320,6 +321,20 @@ export class VerificacionComponent implements OnInit {
       this.pendientes = list;
       this.cargando   = false;
     });
+
+    // FASE 10: los contadores de Aprobadas/Rechazadas reflejan el estado real en BD
+    // (aislado por proyecto activo), no solo lo acumulado en memoria durante la sesión
+    // (ver diagnóstico FASE 9, bloque 4).
+    if (proyectoId) {
+      this.rankingService.getResumen(proyectoId).pipe(
+        catchError(() => of(null))
+      ).subscribe(resumen => {
+        if (resumen) {
+          this.aprobadas  = resumen.aprobadas;
+          this.rechazadas = resumen.rechazadas;
+        }
+      });
+    }
   }
 
   verDetalle(p: Pendiente): void {
