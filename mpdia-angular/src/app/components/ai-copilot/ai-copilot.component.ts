@@ -28,12 +28,20 @@ export class AICopilotComponent implements OnInit, AfterViewChecked {
 
   private shouldScroll = false;
 
+  // FASE 12.9: alineadas con las opciones que ya se anuncian en el mensaje de bienvenida
+  // (addWelcomeMessage) — un solo texto "real" para el menú, tanto narrado como clicable.
   quickPrompts = [
-    '¿Cómo está mi equipo?',
+    '¿Cómo estuvo el último sprint?',
+    'Analiza el sprint activo',
     '¿Qué riesgos detectas?',
-    'Analiza las métricas del sprint actual',
-    '¿Qué debería mejorar el equipo?'
+    '¿Qué deberíamos revisar en la retrospectiva?',
+    'Comparar los últimos sprints'
   ];
+
+  /** Debe coincidir exactamente con CopilotDomainGuard.RESPUESTA_FUERA_DE_DOMINIO (backend). */
+  private static readonly RESPUESTA_FUERA_DE_DOMINIO =
+    'Soy el AI Agile Copilot de MPDIA. Puedo ayudarte con el sprint, métricas, riesgos, ' +
+    'problemas, impedimentos, tendencias y retrospectivas del proyecto activo.';
 
   constructor(
     private copilotService: AICopilotService,
@@ -95,7 +103,7 @@ Puedes preguntarme, por ejemplo:
 • Analiza el sprint activo
 • ¿Qué riesgos detectas?
 • ¿Qué deberíamos revisar en la retrospectiva?
-• Compara los últimos sprints`,
+• Comparar los últimos sprints`,
       timestamp: new Date()
     });
   }
@@ -184,6 +192,27 @@ Puedes preguntarme, por ejemplo:
         this.shouldScroll = true;
       }
     });
+  }
+
+  /**
+   * FASE 12.9/14: el menú de sugerencias se muestra al inicio (sin conversación), inmediatamente
+   * después de una respuesta fuera de dominio, y también tras un error real del backend/Gemini
+   * (FASE 14 — BLOQUE 3: un error no debe dejar al usuario sin forma de retomar la conversación).
+   * Al depender siempre del ÚLTIMO mensaje, nunca se duplica ni se acumula aunque el usuario
+   * encadene varias preguntas fuera de dominio o varios errores seguidos.
+   */
+  get shouldShowQuickPrompts(): boolean {
+    if (this.loading()) return false;
+    if (this.messages.length === 1) return true;
+    const last = this.messages[this.messages.length - 1];
+    if (last.role !== 'assistant') return false;
+    return this.isOutOfDomainMessage(last) || !!last.error;
+  }
+
+  private isOutOfDomainMessage(msg: ChatMessage): boolean {
+    return msg.role === 'assistant' &&
+           !msg.error &&
+           msg.content === AICopilotComponent.RESPUESTA_FUERA_DE_DOMINIO;
   }
 
   useQuickPrompt(prompt: string): void {

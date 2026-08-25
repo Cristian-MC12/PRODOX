@@ -45,7 +45,7 @@ import { environment } from '../../../environments/environment';
               <div class="col-md-6">
                 <div class="text-muted small">Factor</div>
                 <div class="fw-semibold">{{ metrica.factorNombre }}</div>
-                <span class="badge" [class]="categoryBadge(metrica.factorCategoria)">
+                <span class="badge prox-badge-sm" [class]="categoryBadge(metrica.factorCategoria)">
                   {{ metrica.factorCategoria }}
                 </span>
               </div>
@@ -66,7 +66,7 @@ import { environment } from '../../../environments/environment';
             <div class="card-body py-2">
               <div class="d-flex align-items-center justify-content-between">
                 <div>
-                  <span class="badge me-2" 
+                  <span class="badge me-2 prox-badge-sm"
                         [class.bg-warning]="estadoActual === 'propuesta'"
                         [class.text-dark]="estadoActual === 'propuesta'"
                         [class.bg-success]="estadoActual === 'aprobada'">
@@ -134,9 +134,9 @@ import { environment } from '../../../environments/environment';
                   @for (t of top3; track t.id; let i = $index) {
                     <tr>
                       <td class="ps-3 align-middle">
-                        <span class="badge rounded-pill"
+                        <span class="badge rounded-pill prox-badge-sm"
                               [class]="i === 0 ? 'bg-warning text-dark' : i === 1 ? 'bg-secondary' : 'bg-secondary'"
-                              style="font-size:0.7rem;min-width:22px">
+                              style="min-width:22px">
                           {{ i + 1 }}
                         </span>
                       </td>
@@ -210,7 +210,7 @@ import { environment } from '../../../environments/environment';
             </div>
           </div>
           <div class="card-body">
-            <button class="btn btn-primary"
+            <button class="btn btn-primary btn-sm"
                     [disabled]="generando"
                     (click)="generarPropuestas()">
               @if (generando) {
@@ -286,7 +286,7 @@ import { environment } from '../../../environments/environment';
                   <dt class="col-sm-3 text-muted">
                     <i class="bi bi-gear me-1"></i>Tipo operación
                   </dt>
-                  <dd class="col-sm-9"><span class="badge bg-secondary">{{ propuestas[0].tipoOperacion }}</span></dd>
+                  <dd class="col-sm-9"><span class="badge bg-secondary prox-badge-sm">{{ propuestas[0].tipoOperacion }}</span></dd>
                 }
 
                 @if (propuestas[0].unidadResultado) {
@@ -397,62 +397,58 @@ import { environment } from '../../../environments/environment';
                 </select>
               </div>
               
-              <!-- Campos académicos opcionales -->
+              <!-- Campos académicos: información PROPUESTA/GENERADA por IA, nunca
+                   editable manualmente acá — se completan solo copiando una propuesta
+                   de IA ("Copiar al formulario"), una entrada del ranking ("Usar") o
+                   la parametrización base ("Usar como base"). Un campo que la IA no
+                   generó se muestra explícitamente como "No definido", nunca como un
+                   input vacío que invite a completarlo a mano. -->
               <div class="col-12 mt-3">
                 <hr>
                 <h6 class="text-muted small mb-3">
                   <i class="bi bi-mortarboard me-1"></i>
-                  Campos académicos <span class="text-muted">(opcionales - propuestos por IA)</span>
+                  Campos académicos <span class="text-muted">(propuestos por IA — solo lectura)</span>
                 </h6>
               </div>
-              
-              <div class="col-md-6">
-                <label class="form-label small fw-semibold">
-                  Fórmula académica
-                </label>
-                <input type="text" class="form-control form-control-sm"
-                       placeholder="Ej: Σ(problemas_reportados)"
-                       [(ngModel)]="form.formulaAcademica">
-                <div class="form-text small">Fórmula matemática formal</div>
-              </div>
-              
-              <div class="col-md-6">
-                <label class="form-label small fw-semibold">
-                  Tipo de operación
-                </label>
-                <select class="form-select form-select-sm" [(ngModel)]="form.tipoOperacion">
-                  <option value="">Seleccionar...</option>
-                  <option value="SUMA">Suma (Σ)</option>
-                  <option value="PROMEDIO">Promedio (μ)</option>
-                  <option value="PORCENTAJE">Porcentaje (%)</option>
-                  <option value="CONTEO">Conteo (#)</option>
-                  <option value="RATIO">Ratio (x/y)</option>
-                  <!-- FASE 11: sin esta opción, una métrica FORMULA (FAT, Deuda técnica) no podía
-                       parametrizarse manualmente desde esta pantalla — el backend (MetricaAcademicaService)
-                       ya soportaba "FORMULA", solo faltaba poder elegirlo aquí. -->
-                  <option value="FORMULA">Fórmula (expresión matemática)</option>
-                  <option value="OTRO">Otro</option>
-                </select>
-              </div>
-              
-              <div class="col-md-6">
-                <label class="form-label small fw-semibold">
-                  Unidad del resultado
-                </label>
-                <input type="text" class="form-control form-control-sm"
-                       placeholder="Ej: problemas, puntos, horas, %"
-                       [(ngModel)]="form.unidadResultado">
-                <div class="form-text small">Unidad de medida del resultado</div>
-              </div>
-              
-              <div class="col-md-6">
-                <label class="form-label small fw-semibold">
-                  Fuente académica
-                </label>
-                <input type="text" class="form-control form-control-sm"
-                       placeholder="Ej: Scrum Guide 2020, ISO 9126"
-                       [(ngModel)]="form.fuenteAcademica">
-                <div class="form-text small">Referencia académica o estándar</div>
+
+              <div class="col-12">
+                <dl class="row mb-0 small p-3 rounded" style="background-color:var(--background)">
+                  <dt class="col-sm-3 text-muted">Fórmula académica</dt>
+                  <dd class="col-sm-9">
+                    @if (form.formulaAcademica) {
+                      <code>{{ form.formulaAcademica }}</code>
+                    } @else {
+                      <span class="text-muted fst-italic">No definido</span>
+                    }
+                  </dd>
+
+                  <dt class="col-sm-3 text-muted">Tipo de operación</dt>
+                  <dd class="col-sm-9">
+                    @if (form.tipoOperacion) {
+                      <span class="badge bg-secondary prox-badge-sm">{{ form.tipoOperacion }}</span>
+                    } @else {
+                      <span class="text-muted fst-italic">No definido</span>
+                    }
+                  </dd>
+
+                  <dt class="col-sm-3 text-muted">Unidad del resultado</dt>
+                  <dd class="col-sm-9">
+                    @if (form.unidadResultado) {
+                      {{ form.unidadResultado }}
+                    } @else {
+                      <span class="text-muted fst-italic">No definido</span>
+                    }
+                  </dd>
+
+                  <dt class="col-sm-3 text-muted">Fuente académica</dt>
+                  <dd class="col-sm-9 mb-0">
+                    @if (form.fuenteAcademica) {
+                      {{ form.fuenteAcademica }}
+                    } @else {
+                      <span class="text-muted fst-italic">No definido</span>
+                    }
+                  </dd>
+                </dl>
               </div>
             </div>
           </div>
@@ -462,7 +458,7 @@ import { environment } from '../../../environments/environment';
             </button>
             <div class="d-flex align-items-center gap-3">
               <span class="small">
-                Estado: <span class="badge" [class]="estadoBadge()">{{ estadoLabel() }}</span>
+                Estado: <span class="badge prox-badge-sm" [class]="estadoBadge()">{{ estadoLabel() }}</span>
               </span>
               <button class="btn btn-success btn-sm"
                       [disabled]="guardando"
@@ -566,13 +562,25 @@ export class ParametrizacionComponent implements OnInit {
     });
   }
 
-  /** Copiar una entrada del top 3 al formulario */
+  /**
+   * Copiar una entrada del top 3 al formulario. Reutiliza la parametrización
+   * COMPLETA (antes solo copiaba objetivo/procedimiento/indicadorVariable/
+   * escala y descartaba el resto, incluidos los campos académicos y la
+   * frecuencia de captura ya definidos — bug corregido acá). Un campo que
+   * realmente está vacío en el original se conserva vacío/undefined, nunca
+   * se inventa un valor.
+   */
   usarDelTop(t: TopParametrizacion): void {
     this.form = {
       objetivo:          t.objetivo,
       procedimiento:     t.procedimiento,
       indicadorVariable: t.indicadorVariable,
-      escala:            t.escala
+      escala:            t.escala,
+      frecuenciaCaptura: t.frecuenciaCaptura || 'por_sprint',
+      fuenteAcademica:   t.fuenteAcademica ?? undefined,
+      formulaAcademica:  t.formulaAcademica ?? undefined,
+      tipoOperacion:     t.tipoOperacion ?? undefined,
+      unidadResultado:   t.unidadResultado ?? undefined
     };
     this.propuestaElegida = null;
     // Incrementar el ranking de uso de esta parametrización
@@ -624,14 +632,23 @@ export class ParametrizacionComponent implements OnInit {
     });
   }
 
-  /** Copiar la parametrización base al formulario para editarla */
+  /**
+   * Copiar la parametrización base al formulario para editarla. Reutiliza
+   * la parametrización COMPLETA — mismo criterio que usarDelTop().
+   */
   usarBase(): void {
     if (!this.parametrizacionBase) return;
+    const b = this.parametrizacionBase;
     this.form = {
-      objetivo:          this.parametrizacionBase.objetivo,
-      procedimiento:     this.parametrizacionBase.procedimiento,
-      indicadorVariable: this.parametrizacionBase.indicadorVariable,
-      escala:            this.parametrizacionBase.escala
+      objetivo:          b.objetivo,
+      procedimiento:     b.procedimiento,
+      indicadorVariable: b.indicadorVariable,
+      escala:            b.escala,
+      frecuenciaCaptura: b.frecuenciaCaptura || 'por_sprint',
+      fuenteAcademica:   b.fuenteAcademica ?? undefined,
+      formulaAcademica:  b.formulaAcademica ?? undefined,
+      tipoOperacion:     b.tipoOperacion ?? undefined,
+      unidadResultado:   b.unidadResultado ?? undefined
     };
     this.propuestaElegida = null;
   }
@@ -739,7 +756,11 @@ export class ParametrizacionComponent implements OnInit {
       tipoOperacion:     this.form.tipoOperacion ?? null,
       formulaAcademica:  this.form.formulaAcademica ?? null,
       unidadResultado:   this.form.unidadResultado ?? null,
-      fuenteAcademica:   this.form.fuenteAcademica ?? null
+      fuenteAcademica:   this.form.fuenteAcademica ?? null,
+      // Revisión de frecuencia de captura: antes no se enviaba acá, por lo que el
+      // backend la persistía siempre como "por_sprint" sin importar lo elegido
+      // en el selector de arriba (ver MetricRankingService.guardarPorMetrica()).
+      frecuenciaCaptura: this.form.frecuenciaCaptura || 'por_sprint'
     }).pipe(
       catchError(() => of(null))
     ).subscribe(() => {

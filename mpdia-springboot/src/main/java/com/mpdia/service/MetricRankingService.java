@@ -81,6 +81,17 @@ public class MetricRankingService {
                     if (existing.isEmpty() || !existing.get().aprobada()) {
                         planeacionService.aprobar(p.getProyectoId(), p.getMetricaId(), revisadoPor);
                     }
+                } catch (NombreVariableInvalidoException e) {
+                    // Corrección del defecto documentado en FASE 17: antes, esta excepción
+                    // caía en el catch genérico de abajo y solo se registraba en log,
+                    // dejando la parametrización marcada "aprobada" en BD sin variable
+                    // funcional y sin aviso alguno al Scrum Master. Se relanza para que
+                    // la transacción completa de verificar() haga rollback (la
+                    // parametrización NO queda persistida como 'aprobada') y el Scrum
+                    // Master reciba el mensaje claro vía HTTP 400 (GlobalExceptionHandler
+                    // ya mapea IllegalArgumentException, superclase de
+                    // NombreVariableInvalidoException, a 400 con el mensaje original).
+                    throw e;
                 } catch (Exception e) {
                     // Log para diagnosticar si falla la generación de variable
                     System.err.println("[VERIFICAR] Error al aprobar métrica en Planeación: "
@@ -172,7 +183,18 @@ public class MetricRankingService {
         Integer siguienteVersion = 1;
         var historial = parametrizacionRepo.findHistorialVersiones(req.metricaId(), req.proyectoId());
         if (!historial.isEmpty()) {
-            siguienteVersion = historial.get(0).getVersion() + 1;
+            MetricParametrizacion ultima = historial.get(0);
+            // FASE 20: si la última versión sigue "pendiente" y tiene EXACTAMENTE el
+            // mismo contenido que este envío, es un duplicado (doble clic que superó
+            // el guard de frontend, recarga/navegación durante un envío ya en curso,
+            // etc. — ver diagnóstico FASE 20) y no una nueva versión legítima.
+            // Se devuelve la fila existente en vez de crear una idéntica nueva.
+            // Un reenvío con contenido distinto, o sobre una versión ya aprobada o
+            // rechazada, sigue creando una versión nueva exactamente como antes.
+            if ("pendiente".equals(ultima.getStatus()) && esMismoContenido(ultima, req)) {
+                return toDto(ultima, null);
+            }
+            siguienteVersion = ultima.getVersion() + 1;
         }
 
         MetricParametrizacion p = new MetricParametrizacion();
@@ -194,10 +216,36 @@ public class MetricRankingService {
         p.setFormulaAcademica(req.formulaAcademica());
         p.setUnidadResultado(req.unidadResultado());
         p.setFuenteAcademica(req.fuenteAcademica());
+        // Revisión de frecuencia de captura: antes no se asignaba acá, así que la
+        // entidad quedaba siempre en su default "por_sprint" sin importar lo que
+        // el usuario eligiera en el formulario de Planeación (ver GuardarParametrizacionRequest).
+        p.setFrecuenciaCaptura(req.frecuenciaCaptura() != null ? req.frecuenciaCaptura() : "por_sprint");
         p.setStatus("pendiente");
 
         MetricParametrizacion saved = parametrizacionRepo.save(p);
         return toDto(saved, null);
+    }
+
+    /**
+     * FASE 20: compara el contenido relevante de una parametrización ya existente
+     * contra un nuevo request, para distinguir un reenvío duplicado (mismo
+     * contenido) de una nueva versión legítima (contenido editado).
+     */
+    private boolean esMismoContenido(MetricParametrizacion existente, GuardarParametrizacionRequest req) {
+        String frecuenciaReq = req.frecuenciaCaptura() != null ? req.frecuenciaCaptura() : "por_sprint";
+        return java.util.Objects.equals(existente.getObjetivo(), req.objetivo())
+            && java.util.Objects.equals(existente.getProcedimiento(), req.procedimiento())
+            && java.util.Objects.equals(existente.getIndicadorVariable(), req.indicadorVariable())
+            && java.util.Objects.equals(existente.getEscala(), req.escala())
+            && java.util.Objects.equals(existente.getTipoOperacion(), req.tipoOperacion())
+            && java.util.Objects.equals(existente.getFormulaAcademica(), req.formulaAcademica())
+            && java.util.Objects.equals(existente.getUnidadResultado(), req.unidadResultado())
+            && java.util.Objects.equals(existente.getFuenteAcademica(), req.fuenteAcademica())
+            // Revisión de frecuencia de captura: si el usuario solo cambió la
+            // frecuencia (todo lo demás igual), no es el mismo contenido — antes
+            // esta comparación no incluía frecuenciaCaptura y el reenvío se
+            // descartaba silenciosamente devolviendo la versión vieja sin el cambio.
+            && java.util.Objects.equals(existente.getFrecuenciaCaptura(), frecuenciaReq);
     }
 
     /**
@@ -304,7 +352,12 @@ public class MetricRankingService {
                         p.getIndicadorVariable(),
                         p.getEscala(),
                         usosMap.getOrDefault(p.getId(), 0),
-                        p.getCreatedAt()
+                        p.getCreatedAt(),
+                        p.getFrecuenciaCaptura(),
+                        p.getFuenteAcademica(),
+                        p.getFormulaAcademica(),
+                        p.getTipoOperacion(),
+                        p.getUnidadResultado()
                 ))
                 .toList();
     }
@@ -328,7 +381,12 @@ public class MetricRankingService {
                         p.getIndicadorVariable(),
                         p.getEscala(),
                         (int) usosTotales,
-                        p.getCreatedAt()
+                        p.getCreatedAt(),
+                        p.getFrecuenciaCaptura(),
+                        p.getFuenteAcademica(),
+                        p.getFormulaAcademica(),
+                        p.getTipoOperacion(),
+                        p.getUnidadResultado()
                 ))
                 .toList();
     }
@@ -395,7 +453,11 @@ public class MetricRankingService {
                 p.getProyectoId(),
                 p.getCreatedAt(),
                 p.getPropuestaIAJson(),
-                p.getConfiguracionAprobadaJson()
+                p.getConfiguracionAprobadaJson(),
+                p.getFuenteAcademica(),
+                p.getFormulaAcademica(),
+                p.getTipoOperacion(),
+                p.getUnidadResultado()
         );
     }
 }

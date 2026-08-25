@@ -20,5 +20,7 @@ public record VariableConValorDto(
     // Valor actual del sprint (si ya fue registrado)
     BigDecimal valorNum,
     String valorTexto,
-    Boolean valorBool
+    Boolean valorBool,
+    /** FASE 16 — frecuencia de captura de la variable (diaria | semanal | por_sprint | ilimitada). */
+    String frecuenciaCaptura
 ) {}

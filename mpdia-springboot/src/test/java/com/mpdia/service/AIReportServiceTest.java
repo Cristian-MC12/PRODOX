@@ -221,31 +221,95 @@ class AIReportServiceTest {
     }
 
     // ═══════════════════════════════════════════════════════════════════════
-    // MANEJO DE ERRORES
+    // MANEJO DE ERRORES (FASE 23 — corrección del HTTP 500 opaco de FASE 22)
     // ═══════════════════════════════════════════════════════════════════════
 
-    @Test
-    @DisplayName("generateReport: error en Gemini genera reporte con mensaje de error")
-    void generateReport_errorGemini_generaReporteConError() {
-        when(sprintRepository.findById(sprintId)).thenReturn(Optional.of(sprint));
-        when(projectMemberRepository.existsByProyectoIdAndUserId(proyectoId, userId)).thenReturn(true);
-
-        SprintMetricsSummaryDto summary = new SprintMetricsSummaryDto(
+    private SprintMetricsSummaryDto summaryConDatos() {
+        return new SprintMetricsSummaryDto(
                 sprintId, 5, "Goal", "finalizado",
                 LocalDate.now().minusWeeks(2), LocalDate.now().minusWeeks(1),
                 14, Map.of("Calidad", BigDecimal.TEN), 5, true
         );
+    }
 
-        when(analyticsService.getSprintMetricsSummary(sprintId)).thenReturn(summary);
+    @Test
+    @DisplayName("generateReport: Gemini lanza excepción (ej. cuota agotada) -> ReporteIANoDisponibleException, NO HTTP 500 opaco")
+    void generateReport_geminiLanzaExcepcion_lanzaReporteIANoDisponible() {
+        when(sprintRepository.findById(sprintId)).thenReturn(Optional.of(sprint));
+        when(projectMemberRepository.existsByProyectoIdAndUserId(proyectoId, userId)).thenReturn(true);
+        when(analyticsService.getSprintMetricsSummary(sprintId)).thenReturn(summaryConDatos());
+        when(insightsService.getProjectInsights(proyectoId, userId)).thenReturn(List.of());
+        when(geminiService.generate(anyString()))
+                .thenThrow(new RuntimeException("Gemini error 429 TOO_MANY_REQUESTS: quota exceeded"));
+
+        assertThatThrownBy(() -> service.generateReport(sprintId, userId))
+                .isInstanceOf(ReporteIANoDisponibleException.class)
+                .hasMessageNotContaining("500")
+                .hasMessageContaining("Intenta nuevamente");
+    }
+
+    @Test
+    @DisplayName("generateReport: respuesta vacía/inválida de Gemini (sin ninguna sección reconocible) -> ReporteIANoDisponibleException, no fabrica un reporte falso")
+    void generateReport_respuestaGeminiSinSeccionesReconocibles_lanzaReporteIANoDisponible() {
+        when(sprintRepository.findById(sprintId)).thenReturn(Optional.of(sprint));
+        when(projectMemberRepository.existsByProyectoIdAndUserId(proyectoId, userId)).thenReturn(true);
+        when(analyticsService.getSprintMetricsSummary(sprintId)).thenReturn(summaryConDatos());
         when(insightsService.getProjectInsights(proyectoId, userId)).thenReturn(List.of());
         when(geminiService.generate(anyString())).thenReturn("RESPUESTA INVALIDA SIN FORMATO");
+
+        assertThatThrownBy(() -> service.generateReport(sprintId, userId))
+                .isInstanceOf(ReporteIANoDisponibleException.class)
+                .hasMessageContaining("no se pudo interpretar");
+    }
+
+    @Test
+    @DisplayName("generateReport: sección RESUMEN presente diciendo 'datos insuficientes' sigue siendo un 200 legítimo (no se confunde con fallo de IA)")
+    void generateReport_resumenPresenteConDatosInsuficientes_siguSiendoExitoso() {
+        when(sprintRepository.findById(sprintId)).thenReturn(Optional.of(sprint));
+        when(projectMemberRepository.existsByProyectoIdAndUserId(proyectoId, userId)).thenReturn(true);
+        when(analyticsService.getSprintMetricsSummary(sprintId)).thenReturn(summaryConDatos());
+        when(insightsService.getProjectInsights(proyectoId, userId)).thenReturn(List.of());
+        when(geminiService.generate(anyString())).thenReturn("""
+                RESUMEN: Datos insuficientes para un análisis completo, pero el sprint se ejecutó.
+                """);
 
         AISprintReportDto result = service.generateReport(sprintId, userId);
 
         assertThat(result).isNotNull();
-        // El parseo defensivo retorna defaults cuando no encuentra las secciones
-        assertThat(result.resumenEjecutivo()).isNotNull();
-        assertThat(result.recomendaciones()).isNotNull();
+        assertThat(result.resumenEjecutivo()).contains("Datos insuficientes");
+    }
+
+    @Test
+    @DisplayName("generateReport: reintento tras fallo de Gemini funciona correctamente (sin datos corruptos persistidos)")
+    void generateReport_reintentoTrasFallo_funcionaCorrectamente() {
+        when(sprintRepository.findById(sprintId)).thenReturn(Optional.of(sprint));
+        when(projectMemberRepository.existsByProyectoIdAndUserId(proyectoId, userId)).thenReturn(true);
+        when(analyticsService.getSprintMetricsSummary(sprintId)).thenReturn(summaryConDatos());
+        when(insightsService.getProjectInsights(proyectoId, userId)).thenReturn(List.of());
+
+        String geminiResponseValido = """
+                RESUMEN: El sprint 5 completó exitosamente sus objetivos.
+                HIGHLIGHTS:
+                - Calidad superior al promedio
+                CONCERNS:
+                RECOMENDACIONES: Continuar con las prácticas actuales.
+                """;
+
+        when(geminiService.generate(anyString()))
+                .thenThrow(new RuntimeException("Gemini error 429 TOO_MANY_REQUESTS"))
+                .thenReturn(geminiResponseValido);
+
+        // Primer intento: falla de forma controlada
+        assertThatThrownBy(() -> service.generateReport(sprintId, userId))
+                .isInstanceOf(ReporteIANoDisponibleException.class);
+
+        // Segundo intento (reintento del usuario): funciona con normalidad,
+        // el servicio no arrastra estado del intento fallido (es stateless).
+        AISprintReportDto result = service.generateReport(sprintId, userId);
+        assertThat(result).isNotNull();
+        assertThat(result.resumenEjecutivo()).contains("sprint 5");
+
+        verify(geminiService, times(2)).generate(anyString());
     }
 
     @Test

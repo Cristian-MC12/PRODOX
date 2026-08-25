@@ -45,7 +45,7 @@ public class AIInsight {
     @Column(nullable = false, columnDefinition = "TEXT")
     private String descripcion;
 
-    /** Nivel de severidad: 'LOW' | 'MEDIUM' | 'HIGH' */
+    /** Nivel de severidad: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL' */
     @Column(nullable = false, length = 20)
     private String severidad = "MEDIUM";
 

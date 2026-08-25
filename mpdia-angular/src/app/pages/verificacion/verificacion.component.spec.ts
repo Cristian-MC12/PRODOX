@@ -76,4 +76,55 @@ describe('VerificacionComponent (FASE 10)', () => {
     expect(req.request.url).toContain('proyectoId=proj-1');
     req.flush([]);
   });
+
+  // ── FASE 17 (corrección del defecto documentado) ────────────────────────
+  // Antes, aprobar() descartaba cualquier error HTTP con catchError(() => of(null))
+  // y este mismo subscribe mostraba igual el mensaje de éxito y quitaba la fila de
+  // pendientes — el Scrum Master nunca se enteraba de que la aprobación había
+  // fallado (ej. indicador de más de 120 caracteres). Ahora debe mostrarse el
+  // mensaje real del backend y la fila debe seguir en la lista de pendientes.
+
+  const pendiente = {
+    id: 'param-1', factorId: 'f1', factorNombre: 'Estado de ánimo',
+    factorCategoria: 'Significado', userEmail: 'dev@test.com',
+    objetivo: 'obj', procedimiento: 'proc',
+    indicadorVariable: 'a'.repeat(121), escala: 'esc',
+    status: 'pendiente', revisadoPor: null, motivoRechazo: null,
+    createdAt: '2026-08-21T00:00:00Z'
+  };
+
+  it('si el backend rechaza la aprobación, muestra el mensaje real y NO quita la fila de pendientes', () => {
+    component.pendientes = [pendiente];
+    component.aprobadas = 0;
+
+    component.aprobar(pendiente);
+
+    const req = httpMock.expectOne(r => r.url.includes('/metric-ranking/verificar'));
+    req.flush(
+      { timestamp: '2026-08-21T00:00:00Z', status: 400,
+        error: 'El campo "Indicador y Variables" contiene un valor de 121 caracteres, ' +
+               'que excede el máximo de 120 permitido.' },
+      { status: 400, statusText: 'Bad Request' }
+    );
+
+    expect(component.alertClass).toBe('alert-danger');
+    expect(component.alertMsg).toContain('120');
+    expect(component.pendientes).toEqual([pendiente]);
+    expect(component.aprobadas).toBe(0);
+    expect(component.procesando).toBe('');
+  });
+
+  it('si el backend aprueba correctamente, muestra éxito y quita la fila de pendientes', () => {
+    component.pendientes = [pendiente];
+    component.aprobadas = 0;
+
+    component.aprobar(pendiente);
+
+    const req = httpMock.expectOne(r => r.url.includes('/metric-ranking/verificar'));
+    req.flush({});
+
+    expect(component.alertClass).toBe('alert-success');
+    expect(component.pendientes).toEqual([]);
+    expect(component.aprobadas).toBe(1);
+  });
 });

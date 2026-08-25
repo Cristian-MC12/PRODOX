@@ -185,15 +185,18 @@ public class PlaneacionService {
     }
 
     /**
-     * Auto-aprueba métricas seleccionadas que tienen parametrización asociada
+     * Auto-aprueba métricas seleccionadas que tienen una parametrización APROBADA
+     * (status='aprobada'). Una parametrización en 'propuesta' o 'rechazada' no
+     * habilita la métrica: solo el Scrum Master, al aprobar la parametrización,
+     * hace que la métrica pase a formar parte del catálogo oficial del proyecto.
      */
     private void autoAprobarMetricasConParametrizacion(UUID proyectoId, String aprobadaPor) {
         List<ProyectoMetrica> seleccionadas = pmRepo.findByIdProyectoId(proyectoId);
         for (ProyectoMetrica pm : seleccionadas) {
             if (!pm.getAprobada()) {
                 UUID metricaId = pm.getId().getMetricaId();
-                // Verificar si existe parametrización (sin importar el status)
-                boolean tieneParam = parametrizacionRepo.existsByMetricaIdAndProyectoId(metricaId, proyectoId);
+                boolean tieneParam = parametrizacionRepo
+                        .existsByMetricaIdAndProyectoIdAndStatus(metricaId, proyectoId, "aprobada");
                 if (tieneParam) {
                     pm.setAprobada(true);
                     pm.setAprobadaPor(aprobadaPor);

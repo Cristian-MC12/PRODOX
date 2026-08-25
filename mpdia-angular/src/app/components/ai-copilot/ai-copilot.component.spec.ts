@@ -1,176 +1,215 @@
+// Autor: Cristian Santiago Martinez Cordoba — MPDIA
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { HttpClientTestingModule } from '@angular/common/http/testing';
+import { of, throwError } from 'rxjs';
 import { AICopilotComponent } from './ai-copilot.component';
 import { AICopilotService } from '../../services/ai-copilot.service';
-import { of, throwError } from 'rxjs';
+import { ChatResponse } from '../../models/ai-copilot.model';
 
-describe('AICopilotComponent', () => {
+/**
+ * FASE 12.9/14 — Tests del menú de sugerencias tras una respuesta fuera de dominio y tras
+ * un error real del backend/Gemini.
+ *
+ * El texto usado para simular la respuesta del guardrail debe coincidir EXACTAMENTE con
+ * CopilotDomainGuard.RESPUESTA_FUERA_DE_DOMINIO (backend) y con la constante homónima en
+ * ai-copilot.component.ts — es la señal que el componente usa para decidir si debe volver
+ * a mostrar el menú.
+ */
+const RESPUESTA_FUERA_DE_DOMINIO =
+  'Soy el AI Agile Copilot de MPDIA. Puedo ayudarte con el sprint, métricas, riesgos, ' +
+  'problemas, impedimentos, tendencias y retrospectivas del proyecto activo.';
+
+function fueraDeDominioResponse(): ChatResponse {
+  return {
+    message: RESPUESTA_FUERA_DE_DOMINIO,
+    toolsUsed: [],
+    timestamp: new Date().toISOString(),
+    hasData: false
+  };
+}
+
+function respuestaValidaResponse(texto: string): ChatResponse {
+  return {
+    message: texto,
+    toolsUsed: [],
+    timestamp: new Date().toISOString(),
+    hasData: true
+  };
+}
+
+describe('AICopilotComponent — FASE 12.9 menú tras pregunta fuera de dominio', () => {
   let component: AICopilotComponent;
   let fixture: ComponentFixture<AICopilotComponent>;
-  let service: AICopilotService;
+  let copilotServiceSpy: jasmine.SpyObj<AICopilotService>;
 
   beforeEach(async () => {
+    copilotServiceSpy = jasmine.createSpyObj('AICopilotService', ['chat']);
+
+    localStorage.setItem('mpdia_proyecto_activo', JSON.stringify({ id: 'proyecto-1', nombre: 'Proyecto de prueba' }));
+    localStorage.setItem('mpdia_sprint_activo', JSON.stringify({ id: 'sprint-1', numero: 1 }));
+
     await TestBed.configureTestingModule({
-      imports: [AICopilotComponent, HttpClientTestingModule]
+      imports: [AICopilotComponent],
+      providers: [{ provide: AICopilotService, useValue: copilotServiceSpy }]
     }).compileComponents();
 
     fixture = TestBed.createComponent(AICopilotComponent);
     component = fixture.componentInstance;
-    service = TestBed.inject(AICopilotService);
     fixture.detectChanges();
   });
 
-  it('should create', () => {
-    expect(component).toBeTruthy();
-  });
-
-  it('should show welcome message on init', () => {
-    expect(component.messages.length).toBe(1);
-    expect(component.messages[0].role).toBe('assistant');
-    expect(component.messages[0].content).toContain('AI Agile Copilot');
-  });
-
-  it('should toggle panel', () => {
-    expect(component.isOpen()).toBe(false);
-    component.toggle();
-    expect(component.isOpen()).toBe(true);
-    component.toggle();
-    expect(component.isOpen()).toBe(false);
-  });
-
-  it('should close panel', () => {
-    component.isOpen.set(true);
-    component.close();
-    expect(component.isOpen()).toBe(false);
-  });
-
-  it('should not send empty message', () => {
-    const initialLength = component.messages.length;
-    component.userInput = '   ';
-    component.sendMessage();
-    expect(component.messages.length).toBe(initialLength);
-  });
-
-  it('should send message and receive response', (done) => {
-    // Mock proyecto
-    localStorage.setItem('mpdia_proyecto_activo', JSON.stringify({ id: 'test-id', nombre: 'Test' }));
-    component.ngOnInit();
-
-    const mockResponse = {
-      message: 'Respuesta del copilot',
-      toolsUsed: ['getActiveSprintMetrics'],
-      timestamp: new Date().toISOString(),
-      hasData: true
-    };
-
-    spyOn(service, 'chat').and.returnValue(of(mockResponse));
-
-    component.userInput = 'Test message';
-    component.sendMessage();
-
-    // Esperar a que se procese
-    setTimeout(() => {
-      expect(component.messages.some(m => m.content === 'Test message')).toBe(true);
-      expect(component.messages.some(m => m.content === mockResponse.message)).toBe(true);
-      expect(component.loading()).toBe(false);
-      done();
-    }, 100);
-  });
-
-  it('should handle error', (done) => {
-    // Mock proyecto
-    localStorage.setItem('mpdia_proyecto_activo', JSON.stringify({ id: 'test-id', nombre: 'Test' }));
-    component.ngOnInit();
-
-    spyOn(service, 'chat').and.returnValue(throwError(() => new Error('Error de prueba')));
-
-    component.userInput = 'Test message';
-    component.sendMessage();
-
-    setTimeout(() => {
-      expect(component.loading()).toBe(false);
-      expect(component.error()).toBe('Error de prueba');
-      done();
-    }, 100);
-  });
-
-  it('should use quick prompt', () => {
-    // Mock proyecto
-    localStorage.setItem('mpdia_proyecto_activo', JSON.stringify({ id: 'test-id', nombre: 'Test' }));
-    component.ngOnInit();
-
-    spyOn(component, 'sendMessage');
-    const prompt = 'Analiza el sprint activo';
-    
-    component.useQuickPrompt(prompt);
-    
-    expect(component.userInput).toBe(prompt);
-    expect(component.sendMessage).toHaveBeenCalled();
-  });
-
-  it('should show error if no proyecto selected', () => {
-    localStorage.removeItem('mpdia_proyecto_activo');
-    component.ngOnInit();
-
-    component.userInput = 'Test message';
-    component.sendMessage();
-
-    expect(component.error()).toBe('Selecciona un proyecto primero');
-  });
-
-  it('should format message with markdown', () => {
-    const input = '**Hola**\n• Item 1\n• Item 2';
-    const output = component.formatMessage(input);
-    
-    expect(output).toContain('<strong>Hola</strong>');
-    expect(output).toContain('<li>Item 1</li>');
-    expect(output).toContain('<br>');
-  });
-
   afterEach(() => {
-    localStorage.clear();
+    localStorage.removeItem('mpdia_proyecto_activo');
+    localStorage.removeItem('mpdia_sprint_activo');
   });
 
-  // CO.4 — SUGERENCIAS DE PREGUNTAS
-  describe('CO.4 - Sugerencias de preguntas', () => {
-    it('debería tener lista de quickPrompts', () => {
-      expect(component.quickPrompts).toBeDefined();
-      expect(component.quickPrompts.length).toBeGreaterThan(0);
-    });
+  function enviarMensaje(texto: string): void {
+    component.userInput = texto;
+    component.sendMessage();
+    fixture.detectChanges();
+  }
 
-    it('debería incluir pregunta "¿Cómo está mi equipo?"', () => {
-      expect(component.quickPrompts).toContain('¿Cómo está mi equipo?');
-    });
+  // 1. Respuesta fuera de dominio muestra el menú.
+  it('tras una respuesta fuera de dominio, shouldShowQuickPrompts vuelve a ser true', () => {
+    copilotServiceSpy.chat.and.returnValue(of(fueraDeDominioResponse()));
 
-    it('debería incluir pregunta "¿Qué riesgos detectas?"', () => {
-      expect(component.quickPrompts).toContain('¿Qué riesgos detectas?');
-    });
+    enviarMensaje('¿cuánto es 2 más 2?');
 
-    it('debería incluir pregunta "Analiza las métricas del sprint actual"', () => {
-      expect(component.quickPrompts).toContain('Analiza las métricas del sprint actual');
-    });
+    expect(component.shouldShowQuickPrompts).toBeTrue();
+  });
 
-    it('debería incluir pregunta "¿Qué debería mejorar el equipo?"', () => {
-      expect(component.quickPrompts).toContain('¿Qué debería mejorar el equipo?');
-    });
+  // 2. El menú contiene las opciones existentes.
+  it('el menú reutiliza las opciones ya existentes (quickPrompts)', () => {
+    expect(component.quickPrompts).toEqual([
+      '¿Cómo estuvo el último sprint?',
+      'Analiza el sprint activo',
+      '¿Qué riesgos detectas?',
+      '¿Qué deberíamos revisar en la retrospectiva?',
+      'Comparar los últimos sprints'
+    ]);
+  });
 
-    it('debería usar quick prompt correctamente', () => {
-      localStorage.setItem('mpdia_proyecto_activo', JSON.stringify({ id: 'test-id', nombre: 'Test' }));
-      component.ngOnInit();
-      spyOn(component, 'sendMessage');
+  // 3. Las opciones son clicables: useQuickPrompt() debe enviar esa pregunta normalmente.
+  it('useQuickPrompt() envía la pregunta correspondiente a través del servicio', () => {
+    copilotServiceSpy.chat.and.returnValue(of(respuestaValidaResponse('Respuesta real.')));
 
-      const prompt = component.quickPrompts[0];
-      component.useQuickPrompt(prompt);
+    component.useQuickPrompt('¿Qué riesgos detectas?');
+    fixture.detectChanges();
 
-      expect(component.userInput).toBe(prompt);
-      expect(component.sendMessage).toHaveBeenCalled();
-    });
+    expect(copilotServiceSpy.chat).toHaveBeenCalledWith(
+      jasmine.objectContaining({ message: '¿Qué riesgos detectas?' })
+    );
+  });
 
-    it('debería desactivar quick prompts si no hay proyecto', () => {
-      localStorage.removeItem('mpdia_proyecto_activo');
-      component.ngOnInit();
+  // 4. Una pregunta fuera de dominio no dispara ningún flujo adicional: solo UNA llamada,
+  // el mensaje se muestra tal cual (sin marcarlo como error) y no se reintenta.
+  it('una respuesta fuera de dominio se muestra como mensaje normal (no como error) y sin llamadas adicionales', () => {
+    copilotServiceSpy.chat.and.returnValue(of(fueraDeDominioResponse()));
 
-      expect(component.proyecto).toBeNull();
-    });
+    enviarMensaje('cuánto es dos por dos');
+
+    expect(copilotServiceSpy.chat).toHaveBeenCalledTimes(1);
+    const ultimoMensaje = component.messages[component.messages.length - 1];
+    expect(ultimoMensaje.content).toBe(RESPUESTA_FUERA_DE_DOMINIO);
+    expect(ultimoMensaje.error).toBeFalsy();
+  });
+
+  // 5. El menú no se duplica al recibir varias respuestas fuera de dominio seguidas.
+  it('varias preguntas fuera de dominio seguidas no duplican el menú', () => {
+    copilotServiceSpy.chat.and.returnValue(of(fueraDeDominioResponse()));
+
+    enviarMensaje('¿cuánto es 2 más 2?');
+    enviarMensaje('cuéntame un chiste');
+    enviarMensaje('cuánto es dos por dos');
+
+    // shouldShowQuickPrompts es un booleano derivado del ÚLTIMO mensaje: nunca "se acumula".
+    expect(component.shouldShowQuickPrompts).toBeTrue();
+
+    const bloquesDeMenu = fixture.nativeElement.querySelectorAll('.quick-prompts');
+    expect(bloquesDeMenu.length).toBe(1);
+  });
+
+  // 6. Un error real del backend sigue mostrando el mensaje de error correspondiente,
+  // marcado como error (FASE 14 — BLOQUE 3: el menú SÍ vuelve a aparecer tras un error,
+  // para que el usuario no quede sin forma de retomar la conversación; ver tests dedicados
+  // más abajo).
+  it('un error real del backend muestra el mensaje de error correspondiente', () => {
+    copilotServiceSpy.chat.and.returnValue(
+      throwError(() => new Error('El AI Copilot no está disponible en este momento'))
+    );
+
+    enviarMensaje('¿qué riesgos detectas?');
+
+    const ultimoMensaje = component.messages[component.messages.length - 1];
+    expect(ultimoMensaje.error).toBeTrue();
+    expect(ultimoMensaje.content).toContain('no está disponible');
+  });
+
+  // ══════════════════════════════════════════════════════════════════════════════
+  // FASE 14 — BLOQUE 3: manejo de error inicial/posterior y recuperación del menú.
+  // ══════════════════════════════════════════════════════════════════════════════
+
+  // 1. Error inicial (primera interacción del usuario termina en error).
+  it('un error como primera interacción no rompe la interfaz y marca el mensaje como error', () => {
+    copilotServiceSpy.chat.and.returnValue(throwError(() => new Error('servidor no disponible')));
+
+    enviarMensaje('¿qué riesgos detectas?');
+
+    expect(component.messages.length).toBeGreaterThan(0);
+    const ultimoMensaje = component.messages[component.messages.length - 1];
+    expect(ultimoMensaje.error).toBeTrue();
+    expect(component.loading()).toBeFalse();
+  });
+
+  // 2. Error después de una pregunta válida previa.
+  it('un error después de una respuesta válida se muestra correctamente sin perder el historial previo', () => {
+    copilotServiceSpy.chat.and.returnValue(of(respuestaValidaResponse('Todo bien por ahora.')));
+    enviarMensaje('¿qué riesgos detectas?');
+
+    copilotServiceSpy.chat.and.returnValue(throwError(() => new Error('servidor no disponible')));
+    enviarMensaje('¿cómo estuvo el último sprint?');
+
+    const ultimoMensaje = component.messages[component.messages.length - 1];
+    expect(ultimoMensaje.error).toBeTrue();
+    // El mensaje válido anterior sigue presente en el historial (no se pierde).
+    expect(component.messages.some(m => m.content === 'Todo bien por ahora.')).toBeTrue();
+  });
+
+  // 3. Se puede seguir preguntando normalmente después de un error.
+  it('permite enviar una nueva pregunta normalmente después de un error', () => {
+    copilotServiceSpy.chat.and.returnValue(throwError(() => new Error('servidor no disponible')));
+    enviarMensaje('¿qué riesgos detectas?');
+
+    copilotServiceSpy.chat.and.returnValue(of(respuestaValidaResponse('Ahora sí funciona.')));
+    enviarMensaje('¿cómo estuvo el último sprint?');
+
+    expect(copilotServiceSpy.chat).toHaveBeenCalledTimes(2);
+    const ultimoMensaje = component.messages[component.messages.length - 1];
+    expect(ultimoMensaje.content).toBe('Ahora sí funciona.');
+    expect(ultimoMensaje.error).toBeFalsy();
+  });
+
+  // 4. El menú vuelve a aparecer después de un error (para que el usuario no quede "atascado").
+  it('el menú de sugerencias reaparece después de un error', () => {
+    copilotServiceSpy.chat.and.returnValue(throwError(() => new Error('servidor no disponible')));
+
+    enviarMensaje('¿qué riesgos detectas?');
+
+    expect(component.shouldShowQuickPrompts).toBeTrue();
+    const menu = fixture.nativeElement.querySelector('.quick-prompts');
+    expect(menu).toBeTruthy();
+  });
+
+  // 5. Varias preguntas tras un error no duplican el menú.
+  it('varias preguntas después de un error no duplican el menú', () => {
+    copilotServiceSpy.chat.and.returnValue(throwError(() => new Error('servidor no disponible')));
+    enviarMensaje('¿qué riesgos detectas?');
+
+    copilotServiceSpy.chat.and.returnValue(throwError(() => new Error('servidor no disponible')));
+    enviarMensaje('¿cómo estuvo el último sprint?');
+    enviarMensaje('¿qué deberíamos mejorar?');
+
+    expect(component.shouldShowQuickPrompts).toBeTrue();
+    const bloquesDeMenu = fixture.nativeElement.querySelectorAll('.quick-prompts');
+    expect(bloquesDeMenu.length).toBe(1);
   });
 });

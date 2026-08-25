@@ -51,7 +51,10 @@ public class AIRetrospectiveService {
         
         if (previousSprint.isPresent()) {
             try {
-                comparison = analyticsService.compareSprints(sprintId, previousSprint.get().getId());
+                // FASE 12.8: el orden debe ser (anterior, actual) para que variación/dirección
+                // representen "sprint anterior → sprint actual", coherente con el texto narrativo
+                // "Sprint anterior: X" que construye buildRetrospectiveContext.
+                comparison = analyticsService.compareSprints(previousSprint.get().getId(), sprintId);
             } catch (Exception e) {
                 log.warn("Error comparando sprints: {}", e.getMessage());
             }
@@ -64,8 +67,23 @@ public class AIRetrospectiveService {
         String context = buildRetrospectiveContext(sprint, currentMetrics, previousSprint.orElse(null), comparison, insights, risks);
         
         // 5. Generar con Gemini
-        String geminiResponse = geminiService.generate(buildRetrospectivePrompt(context));
-        
+        // FASE 24: a diferencia de getCurrentMetrics/getSprintInsights/getRisks
+        // (que sí degradan con valores por defecto), esta llamada NO tenía
+        // try/catch — cualquier fallo de Gemini (cuota agotada, HTTP error,
+        // red, texto vacío — ver GeminiService.generate()) se propagaba sin
+        // capturar y terminaba como un HTTP 500 opaco (mismo defecto que
+        // AIReportService tenía antes de FASE 23, confirmado en vivo con un
+        // 429 RESOURCE_EXHAUSTED real de Gemini).
+        String geminiResponse;
+        try {
+            geminiResponse = geminiService.generate(buildRetrospectivePrompt(context));
+        } catch (Exception e) {
+            log.error("Gemini falló generando retrospectiva para sprint {}: {}", sprintId, e.getMessage(), e);
+            throw new RetrospectivaIANoDisponibleException(
+                    "No se pudo generar la retrospectiva: el servicio de IA no respondió correctamente. Intenta nuevamente en unos segundos.",
+                    e);
+        }
+
         // 6. Parsear respuesta
         RetrospectiveContent content = parseRetrospectiveResponse(geminiResponse);
         
@@ -222,31 +240,40 @@ public class AIRetrospectiveService {
                 """.formatted(context);
     }
     
+    private static final List<String> MARCADORES_RETROSPECTIVA = List.of(
+            "WHAT WENT WELL:", "WHAT COULD IMPROVE:", "RISKS:", "RECOMMENDATIONS:", "QUESTIONS FOR TEAM:");
+
     private RetrospectiveContent parseRetrospectiveResponse(String response) {
-        try {
-            List<String> whatWentWell = extractList(response, "WHAT WENT WELL:", "WHAT COULD IMPROVE:");
-            List<String> whatCouldImprove = extractList(response, "WHAT COULD IMPROVE:", "RISKS:");
-            List<String> risks = extractList(response, "RISKS:", "RECOMMENDATIONS:");
-            List<String> recommendations = extractList(response, "RECOMMENDATIONS:", "QUESTIONS FOR TEAM:");
-            List<String> questionsForTeam = extractList(response, "QUESTIONS FOR TEAM:", null);
-            
-            return new RetrospectiveContent(
-                    whatWentWell.isEmpty() ? List.of("Datos insuficientes para identificar aspectos positivos") : whatWentWell,
-                    whatCouldImprove.isEmpty() ? List.of("Considerar registrar más métricas para futuros sprints") : whatCouldImprove,
-                    risks,
-                    recommendations.isEmpty() ? List.of("Continuar con las prácticas actuales del equipo") : recommendations,
-                    questionsForTeam.isEmpty() ? List.of("¿Qué podemos hacer para mejorar nuestro proceso?") : questionsForTeam
-            );
-        } catch (Exception e) {
-            log.warn("Error parseando respuesta de retrospectiva: {}", e.getMessage());
-            return new RetrospectiveContent(
-                    List.of("No se pudo procesar la información de la retrospectiva"),
-                    List.of("Revisar el registro de métricas del sprint"),
-                    List.of(),
-                    List.of("Intentar generar la retrospectiva nuevamente"),
-                    List.of("¿Cómo podemos mejorar el seguimiento de nuestras métricas?")
-            );
+        // FASE 24: si NINGUNO de los 5 marcadores esperados aparece en la
+        // respuesta, Gemini no siguió el formato solicitado — no es el caso
+        // legítimo de "datos insuficientes" (donde Gemini sí escribe los
+        // marcadores pero deja la sección vacía, ver test
+        // generateRetrospective_datosInsuficientes_generaRetrospectiva), sino
+        // una respuesta que no se puede interpretar en absoluto. Antes esto
+        // se disfrazaba de retrospectiva válida con texto de relleno; ahora
+        // se trata igual que un fallo de Gemini: este servicio nunca
+        // persiste nada, así que no queda ningún dato falso guardado, y no
+        // se le muestra al usuario una retrospectiva ficticia.
+        boolean ningunMarcadorPresente = MARCADORES_RETROSPECTIVA.stream().noneMatch(response::contains);
+        if (ningunMarcadorPresente) {
+            throw new RetrospectivaIANoDisponibleException(
+                    "La IA devolvió una respuesta que no se pudo interpretar. Intenta generar la retrospectiva nuevamente.",
+                    null);
         }
+
+        List<String> whatWentWell = extractList(response, "WHAT WENT WELL:", "WHAT COULD IMPROVE:");
+        List<String> whatCouldImprove = extractList(response, "WHAT COULD IMPROVE:", "RISKS:");
+        List<String> risks = extractList(response, "RISKS:", "RECOMMENDATIONS:");
+        List<String> recommendations = extractList(response, "RECOMMENDATIONS:", "QUESTIONS FOR TEAM:");
+        List<String> questionsForTeam = extractList(response, "QUESTIONS FOR TEAM:", null);
+
+        return new RetrospectiveContent(
+                whatWentWell.isEmpty() ? List.of("Datos insuficientes para identificar aspectos positivos") : whatWentWell,
+                whatCouldImprove.isEmpty() ? List.of("Considerar registrar más métricas para futuros sprints") : whatCouldImprove,
+                risks,
+                recommendations.isEmpty() ? List.of("Continuar con las prácticas actuales del equipo") : recommendations,
+                questionsForTeam.isEmpty() ? List.of("¿Qué podemos hacer para mejorar nuestro proceso?") : questionsForTeam
+        );
     }
     
     private List<String> extractList(String response, String startMarker, String endMarker) {

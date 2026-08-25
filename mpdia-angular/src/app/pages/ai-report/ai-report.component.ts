@@ -96,6 +96,13 @@ export class AIReportComponent implements OnInit {
             this.showAlert('No tienes permisos para generar reportes en este proyecto', 'alert-danger');
           } else if (err.status === 429) {
             this.showAlert('Has alcanzado temporalmente el límite de generación. Intenta nuevamente más tarde.', 'alert-warning');
+          } else if (err.status === 503) {
+            // FASE 23: antes esto caía en el "else" genérico y, peor, algunos
+            // fallos de Gemini ni siquiera llegaban acá porque el backend
+            // devolvía un HTTP 500 opaco (ver AIReportService.generateReport).
+            // Ahora el backend distingue este caso y el mensaje del propio
+            // error ya es claro para el usuario (ej. cuota de IA agotada).
+            this.showAlert(err.error?.error || 'El servicio de IA no está disponible en este momento. Intenta nuevamente en unos segundos.', 'alert-warning');
           } else {
             this.showAlert('Error al generar el reporte. Intentá nuevamente.', 'alert-danger');
           }

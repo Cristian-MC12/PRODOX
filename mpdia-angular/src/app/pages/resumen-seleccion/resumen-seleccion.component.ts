@@ -323,6 +323,15 @@ export class ResumenSeleccionComponent implements OnInit {
    * cualquier error HTTP y navegaba a Verificación como si todo hubiera salido bien).
    */
   aceptar(): void {
+    // FASE 20: reentrada bloqueada ANTES que nada, sobre el estado real del
+    // componente — no basta con [disabled]="enviando" en el template, porque
+    // dos clics muy rápidos pueden ejecutar aceptar() dos veces antes de que
+    // Angular llegue a reflejar "enviando" como disabled en el DOM (confirmado
+    // empíricamente: dos clics con ~26ms de diferencia generaban dos filas
+    // "pendiente" idénticas). Esta comprobación tiene efecto incluso si el
+    // binding del template no llegó a actualizar el atributo disabled a tiempo.
+    if (this.enviando) return;
+
     const proyectoActivo = localStorage.getItem('mpdia_proyecto_activo');
     const proyectoId: string | null = proyectoActivo ? (JSON.parse(proyectoActivo)?.id ?? null) : null;
 
@@ -350,7 +359,11 @@ export class ResumenSeleccionComponent implements OnInit {
         tipoOperacion:     s.parametrizacion!.tipoOperacion ?? null,
         formulaAcademica:  s.parametrizacion!.formulaAcademica ?? null,
         unidadResultado:   s.parametrizacion!.unidadResultado ?? null,
-        fuenteAcademica:   s.parametrizacion!.fuenteAcademica ?? null
+        fuenteAcademica:   s.parametrizacion!.fuenteAcademica ?? null,
+        // Revisión de frecuencia de captura: antes no se propagaba aquí tampoco,
+        // dejando la parametrización siempre en "por_sprint" al enviarla al
+        // Scrum Master por este flujo (ver MetricRankingService.guardarPorMetrica()).
+        frecuenciaCaptura: s.parametrizacion!.frecuenciaCaptura ?? 'por_sprint'
       }).pipe(
         map(() => ({ ok: true as const, nombre: s.metricaNombre })),
         catchError(err => of({

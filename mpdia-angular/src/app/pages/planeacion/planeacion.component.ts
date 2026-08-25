@@ -27,10 +27,10 @@ type Paso = 'metricas' | 'variables' | 'sprints';
     <app-shell title="Planeación">
 
       @if (!proyecto) {
-        <div class="text-center py-5 text-muted">
-          <i class="bi bi-folder-x fs-1 d-block mb-3 opacity-25"></i>
+        <div class="prox-empty-state">
+          <i class="bi bi-folder-x"></i>
           <p>Seleccioná un proyecto primero.</p>
-          <button class="btn btn-primary btn-sm" (click)="router.navigate(['/proyectos'])">
+          <button class="btn btn-primary btn-sm mt-3" (click)="router.navigate(['/proyectos'])">
             Ir a Proyectos
           </button>
         </div>
@@ -112,7 +112,12 @@ type Paso = 'metricas' | 'variables' | 'sprints';
                   <span class="fw-semibold small">
                     <i class="bi bi-grid me-1"></i>Catálogo de Métricas
                   </span>
-                  <div class="d-flex gap-2 ms-2">
+                  <div class="d-flex gap-2 ms-2 align-items-center">
+                    <button class="btn btn-outline-primary btn-sm"
+                            (click)="router.navigate(['/crear-metrica-ia'])"
+                            title="Proponer una nueva métrica con IA">
+                      <i class="bi bi-robot me-1"></i>Crear métrica con IA
+                    </button>
                     <select class="form-select form-select-sm"
                             style="max-width:150px"
                             [(ngModel)]="categoriaFiltro">
@@ -155,33 +160,40 @@ type Paso = 'metricas' | 'variables' | 'sprints';
                                   <div class="fw-semibold small">{{ m.nombre }}</div>
                                   <div class="text-muted" style="font-size:0.72rem">{{ m.descripcion }}</div>
                                   <div class="mt-1 d-flex gap-1 flex-wrap">
-                                    <span class="badge bg-light text-dark border" style="font-size:0.62rem">
+                                    <span class="badge bg-light text-dark border prox-badge-sm">
                                       {{ m.codigo }}
                                     </span>
                                     @if (m.aprobada) {
-                                      <span class="badge bg-success" style="font-size:0.62rem">
+                                      <span class="badge bg-success prox-badge-sm">
                                         <i class="bi bi-check me-1"></i>Aprobada
                                       </span>
                                       @if (m.tieneVariable) {
-                                        <span class="badge bg-info text-dark" style="font-size:0.62rem">
+                                        <span class="badge bg-info text-dark prox-badge-sm">
                                           <i class="bi bi-lightning me-1"></i>Variable generada
                                         </span>
                                       }
                                     } @else if (estaSeleccionada(m)) {
-                                      <span class="badge bg-warning text-dark" style="font-size:0.62rem">
+                                      <span class="badge bg-primary prox-badge-sm">
+                                        <i class="bi bi-check2 me-1"></i>Seleccionada
+                                      </span>
+                                      <span class="badge bg-warning text-dark prox-badge-sm">
                                         Pendiente aprobación
+                                      </span>
+                                    } @else {
+                                      <span class="badge bg-light text-dark border prox-badge-sm">
+                                        Disponible
                                       </span>
                                     }
                                   </div>
                                 </div>
                                 <div class="d-flex gap-1 flex-shrink-0 pt-1">
                                   @if (!estaSeleccionada(m)) {
-                                    <button class="btn btn-sm btn-outline-primary py-0 px-2"
-                                            (click)="seleccionar(m)" title="Agregar">
+                                    <button class="btn btn-sm btn-outline-primary btn-icon"
+                                            (click)="seleccionar(m)" title="Seleccionar">
                                       <i class="bi bi-plus-lg"></i>
                                     </button>
                                   } @else if (!m.aprobada) {
-                                    <button class="btn btn-sm btn-success py-0 px-2"
+                                    <button class="btn btn-sm btn-success btn-icon"
                                             (click)="aprobar(m)" title="Aprobar y generar variable"
                                             [disabled]="aprobando === m.metricaId">
                                       @if (aprobando === m.metricaId) {
@@ -190,12 +202,12 @@ type Paso = 'metricas' | 'variables' | 'sprints';
                                         <i class="bi bi-check-lg"></i>
                                       }
                                     </button>
-                                    <button class="btn btn-sm btn-outline-danger py-0 px-2"
+                                    <button class="btn btn-sm btn-outline-danger btn-icon"
                                             (click)="deseleccionar(m)" title="Quitar">
                                       <i class="bi bi-x-lg"></i>
                                     </button>
                                   } @else {
-                                    <button class="btn btn-sm btn-outline-warning py-0 px-2"
+                                    <button class="btn btn-sm btn-outline-warning btn-icon"
                                             (click)="desaprobar(m)" title="Desaprobar">
                                       <i class="bi bi-arrow-counterclockwise"></i>
                                     </button>
@@ -232,7 +244,7 @@ type Paso = 'metricas' | 'variables' | 'sprints';
                             <tr>
                               <td class="ps-3 small">{{ m.nombre }}</td>
                               <td>
-                                <span class="badge" style="font-size:0.6rem"
+                                <span class="badge prox-badge-sm"
                                       [class]="badgeCategoria(m.categoria)">
                                   {{ m.categoria }}
                                 </span>
@@ -240,17 +252,17 @@ type Paso = 'metricas' | 'variables' | 'sprints';
                               <td class="text-center">
                                 @switch (estadoParametrizacion(m)) {
                                   @case ('completa') {
-                                    <span class="badge bg-success" style="font-size:0.62rem">
+                                    <span class="badge bg-success prox-badge-sm">
                                       <i class="bi bi-check-circle me-1"></i>Completa
                                     </span>
                                   }
                                   @case ('parcial') {
-                                    <span class="badge bg-warning text-dark" style="font-size:0.62rem">
+                                    <span class="badge bg-warning text-dark prox-badge-sm">
                                       <i class="bi bi-exclamation-circle me-1"></i>Parcial
                                     </span>
                                   }
                                   @default {
-                                    <span class="badge bg-secondary" style="font-size:0.62rem">
+                                    <span class="badge bg-secondary prox-badge-sm">
                                       Sin parametrizar
                                     </span>
                                   }
@@ -258,13 +270,13 @@ type Paso = 'metricas' | 'variables' | 'sprints';
                               </td>
                               <td class="text-center">
                                 @if (estadoParametrizacion(m) !== 'sin_parametrizar') {
-                                  <button class="btn btn-sm btn-outline-info py-0 px-2 me-1"
+                                  <button class="btn btn-sm btn-outline-info btn-icon me-1"
                                           (click)="verParametrizacion(m)"
                                           title="Ver parametrización">
                                     <i class="bi bi-eye"></i>
                                   </button>
                                 }
-                                <button class="btn btn-sm py-0 px-2"
+                                <button class="btn btn-sm btn-icon"
                                         [class]="estadoParametrizacion(m) === 'sin_parametrizar' ? 'btn-outline-primary' : 'btn-outline-success'"
                                         (click)="irAParametrizar(m)"
                                         title="Parametrizar con GenAI">
@@ -324,7 +336,7 @@ type Paso = 'metricas' | 'variables' | 'sprints';
                               </div>
                             }
                           </div>
-                          <span class="badge" style="font-size:0.6rem"
+                          <span class="badge prox-badge-sm"
                                 [class]="badgeCategoria(m.categoria)">
                             {{ m.categoria }}
                           </span>
@@ -366,9 +378,9 @@ type Paso = 'metricas' | 'variables' | 'sprints';
               <i class="bi bi-list-check me-1"></i>Variables generadas automáticamente
             </div>
             @if (variables.length === 0) {
-              <div class="text-center py-5 text-muted small">
-                <i class="bi bi-lightning fs-2 d-block mb-2 opacity-25"></i>
-                No hay variables generadas. Aprobá métricas en la pestaña anterior.
+              <div class="prox-empty-state">
+                <i class="bi bi-lightning"></i>
+                <p>No hay variables generadas. Aprobá métricas en la pestaña anterior.</p>
               </div>
             } @else {
               <div class="table-responsive">
@@ -391,13 +403,12 @@ type Paso = 'metricas' | 'variables' | 'sprints';
                           <div class="text-muted" style="font-size:0.7rem">{{ v.descripcion }}</div>
                         </td>
                         <td>
-                          <span class="badge" [class]="badgeCategoria(v.metricaCategoria)"
-                                style="font-size:0.65rem">
+                          <span class="badge prox-badge-sm" [class]="badgeCategoria(v.metricaCategoria)">
                             {{ v.metricaCategoria }}
                           </span>
                         </td>
                         <td>
-                          <span class="badge" style="font-size:0.65rem"
+                          <span class="badge prox-badge-sm"
                                 [class]="v.tipoAlcance === 'grupal' ? 'bg-primary' : 'bg-warning text-dark'">
                             <i class="bi me-1"
                                [class]="v.tipoAlcance === 'grupal' ? 'bi-people' : 'bi-person'"></i>
@@ -450,7 +461,7 @@ type Paso = 'metricas' | 'variables' | 'sprints';
                           {{ s.fechaFin ? (s.fechaFin | date:'dd/MM/yyyy') : '—' }}
                         </td>
                         <td class="align-middle">
-                          <span class="badge" style="font-size:0.65rem"
+                          <span class="badge prox-badge-sm"
                                 [class]="badgeSprint(s.estado)">
                             {{ labelSprint(s.estado) }}
                           </span>
@@ -715,11 +726,39 @@ export class PlaneacionComponent implements OnInit {
     ).subscribe(v => this.variables = v);
   }
 
+  /** FASE 15: prefijo único (V27__metrica_ia_secuencia_codigo.sql) de las métricas
+   *  creadas mediante "Crear métrica con IA" — nunca lo usa ninguna métrica
+   *  preexistente del catálogo sembrado. */
+  private esMetricaCreadaConIA(m: ProyectoMetricaDto): boolean {
+    return !!m.codigo?.startsWith('IA-');
+  }
+
   metricasFiltradas(categoria: string): ProyectoMetricaDto[] {
     if (this.categoriaFiltro && this.categoriaFiltro !== categoria) return [];
     return this.metricas.filter(m =>
-      this.METRICAS_VISIBLES.has(m.metricaId) &&
+      // Además de las 5 oficiales, el catálogo muestra TODAS las métricas
+      // creadas con IA (Metrica es un catálogo GLOBAL desde V31: cualquier
+      // proyecto puede reutilizar una métrica creada por otro). Antes, una
+      // métrica de IA solo aparecía en el catálogo de un proyecto una vez
+      // que ESE proyecto ya la había seleccionado — así, el Proyecto B nunca
+      // veía como "Disponible" una métrica creada por el Proyecto A, aunque
+      // el catálogo global ya la tuviera. m.seleccionada sigue viniendo
+      // scopeada por proyecto desde el backend (PlaneacionService.
+      // listarMetricasConEstado), así que la distinción Disponible/
+      // Seleccionada se sigue calculando correctamente por proyecto — solo
+      // cambió QUÉ filas se listan, no de quién es cada selección. Las demás
+      // métricas del catálogo no-whitelisteadas (ej. las ocultas de FASE 4,
+      // que no son de IA) permanecen exactamente igual que antes: fuera del
+      // panel de catálogo aunque ya estén seleccionadas/aprobadas.
+      (this.METRICAS_VISIBLES.has(m.metricaId) || this.esMetricaCreadaConIA(m)) &&
       m.categoria === categoria &&
+      // Revisión de Planeación: una métrica ya seleccionada por el proyecto
+      // ACTUAL no debe seguir ofreciéndose como opción en el catálogo — su
+      // estado ya se representa en "Seleccionadas"/"Historial" (que no usan
+      // este método, ver sus getters). m.seleccionada ya viene scopeada por
+      // proyecto desde el backend, así que esto no afecta en absoluto a otro
+      // proyecto que también use esta misma Metrica global.
+      !this.estaSeleccionada(m) &&
       (!this.busqueda || m.nombre.toLowerCase().includes(this.busqueda.toLowerCase()) ||
        m.codigo?.toLowerCase().includes(this.busqueda.toLowerCase()))
     );

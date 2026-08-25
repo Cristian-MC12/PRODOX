@@ -186,28 +186,65 @@ class VariableDinamicaServiceTest {
             new BigDecimal("42"),
             null,
             null,
-            "Test observation"
+            "Test observation",
+            null,
+            null
         );
-        
+
         GuardarValoresRequest request = new GuardarValoresRequest(
             proyectoId,
             sprintId,
             List.of(valor)
         );
-        
+
         when(proyectoRepo.findById(proyectoId)).thenReturn(Optional.of(proyecto));
         when(sprintRepo.findById(sprintId)).thenReturn(Optional.of(sprint));
         when(parametrizacionRepo.findUltimaVersionAprobada(metricaId, proyectoId))
             .thenReturn(Optional.of(parametrizacion));
         when(variableRepo.findById(variable.getId())).thenReturn(Optional.of(variable));
-        
+
         // When
         service.guardarValores(metricaId, request, "test@example.com");
 
-        // Then
+        // Then: sin fechaCaptura en el request, se propaga null (FASE 16: la
+        // sobrecarga con fecha delega en el comportamiento existente cuando es null).
         verify(ejecucionService, times(1)).guardarOActualizarValor(
             eq(variable), eq(sprintId), eq("test@example.com"),
-            eq(new BigDecimal("42")), isNull(), isNull(), eq("Test observation"));
+            eq(new BigDecimal("42")), isNull(), isNull(), eq("Test observation"), isNull(), isNull());
+    }
+
+    @Test
+    void debeGuardarValorConFechaCapturaExplicita() {
+        // Given
+        Variable variable = crearVariable();
+        variable.setTipoDato("numerico");
+
+        GuardarValoresRequest.ValorVariable valor = new GuardarValoresRequest.ValorVariable(
+            variable.getId(),
+            new BigDecimal("7"),
+            null,
+            null,
+            null,
+            "2026-08-21T00:00:00Z",
+            null
+        );
+
+        GuardarValoresRequest request = new GuardarValoresRequest(proyectoId, sprintId, List.of(valor));
+
+        when(proyectoRepo.findById(proyectoId)).thenReturn(Optional.of(proyecto));
+        when(sprintRepo.findById(sprintId)).thenReturn(Optional.of(sprint));
+        when(parametrizacionRepo.findUltimaVersionAprobada(metricaId, proyectoId))
+            .thenReturn(Optional.of(parametrizacion));
+        when(variableRepo.findById(variable.getId())).thenReturn(Optional.of(variable));
+
+        // When
+        service.guardarValores(metricaId, request, "test@example.com");
+
+        // Then: la fecha ISO del request se parsea y se propaga como Instant explícito.
+        verify(ejecucionService, times(1)).guardarOActualizarValor(
+            eq(variable), eq(sprintId), eq("test@example.com"),
+            eq(new BigDecimal("7")), isNull(), isNull(), isNull(),
+            eq(Instant.parse("2026-08-21T00:00:00Z")), isNull());
     }
 
     @Test
@@ -219,6 +256,8 @@ class VariableDinamicaServiceTest {
         GuardarValoresRequest.ValorVariable valor = new GuardarValoresRequest.ValorVariable(
             variable.getId(),
             null,  // Sin valor numérico
+            null,
+            null,
             null,
             null,
             null
@@ -253,25 +292,96 @@ class VariableDinamicaServiceTest {
             new BigDecimal("42"),
             null,
             null,
+            null,
+            null,
             null
         );
-        
+
         GuardarValoresRequest request = new GuardarValoresRequest(
             proyectoId,
             sprintId,
             List.of(valor)
         );
-        
+
         when(proyectoRepo.findById(proyectoId)).thenReturn(Optional.of(proyecto));
         when(sprintRepo.findById(sprintId)).thenReturn(Optional.of(sprint));
         when(parametrizacionRepo.findUltimaVersionAprobada(metricaId, proyectoId))
             .thenReturn(Optional.of(parametrizacion));
         when(variableRepo.findById(variable.getId())).thenReturn(Optional.of(variable));
-        
+
         // When/Then
         assertThatThrownBy(() -> service.guardarValores(metricaId, request, "test@example.com"))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("no pertenece a la parametrización aprobada");
+    }
+
+    /**
+     * FASE 17 (corrección del defecto documentado): crearVariablesDesdeParametrizacion()
+     * debe validar la longitud del indicadorVariable ANTES de persistir, igual que
+     * ParametrizacionService ya hace para su propio flujo. Estos tests cubren el
+     * límite exacto (120 = válido, 121 = rechazado) y confirman que ningún
+     * variableRepo.save(...) se ejecuta cuando el indicador es inválido.
+     */
+    @Test
+    void debeCrearVariableConIndicadorDeExactamente120Caracteres() {
+        String indicador120 = "a".repeat(120);
+        parametrizacion.setConfiguracionAprobadaJson("""
+            {
+                "objetivo": "Medir algo",
+                "procedimiento": "Procedimiento de prueba",
+                "indicadorVariable": "%s",
+                "escala": "Numérica 0-100 puntos",
+                "frecuenciaCaptura": "por_sprint"
+            }
+            """.formatted(indicador120));
+
+        when(proyectoRepo.findById(proyectoId)).thenReturn(Optional.of(proyecto));
+        when(sprintRepo.findById(sprintId)).thenReturn(Optional.of(sprint));
+        when(parametrizacionRepo.findUltimaVersionAprobada(metricaId, proyectoId))
+            .thenReturn(Optional.of(parametrizacion));
+        when(variableRepo.findByParametrizacionIdAndParametrizacionVersion(parametrizacionId, 1))
+            .thenReturn(List.of());
+        when(metricaRepo.findById(metricaId)).thenReturn(Optional.of(metrica));
+        when(variableRepo.save(any(Variable.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(registroRepo.findBySprintIdAndVariable_Id(any(), any())).thenReturn(List.of());
+
+        VariablesMetricaResponse response =
+            service.obtenerVariables(metricaId, proyectoId, sprintId, "test@example.com");
+
+        assertThat(response.variables()).hasSize(1);
+        assertThat(response.variables().get(0).nombre()).hasSize(120);
+        verify(variableRepo, times(1)).save(any(Variable.class));
+    }
+
+    @Test
+    void debeRechazarIndicadorDe121CaracteresConMensajeClaro() {
+        String indicador121 = "a".repeat(121);
+        parametrizacion.setConfiguracionAprobadaJson("""
+            {
+                "objetivo": "Medir algo",
+                "procedimiento": "Procedimiento de prueba",
+                "indicadorVariable": "%s",
+                "escala": "Numérica 0-100 puntos",
+                "frecuenciaCaptura": "por_sprint"
+            }
+            """.formatted(indicador121));
+
+        when(proyectoRepo.findById(proyectoId)).thenReturn(Optional.of(proyecto));
+        when(sprintRepo.findById(sprintId)).thenReturn(Optional.of(sprint));
+        when(parametrizacionRepo.findUltimaVersionAprobada(metricaId, proyectoId))
+            .thenReturn(Optional.of(parametrizacion));
+        when(variableRepo.findByParametrizacionIdAndParametrizacionVersion(parametrizacionId, 1))
+            .thenReturn(List.of());
+        when(metricaRepo.findById(metricaId)).thenReturn(Optional.of(metrica));
+
+        assertThatThrownBy(() ->
+            service.obtenerVariables(metricaId, proyectoId, sprintId, "test@example.com"))
+            .isInstanceOf(NombreVariableInvalidoException.class)
+            .hasMessageContaining("Indicador y Variables")
+            .hasMessageContaining("120")
+            .hasMessageContaining("121");
+
+        verify(variableRepo, never()).save(any(Variable.class));
     }
 
     private Variable crearVariable() {

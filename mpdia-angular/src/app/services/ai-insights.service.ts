@@ -3,7 +3,7 @@ import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { environment } from '../../environments/environment';
-import { AIInsight } from '../models/ai-insights.model';
+import { AIInsight, GenerateInsightsResult } from '../models/ai-insights.model';
 
 /**
  * Servicio para gestionar AI Insights del proyecto.
@@ -33,9 +33,14 @@ export class AIInsightsService {
    * - Cálculos de analytics
    * - Llamadas a Gemini
    * - Persistencia en BD
+   *
+   * FASE 23: devuelve el resultado completo de la corrida (insights nuevos +
+   * status COMPLETE/PARTIAL/FAILED/SIN_SENALES/SIN_DATOS), no solo la lista
+   * de insights — antes no había forma de distinguir una generación parcial
+   * de una completa.
    */
-  generateInsights(proyectoId: string): Observable<AIInsight[]> {
-    return this.http.post<AIInsight[]>(`${this.base}/generate/${proyectoId}`, {});
+  generateInsights(proyectoId: string): Observable<GenerateInsightsResult> {
+    return this.http.post<GenerateInsightsResult>(`${this.base}/generate/${proyectoId}`, {});
   }
 
   /**

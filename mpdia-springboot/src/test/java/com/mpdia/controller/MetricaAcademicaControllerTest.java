@@ -120,7 +120,7 @@ class MetricaAcademicaControllerTest {
     }
     
     @Test
-    void propuesta_sinAutenticacion_retorna403() throws Exception {
+    void propuesta_sinAutenticacion_retorna401() throws Exception {
         // Arrange
         MetricaAcademicaRequest request = new MetricaAcademicaRequest(
             proyectoId,
@@ -140,7 +140,7 @@ class MetricaAcademicaControllerTest {
                 .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
-            .andExpect(status().isForbidden());
+            .andExpect(status().isUnauthorized());
     }
     
     // ========================================
@@ -330,7 +330,7 @@ class MetricaAcademicaControllerTest {
     }
     
     @Test
-    void ejecutar_sinAutenticacion_retorna403() throws Exception {
+    void ejecutar_sinAutenticacion_retorna401() throws Exception {
         // Arrange
         Map<String, Object> valores = Map.of("problemas_reportados", 7);
         EjecutarMetricaAcademicaRequest request = new EjecutarMetricaAcademicaRequest(
@@ -344,7 +344,7 @@ class MetricaAcademicaControllerTest {
                 .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
-            .andExpect(status().isForbidden());
+            .andExpect(status().isUnauthorized());
     }
     
     // ========================================
@@ -391,12 +391,12 @@ class MetricaAcademicaControllerTest {
     }
     
     @Test
-    void historico_sinAutenticacion_retorna403() throws Exception {
+    void historico_sinAutenticacion_retorna401() throws Exception {
         // Act & Assert
         mockMvc.perform(get("/api/metricas-academicas/{metricaId}/historico", metricaId)
                 .param("proyectoId", proyectoId.toString())
                 .with(csrf()))
-            .andExpect(status().isForbidden());
+            .andExpect(status().isUnauthorized());
     }
     
     // ========================================
@@ -446,11 +446,11 @@ class MetricaAcademicaControllerTest {
     }
     
     @Test
-    void interpretar_sinAutenticacion_retorna403() throws Exception {
+    void interpretar_sinAutenticacion_retorna401() throws Exception {
         // Act & Assert
         mockMvc.perform(post("/api/metricas-academicas/resultados/{resultadoId}/interpretar", resultadoId)
                 .with(csrf()))
-            .andExpect(status().isForbidden());
+            .andExpect(status().isUnauthorized());
     }
     
     // ========================================

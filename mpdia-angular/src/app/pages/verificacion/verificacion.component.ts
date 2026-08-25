@@ -65,6 +65,19 @@ interface Pendiente {
           Revisá las parametrizaciones enviadas por el equipo y aprobá o rechazá cada una.
         </p>
 
+        <!-- FASE 14 — BLOQUE 1: documentación del comportamiento real de versionado,
+             para que el Scrum Master entienda las consecuencias de aprobar una nueva versión. -->
+        <div class="alert alert-info small mb-4" role="note">
+          <i class="bi bi-info-circle me-1"></i>
+          <strong>Sobre las versiones de parametrización:</strong> al aprobar una nueva versión,
+          la versión anterior deja de estar vigente automáticamente y Ejecución pasa a usar
+          exclusivamente la nueva. Como cada versión aprobada genera su propia variable de
+          medición, las tendencias y comparaciones entre sprints de esa métrica comienzan a
+          acumular historial desde cero a partir de la nueva versión — los resultados ya
+          calculados con la versión anterior no se pierden, pero dejan de sumarse a las
+          tendencias futuras de esa métrica.
+        </div>
+
         <!-- KPIs -->
         <div class="row g-3 mb-4">
           <div class="col-md-4">
@@ -343,14 +356,26 @@ export class VerificacionComponent implements OnInit {
 
   aprobar(p: Pendiente): void {
     this.procesando = p.id;
+    // FASE 17 (corrección del defecto documentado): antes, cualquier error del
+    // backend (ej. indicador demasiado largo) se descartaba con catchError(() =>
+    // of(null)) y este mismo subscribe mostraba igual el mensaje de éxito y
+    // quitaba la fila de pendientes — el Scrum Master nunca se enteraba de que
+    // la aprobación había fallado. Ahora se distingue éxito de error real.
     this.http.post(`${this.apiBase}/metric-ranking/verificar`, {
       parametrizacionId: p.id,
       accion: 'aprobar'
-    }).pipe(catchError(() => of(null))).subscribe(() => {
-      this.procesando = '';
-      this.aprobadas++;
-      this.pendientes = this.pendientes.filter(x => x.id !== p.id);
-      this.showAlert(`Parametrización de "${p.factorNombre}" aprobada.`, 'alert-success');
+    }).subscribe({
+      next: () => {
+        this.procesando = '';
+        this.aprobadas++;
+        this.pendientes = this.pendientes.filter(x => x.id !== p.id);
+        this.showAlert(`Parametrización de "${p.factorNombre}" aprobada.`, 'alert-success');
+      },
+      error: (err) => {
+        this.procesando = '';
+        const mensaje = err?.error?.error || 'No se pudo aprobar la parametrización. Intentá de nuevo.';
+        this.showAlert(mensaje, 'alert-danger');
+      }
     });
   }
 

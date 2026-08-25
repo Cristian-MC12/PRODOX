@@ -35,3 +35,20 @@ export interface AIInsight {
   createdAt: string;
   dismissedAt: string | null;
 }
+
+/**
+ * Resultado de una generación de AI Insights (FASE 23).
+ *
+ * Antes el endpoint devolvía solo AIInsight[], sin forma de distinguir "no
+ * había nada que reportar" de "algunos detectores fallaron" de "generación
+ * completa" — ver GenerateInsightsResultDto (backend) para el detalle de
+ * cada valor de `status`.
+ */
+export interface GenerateInsightsResult {
+  insights: AIInsight[];
+  status: 'COMPLETE' | 'PARTIAL' | 'FAILED' | 'SIN_SENALES' | 'SIN_DATOS';
+  senalesDetectadas: number;
+  senalesNuevas: number;
+  senalesOmitidasPorDuplicado: number;
+  errores: string[];
+}

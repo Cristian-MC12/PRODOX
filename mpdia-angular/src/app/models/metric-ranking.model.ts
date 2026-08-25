@@ -20,6 +20,11 @@ export interface MetricParametrizacionBase {
   escala:            string;
   metricaBaseId:     string | null;
   createdAt:         string;
+  frecuenciaCaptura?: string | null;
+  fuenteAcademica?:  string | null;
+  formulaAcademica?: string | null;
+  tipoOperacion?:    string | null;
+  unidadResultado?:  string | null;
 }
 
 export interface GuardarParametrizacionRequest {
@@ -37,6 +42,9 @@ export interface GuardarParametrizacionRequest {
   formulaAcademica?: string | null;
   unidadResultado?:  string | null;
   fuenteAcademica?:  string | null;
+  // Revisión de frecuencia de captura: faltaba acá, por lo que el backend nunca
+  // podía recibirla y la persistía siempre como "por_sprint" (ver MetricRankingService).
+  frecuenciaCaptura?: string | null;
 }
 
 export interface TopParametrizacion {
@@ -48,4 +56,9 @@ export interface TopParametrizacion {
   escala:            string;
   usos:              number;
   createdAt:         string;
+  frecuenciaCaptura?: string | null;
+  fuenteAcademica?:  string | null;
+  formulaAcademica?: string | null;
+  tipoOperacion?:    string | null;
+  unidadResultado?:  string | null;
 }

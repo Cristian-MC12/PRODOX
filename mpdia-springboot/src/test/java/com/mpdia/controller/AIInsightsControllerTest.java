@@ -2,6 +2,7 @@
 package com.mpdia.controller;
 
 import com.mpdia.dto.ai.AIInsightDto;
+import com.mpdia.dto.ai.GenerateInsightsResultDto;
 import com.mpdia.service.AIInsightsService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -136,31 +137,37 @@ class AIInsightsControllerTest {
     @DisplayName("POST generate: usuario autenticado genera insights y retorna 200")
     @WithMockUser(username = "test-user-123")
     void generateInsights_usuarioAutenticado_retorna200() throws Exception {
+        GenerateInsightsResultDto resultado = new GenerateInsightsResultDto(
+                List.of(insightDto), "COMPLETE", 1, 1, 0, List.of());
         when(insightsService.generateInsights(proyectoId, userId))
-                .thenReturn(List.of(insightDto));
+                .thenReturn(resultado);
 
         mockMvc.perform(post("/api/ai/insights/generate/{proyectoId}", proyectoId)
                         .with(csrf()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$").isArray())
-                .andExpect(jsonPath("$[0].id").value(insightId.toString()))
-                .andExpect(jsonPath("$[0].type").value("TREND"));
+                .andExpect(jsonPath("$.status").value("COMPLETE"))
+                .andExpect(jsonPath("$.insights").isArray())
+                .andExpect(jsonPath("$.insights[0].id").value(insightId.toString()))
+                .andExpect(jsonPath("$.insights[0].type").value("TREND"));
 
         verify(insightsService).generateInsights(proyectoId, userId);
     }
 
     @Test
-    @DisplayName("POST generate: proyecto con datos insuficientes retorna 200 con lista vacía")
+    @DisplayName("POST generate: proyecto con datos insuficientes retorna 200 con lista vacía (SIN_DATOS)")
     @WithMockUser(username = "test-user-123")
     void generateInsights_datosInsuficientes_retorna200Vacio() throws Exception {
+        GenerateInsightsResultDto resultado = new GenerateInsightsResultDto(
+                List.of(), "SIN_DATOS", 0, 0, 0, List.of());
         when(insightsService.generateInsights(proyectoId, userId))
-                .thenReturn(List.of());
+                .thenReturn(resultado);
 
         mockMvc.perform(post("/api/ai/insights/generate/{proyectoId}", proyectoId)
                         .with(csrf()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$").isArray())
-                .andExpect(jsonPath("$").isEmpty());
+                .andExpect(jsonPath("$.status").value("SIN_DATOS"))
+                .andExpect(jsonPath("$.insights").isArray())
+                .andExpect(jsonPath("$.insights").isEmpty());
 
         verify(insightsService).generateInsights(proyectoId, userId);
     }

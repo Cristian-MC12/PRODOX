@@ -105,16 +105,16 @@ class ParametrizacionControllerTest {
     }
 
     @Test
-    void obtenerUltimaAprobada_sinAutenticacion_retorna403() throws Exception {
+    void obtenerUltimaAprobada_sinAutenticacion_retorna401() throws Exception {
         // Given
         UUID metricaId = UUID.randomUUID();
         UUID proyectoId = UUID.randomUUID();
-        
+
         // When & Then
         mockMvc.perform(get("/api/parametrizacion/ultima-aprobada")
                         .param("metricaId", metricaId.toString())
                         .param("proyectoId", proyectoId.toString()))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
     }
     
     // ========================================
@@ -160,7 +160,7 @@ class ParametrizacionControllerTest {
     }
     
     @Test
-    void generarPropuestas_sinAutenticacion_retorna403() throws Exception {
+    void generarPropuestas_sinAutenticacion_retorna401() throws Exception {
         // Given
         ParametrizacionRequest request = new ParametrizacionRequest(
                 "Factor Test",
@@ -168,12 +168,12 @@ class ParametrizacionControllerTest {
                 "Métrica Test",
                 "Descripción"
         );
-        
+
         // When & Then
         mockMvc.perform(post("/api/parametrizacion/propuestas")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
     }
     
     @Test
@@ -221,7 +221,7 @@ class ParametrizacionControllerTest {
     }
     
     @Test
-    void guardarPropuesta_sinAutenticacion_retorna403() throws Exception {
+    void guardarPropuesta_sinAutenticacion_retorna401() throws Exception {
         // Given
         GuardarPropuestaRequest request = new GuardarPropuestaRequest(
                 UUID.randomUUID(),
@@ -243,7 +243,7 @@ class ParametrizacionControllerTest {
         mockMvc.perform(post("/api/parametrizacion/guardar-propuesta")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
     }
     
     @Test
@@ -343,10 +343,10 @@ class ParametrizacionControllerTest {
     }
     
     @Test
-    void aprobarParametrizacion_sinAutenticacion_retorna403() throws Exception {
+    void aprobarParametrizacion_sinAutenticacion_retorna401() throws Exception {
         // Given
         UUID parametrizacionId = UUID.randomUUID();
-        
+
         AprobarParametrizacionRequest request = new AprobarParametrizacionRequest(
                 "Objetivo",
                 "Procedimiento",
@@ -364,6 +364,6 @@ class ParametrizacionControllerTest {
         mockMvc.perform(post("/api/parametrizacion/" + parametrizacionId + "/aprobar")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
     }
 }

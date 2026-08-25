@@ -123,7 +123,7 @@ class AICopilotControllerTest {
     }
 
     @Test
-    void chat_sinAutenticacion_retorna403() throws Exception {
+    void chat_sinAutenticacion_retorna401() throws Exception {
         // Given
         UUID proyectoId = UUID.randomUUID();
         ChatRequest request = new ChatRequest(
@@ -133,12 +133,15 @@ class AICopilotControllerTest {
         );
 
         // When & Then
-        // Sin autenticación, Spring Security retorna 403 (no 401)
+        // Corrección de autenticación: con el AuthenticationEntryPoint agregado en
+        // SecurityConfig, "sin autenticar" ahora responde 401 (semántica HTTP
+        // correcta) — 403 queda reservado a fallos de autorización con sesión
+        // válida (ver chat_proyectoNoAutorizado_retorna403/chat_sprintNoPertenece_retorna403).
         mockMvc.perform(post("/api/ai/copilot/chat")
                         .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
     }
 
     @Test

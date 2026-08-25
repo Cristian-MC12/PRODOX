@@ -7,7 +7,7 @@ import { NO_ERRORS_SCHEMA } from '@angular/core';
 import { of, throwError } from 'rxjs';
 import { AIInsightsComponent } from './ai-insights.component';
 import { AIInsightsService } from '../../services/ai-insights.service';
-import { AIInsight } from '../../models/ai-insights.model';
+import { AIInsight, GenerateInsightsResult } from '../../models/ai-insights.model';
 import { ProyectoDto } from '../../models/proyecto.model';
 
 describe('AIInsightsComponent', () => {
@@ -145,10 +145,27 @@ describe('AIInsightsComponent', () => {
   describe('generateInsights', () => {
     beforeEach(() => {
       component.proyecto = mockProyecto;
+      // FASE 23: tras generar, el componente recarga la lista completa
+      // (loadInsights()) en vez de reemplazarla solo con la tanda nueva.
+      insightsService.getProjectInsights.and.returnValue(of(mockInsights));
     });
 
-    it('should generate insights successfully', fakeAsync(() => {
-      insightsService.generateInsights.and.returnValue(of(mockInsights));
+    function resultado(overrides: Partial<GenerateInsightsResult>): GenerateInsightsResult {
+      return {
+        insights: [],
+        status: 'COMPLETE',
+        senalesDetectadas: 0,
+        senalesNuevas: 0,
+        senalesOmitidasPorDuplicado: 0,
+        errores: [],
+        ...overrides
+      };
+    }
+
+    it('should generate insights successfully (status COMPLETE)', fakeAsync(() => {
+      insightsService.generateInsights.and.returnValue(of(resultado({
+        insights: mockInsights, status: 'COMPLETE', senalesDetectadas: 1, senalesNuevas: 1
+      })));
 
       component.generateInsights();
 
@@ -157,26 +174,63 @@ describe('AIInsightsComponent', () => {
       tick(500);
 
       expect(component.generating()).toBe(false);
-      expect(component.insights).toEqual(mockInsights);
-      expect(component.alertMsg()).toContain('generado(s) exitosamente');
-      
+      expect(component.insights).toEqual(mockInsights); // recargado vía loadInsights()
+      expect(component.alertMsg()).toContain('insight(s) nuevo(s) generado(s)');
+
       // Flush remaining timers
       flush();
     }));
 
-    it('should handle insufficient data', fakeAsync(() => {
-      insightsService.generateInsights.and.returnValue(of([]));
+    it('should handle SIN_DATOS (sin sprints finalizados)', fakeAsync(() => {
+      insightsService.generateInsights.and.returnValue(of(resultado({ status: 'SIN_DATOS' })));
 
       component.generateInsights();
-
-      // El Observable se completa inmediatamente (síncrono)
-      // Solo necesitamos esperar el setTimeout final de 500ms
       tick(500);
 
       expect(component.generating()).toBe(false);
       expect(component.alertMsg()).toContain('No se generaron insights');
-      
-      // Flush remaining timers
+
+      flush();
+    }));
+
+    it('should handle SIN_SENALES (datos existen pero sin señales significativas)', fakeAsync(() => {
+      insightsService.generateInsights.and.returnValue(of(resultado({ status: 'SIN_SENALES' })));
+
+      component.generateInsights();
+      tick(500);
+
+      expect(component.generating()).toBe(false);
+      expect(component.alertMsg()).toContain('No se generaron insights');
+
+      flush();
+    }));
+
+    it('should handle PARTIAL (fallo parcial de Gemini) sin presentarlo como éxito total', fakeAsync(() => {
+      insightsService.generateInsights.and.returnValue(of(resultado({
+        insights: mockInsights, status: 'PARTIAL', senalesDetectadas: 2, senalesNuevas: 1,
+        errores: ['TREND (Calidad): Gemini error 429']
+      })));
+
+      component.generateInsights();
+      tick(500);
+
+      expect(component.generating()).toBe(false);
+      expect(component.alertMsg()).toContain('no pudieron procesarse');
+
+      flush();
+    }));
+
+    it('should handle FAILED (Gemini no respondió para ninguna señal)', fakeAsync(() => {
+      insightsService.generateInsights.and.returnValue(of(resultado({
+        status: 'FAILED', senalesDetectadas: 1, errores: ['TREND (Calidad): Gemini error 429']
+      })));
+
+      component.generateInsights();
+      tick(500);
+
+      expect(component.generating()).toBe(false);
+      expect(component.alertMsg()).toContain('No se pudo generar ningún insight');
+
       flush();
     }));
 
@@ -203,7 +257,7 @@ describe('AIInsightsComponent', () => {
     });
 
     it('should prevent double generation', () => {
-      insightsService.generateInsights.and.returnValue(of(mockInsights));
+      insightsService.generateInsights.and.returnValue(of(resultado({ insights: mockInsights })));
       component.generating.set(true);
 
       component.generateInsights();

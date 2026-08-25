@@ -25,4 +25,12 @@ public interface AIInsightRepository extends JpaRepository<AIInsight, UUID> {
     
     /** Obtener insights por tipo */
     List<AIInsight> findByProyectoIdAndTipoOrderByCreatedAtDesc(UUID proyectoId, String tipo);
+
+    /**
+     * FASE 23: insights activos (no descartados) de un proyecto, tipo y
+     * categoría dados — usado para deduplicar antes de generar uno nuevo
+     * (ver AIInsightsService.esDuplicadoDeSenialExistente).
+     */
+    List<AIInsight> findByProyectoIdAndTipoAndCategoriaAfectadaAndDismissedFalse(
+            UUID proyectoId, String tipo, String categoriaAfectada);
 }

@@ -1,22 +1,106 @@
+// Autor: Cristian Santiago Martinez Cordoba — MPDIA
+// ============================================================
+// FASE 1 del rediseño visual — overrides de Bootstrap ANTES del
+// @import: así todas las clases Bootstrap ya usadas en cada pantalla
+// (.btn-*, .card, .badge, .alert-*, .form-control, .text-muted...)
+// heredan la nueva paleta/tipografía/radios/sombras sin tocar el
+// markup ni la lógica de ningún componente de página. Nombres y
+// valores por defecto confirmados contra
+// node_modules/bootstrap/scss/_variables.scss (Bootstrap 5.3.3).
+// ============================================================
+$primary:   #0E7C86; // teal de marca
+$secondary: #5B6B70; // pizarra — botones/textos secundarios
+$success:   #1E8E5A;
+$info:      #5A96C4; // azul acero, verificado ≥4.5:1 sobre text-dark
+$warning:   #D99A2B; // ámbar, verificado ≥4.5:1 sobre text-dark
+$danger:    #C23B34;
+
+$body-bg:              #F5F6F4;
+$body-color:            #161B1F;
+$body-secondary-color:  #5B6B70; // deriva .text-muted en Bootstrap 5.3
+$border-color:           #D9DEDC;
+
+$border-radius:     .625rem; // 10px — md
+$border-radius-sm:  .375rem; // 6px  — sm
+$border-radius-lg:  1rem;    // 16px — lg
+
+$box-shadow-sm: 0 1px 2px rgba(22, 27, 31, .08);
+$box-shadow:    0 4px 12px rgba(22, 27, 31, .10);
+$box-shadow-lg: 0 16px 32px rgba(22, 27, 31, .16);
+
+$font-family-sans-serif: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+$font-family-monospace:  'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+// FASE 2 — badges más "chip" (menos redondeados que el radio md por
+// defecto) y pestañas activas con el color de marca en vez del gris
+// genérico de Bootstrap ($nav-tabs-link-active-color por defecto usa
+// --bs-emphasis-color, no la marca).
+$badge-border-radius: $border-radius-sm;
+$nav-tabs-link-active-color: $primary;
+
 // Bootstrap 5
 @import "bootstrap/scss/bootstrap";
 @import "bootstrap-icons/font/bootstrap-icons.css";
 
 // ============================================================
-// MPDIA — Variables y estilos globales
+// MPDIA — Design tokens
 // ============================================================
 :root {
-  --mpdia-primary: #0d6efd;
+  // Identidad (alias legibles sobre las variables Bootstrap de arriba)
+  --brand: #{$primary};
+  --brand-hover: #0B6169;
+  --brand-tint: #E3F0F0;
+  --surface: #FFFFFF;
+  --background: #{$body-bg};
+  --text-primary: #{$body-color};
+  --text-secondary: #{$body-secondary-color};
+  --border: #{$border-color};
+  --success: #{$success};
+  --warning: #{$warning};
+  --danger: #{$danger};
+  --info: #{$info};
+
+  // Espaciado
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+
+  // Radios
+  --radius-sm: #{$border-radius-sm};
+  --radius-md: #{$border-radius};
+  --radius-lg: #{$border-radius-lg};
+
+  // Sombras
+  --shadow-sm: #{$box-shadow-sm};
+  --shadow-md: #{$box-shadow};
+  --shadow-lg: #{$box-shadow-lg};
+
+  // Tipografía
+  --font-sans: #{$font-family-sans-serif};
+  --font-mono: #{$font-family-monospace};
+  // Micro-escala: mismos valores que ya usaba el sidebar de forma dispersa
+  // (0.6/0.65/0.7rem repetidos como style="" inline en 4+ lugares distintos)
+  // — ahora nombrados y centralizados, sin cambiar ningún tamaño real.
+  --text-3xs: .6rem;
+  --text-2xs: .65rem;
+  --text-xs: .7rem;
+  --text-sm: .82rem;
+
+  // Layout del shell (sin cambio de comportamiento, solo agrupados aquí)
   --mpdia-sidebar-width: 260px;
-  --mpdia-sidebar-bg: #f8f9fa;
-  --mpdia-sidebar-border: #dee2e6;
+  --mpdia-sidebar-bg: var(--surface);
+  --mpdia-sidebar-border: var(--border);
   --mpdia-header-height: 60px;
 }
 
 body {
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
-  background-color: #f5f6fa;
-  color: #212529;
+  font-family: var(--font-sans);
+  background-color: var(--background);
+  color: var(--text-primary);
 }
 
 // Sidebar
@@ -39,14 +123,14 @@ body {
     border-bottom: 1px solid var(--mpdia-sidebar-border);
     font-weight: 700;
     font-size: 1.1rem;
-    color: var(--mpdia-primary);
+    color: var(--brand);
     text-decoration: none;
   }
 
   .nav-link {
-    color: #495057;
+    color: var(--text-secondary);
     padding: 0.6rem 1.25rem;
-    border-radius: 0.375rem;
+    border-radius: var(--radius-sm);
     margin: 0.1rem 0.5rem;
     display: flex;
     align-items: center;
@@ -55,13 +139,13 @@ body {
     transition: background-color 0.15s, color 0.15s;
 
     &:hover {
-      background-color: #e9ecef;
-      color: #212529;
+      background-color: var(--background);
+      color: var(--text-primary);
     }
 
     &.active {
-      background-color: #e7f1ff;
-      color: var(--mpdia-primary);
+      background-color: var(--brand-tint);
+      color: var(--brand);
       font-weight: 600;
     }
 
@@ -79,8 +163,8 @@ body {
 
 .page-header {
   height: var(--mpdia-header-height);
-  background: #fff;
-  border-bottom: 1px solid #dee2e6;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
   display: flex;
   align-items: center;
   padding: 0 1.5rem;
@@ -92,7 +176,7 @@ body {
     font-size: 1.1rem;
     font-weight: 600;
     margin: 0;
-    color: #212529;
+    color: var(--text-primary);
   }
 }
 
@@ -103,8 +187,9 @@ body {
 
 // Cards
 .card {
-  border: 1px solid #dee2e6;
-  box-shadow: 0 1px 3px rgba(0,0,0,.06);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
 }
 
 // KPI cards
@@ -115,10 +200,10 @@ body {
     line-height: 1;
   }
   .kpi-label {
-    font-size: 0.75rem;
+    font-size: .75rem;
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    color: #6c757d;
+    color: var(--text-secondary);
   }
 }
 
@@ -128,8 +213,8 @@ body {
   transition: border-color 0.15s;
 
   &.selected {
-    border-color: var(--mpdia-primary);
-    background-color: #f0f7ff;
+    border-color: var(--brand);
+    background-color: var(--brand-tint);
   }
 }
 
@@ -143,13 +228,153 @@ body {
 }
 
 // Toast / alert overrides
-.alert { border-radius: 0.5rem; }
+.alert { border-radius: var(--radius-md); }
 
 // Table
 .table th {
   font-size: 0.8rem;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: #6c757d;
+  color: var(--text-secondary);
   font-weight: 600;
+  background-color: var(--surface);
+}
+
+// Hover de fila consistente en toda tabla, tenga o no la clase
+// table-hover (hoy solo algunas pantallas la usan) — puramente
+// cosmético, no cambia ningún dato ni comportamiento de clic.
+.table tbody tr {
+  transition: background-color .1s ease;
+
+  &:hover {
+    background-color: var(--background);
+  }
+}
+
+// ============================================================
+// FASE 2 — primitivos visuales reutilizables de PRODOX
+//
+// Regla seguida: los estados que Bootstrap ya deriva correctamente del
+// $primary/$border-radius/$box-shadow sobrescritos en la Fase 1 (foco de
+// inputs, hover de .btn-primary, sombra de modales) NO se repiten acá.
+// Solo se agrega lo que Bootstrap no cubre por defecto (disabled más
+// legible, foco visible por teclado en botones) y clases .prox-* NUEVAS,
+// opcionales, para que las pantallas de fases futuras dejen de reinventar
+// el mismo patrón visual archivo por archivo (estado vacío, KPI, título
+// de sección, header de tarjeta destacada). Ninguna pantalla existente
+// las usa todavía — no se retocó ningún componente de página para esto.
+// ============================================================
+
+// ---- Botones: disabled más diferenciado, foco visible por teclado ----
+.btn {
+  &:disabled,
+  &.disabled {
+    opacity: .55;
+    cursor: not-allowed;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--brand);
+    outline-offset: 2px;
+  }
+}
+
+// Utilidad opcional para botones ícono-solo: área de clic cuadrada y
+// consistente (hoy hay 3 densidades de padding distintas entre pantallas).
+.btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  line-height: 1;
+}
+
+// ---- Inputs / selects: disabled consistente con los tokens ----
+.form-control:disabled,
+.form-control[readonly],
+.form-select:disabled {
+  background-color: var(--background);
+  color: var(--text-secondary);
+}
+
+// ---- Cards ----
+.card-header {
+  background-color: var(--surface);
+  border-bottom: 1px solid var(--border);
+  font-weight: 600;
+}
+
+// Variante opcional de header "destacado", para normalizar el patrón que
+// hoy algunas pantallas arman a mano con bg-primary bg-opacity-10.
+.prox-card-header-accent {
+  background-color: var(--brand-tint);
+  border-bottom: 1px solid var(--border);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+// ---- Badge chico opcional, para los ~6 tamaños de fuente sueltos que
+// hoy existen inline en distintas pantallas (no se tocaron esas pantallas). ----
+.prox-badge-sm {
+  font-size: var(--text-2xs);
+  padding: .25em .55em;
+  font-weight: 600;
+}
+
+// ---- Estado vacío reutilizable (ícono + texto), opcional ----
+.prox-empty-state {
+  text-align: center;
+  padding: var(--space-6) var(--space-4);
+  color: var(--text-secondary);
+
+  > i, > .bi {
+    display: block;
+    font-size: 2.5rem;
+    opacity: .3;
+    margin-bottom: var(--space-3);
+  }
+
+  // El texto secundario hereda el color del contenedor, pero el título
+  // debe seguir leyéndose como título (jerarquía), no como texto muted.
+  h4, h5, h6 {
+    color: var(--text-primary);
+    font-weight: 600;
+  }
+
+  p { margin: 0; }
+}
+
+// ---- Indicador / KPI reutilizable, opcional ----
+.prox-stat {
+  .prox-stat-label {
+    font-size: var(--text-2xs);
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    color: var(--text-secondary);
+    margin-bottom: .25rem;
+  }
+
+  .prox-stat-value {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+}
+
+// ---- Títulos de sección reutilizables, opcionales ----
+.prox-section-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: var(--space-3);
+}
+
+.prox-section-subtitle {
+  font-size: .8125rem;
+  color: var(--text-secondary);
+  margin-bottom: var(--space-4);
 }

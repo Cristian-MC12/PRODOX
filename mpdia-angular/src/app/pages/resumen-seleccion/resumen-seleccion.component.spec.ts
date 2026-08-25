@@ -6,7 +6,7 @@ import { Component } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
 import { HttpClientTestingModule } from '@angular/common/http/testing';
-import { of, throwError } from 'rxjs';
+import { Subject, of, throwError } from 'rxjs';
 import { ResumenSeleccionComponent } from './resumen-seleccion.component';
 import { ShellComponent } from '../../layout/shell/shell.component';
 import { MetricRankingService } from '../../services/metric-ranking.service';
@@ -126,5 +126,84 @@ describe('ResumenSeleccionComponent.aceptar() (FASE 10)', () => {
     expect(router.navigate).not.toHaveBeenCalled();
     expect(component.errorMsg).toContain('1 de 2');
     expect(component.errorMsg).toContain('Métrica b');
+  });
+
+  // ── FASE 20 (envío duplicado al Scrum Master) ───────────────────────────
+  // Confirmado empíricamente en un navegador real: dos clics con ~26ms de
+  // diferencia en "Enviar al Scrum Master" generaban dos filas "pendiente"
+  // idénticas, porque aceptar() no tenía ningún guard propio — dependía por
+  // completo del binding [disabled]="enviando" del template, que no alcanza a
+  // reflejarse en el DOM a tiempo para bloquear el segundo clic.
+
+  it('un clic llama a guardar() exactamente una vez por métrica seleccionada', () => {
+    component.seleccionadas = [seleccionCompleta('a', 'm-1')];
+    rankingService.guardar.and.returnValue(of({ id: 'p-1' } as any));
+
+    component.aceptar();
+
+    expect(rankingService.guardar).toHaveBeenCalledTimes(1);
+  });
+
+  it('dos clics rápidos (aceptar() llamado dos veces mientras enviando=true) generan una sola operación', () => {
+    component.seleccionadas = [seleccionCompleta('a', 'm-1')];
+    // Subject: nunca emite hasta que se le indique explícitamente — simula una
+    // petición HTTP real todavía en curso cuando llega el "segundo clic".
+    const enCurso = new Subject<any>();
+    rankingService.guardar.and.returnValue(enCurso.asObservable());
+
+    component.aceptar(); // primer clic: enviando pasa a true, guardar() se invoca
+    component.aceptar(); // segundo clic "rápido": debe bloquearse por enviando=true
+
+    expect(rankingService.guardar).toHaveBeenCalledTimes(1);
+    expect(component.enviando).toBeTrue();
+  });
+
+  it('tras un fallo en el primer intento (enviando vuelve a false), un reintento sí funciona y navega', () => {
+    component.seleccionadas = [seleccionCompleta('a', 'm-1')];
+    rankingService.guardar.and.returnValue(
+      throwError(() => ({ status: 500, error: { error: 'fallo de guardado' } }))
+    );
+
+    component.aceptar();
+
+    expect(component.enviando).toBeFalse();
+    expect(router.navigate).not.toHaveBeenCalled();
+
+    // Reintento: esta vez el backend responde bien.
+    rankingService.guardar.and.returnValue(of({ id: 'p-1' } as any));
+    component.aceptar();
+
+    expect(rankingService.guardar).toHaveBeenCalledTimes(2);
+    expect(router.navigate).toHaveBeenCalledWith(['/verificacion']);
+  });
+
+  // Revisión de frecuencia de captura: aceptar() no propagaba frecuenciaCaptura al
+  // enviar al Scrum Master — el backend la persistía siempre como "por_sprint" sin
+  // importar lo elegido en Parametrización, aunque el dato sí estaba disponible acá
+  // en s.parametrizacion.frecuenciaCaptura.
+  it('aceptar() propaga la frecuenciaCaptura de cada parametrización al backend', () => {
+    const conFrecuenciaDiaria = {
+      ...seleccionCompleta('a', 'm-1'),
+      parametrizacion: { objetivo: 'obj', procedimiento: 'proc', indicadorVariable: 'ind', escala: 'esc', frecuenciaCaptura: 'diaria' }
+    };
+    component.seleccionadas = [conFrecuenciaDiaria];
+    rankingService.guardar.and.returnValue(of({ id: 'p-1' } as any));
+
+    component.aceptar();
+
+    expect(rankingService.guardar).toHaveBeenCalledWith(
+      jasmine.objectContaining({ frecuenciaCaptura: 'diaria' })
+    );
+  });
+
+  it('aceptar() sin frecuenciaCaptura informada sigue enviando "por_sprint" (comportamiento preexistente)', () => {
+    component.seleccionadas = [seleccionCompleta('a', 'm-1')]; // sin frecuenciaCaptura
+    rankingService.guardar.and.returnValue(of({ id: 'p-1' } as any));
+
+    component.aceptar();
+
+    expect(rankingService.guardar).toHaveBeenCalledWith(
+      jasmine.objectContaining({ frecuenciaCaptura: 'por_sprint' })
+    );
   });
 });

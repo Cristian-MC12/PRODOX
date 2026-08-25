@@ -23,5 +23,14 @@ public interface RegistroValorRepository extends JpaRepository<RegistroValor, UU
         UUID sprintId, UUID variableId);
     Optional<RegistroValor> findFirstBySprintIdAndVariable_IdAndUserIdOrderByRegistradoAtDesc(
         UUID sprintId, UUID variableId, String userId);
+
+    // FASE 16 — captura por fecha explícita: localizar el registro EXACTO de esa
+    // fecha (no "el más reciente") para poder decidir entre actualizar (misma
+    // fecha) o crear una fila nueva (fecha distinta), permitiendo que coexistan
+    // varias capturas de la misma variable+sprint en fechas diferentes.
+    Optional<RegistroValor> findFirstBySprintIdAndVariable_IdAndRegistradoAt(
+        UUID sprintId, UUID variableId, java.time.Instant registradoAt);
+    Optional<RegistroValor> findFirstBySprintIdAndVariable_IdAndUserIdAndRegistradoAt(
+        UUID sprintId, UUID variableId, String userId, java.time.Instant registradoAt);
 }
 

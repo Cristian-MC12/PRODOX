@@ -136,7 +136,7 @@ class ParametrizacionUnicidadV25Test {
             null, // metricaBaseId
             PROYECTO_1,
             METRICA_VEL,
-            "SUMA", "SUMA(indicador_ranking_v25)", "unidades", "fuente test"
+            "SUMA", "SUMA(indicador_ranking_v25)", "unidades", "fuente test", null
         );
 
         var dto = rankingService.guardar(req, userId, userId + "@test.mpdia.com");
@@ -147,11 +147,25 @@ class ParametrizacionUnicidadV25Test {
         // usuario+métrica — ese patrón "find-or-update" era exactamente el bug crítico
         // confirmado en FASE 9 (bloque 1): degradaba una parametrización ya aprobada
         // de vuelta a "pendiente" al reenviar, y podía pisar una fila de otro proyecto.
-        // Ahora cada envío crea una versión NUEVA para metricaId+proyectoId, igual que
-        // ParametrizacionService.guardarPropuesta() (índice único ux_parametrizacion_
-        // proyecto_metrica_version sigue protegiendo la unicidad por versión, no por
-        // "una fila por usuario").
-        var dto2 = rankingService.guardar(req, userId, userId + "@test.mpdia.com");
+        // Un envío con contenido REALMENTE distinto crea una versión NUEVA para
+        // metricaId+proyectoId, igual que ParametrizacionService.guardarPropuesta()
+        // (índice único ux_parametrizacion_proyecto_metrica_version sigue protegiendo
+        // la unicidad por versión, no por "una fila por usuario").
+        //
+        // FASE 20: reenviar el MISMO req (contenido idéntico) ya NO crea una segunda
+        // fila — ese era exactamente el defecto de "envío duplicado al Scrum Master"
+        // (doble clic / recarga durante un envío en curso). Por eso este test usa un
+        // segundo request con un objetivo distinto: sigue verificando que múltiples
+        // versiones legítimas conviven correctamente para efectos del ranking, sin
+        // depender del comportamiento ya corregido.
+        GuardarParametrizacionRequest req2 = new GuardarParametrizacionRequest(
+            null, "Objetivo ranking prueba V25 (segunda versión, editado)",
+            req.procedimiento(), req.indicadorVariable(), req.escala(), null,
+            req.proyectoId(), req.metricaId(),
+            req.tipoOperacion(), req.formulaAcademica(), req.unidadResultado(), req.fuenteAcademica(),
+            req.frecuenciaCaptura()
+        );
+        var dto2 = rankingService.guardar(req2, userId, userId + "@test.mpdia.com");
         assertThat(dto2.id()).isNotEqualTo(dto.id());
         assertThat(dto2.version()).isEqualTo(dto.version() + 1);
 

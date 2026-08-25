@@ -10,24 +10,7 @@ import { ProyectoDto } from '../../models/proyecto.model';
 import {
   MetricaEvaluacionDetalleDto, RegistroPuntoDto, SprintStatsDto, Tendencia, Variabilidad
 } from '../../models/evaluacion-detalle.model';
-
-/** Punto ya proyectado a coordenadas SVG, listo para dibujar. */
-interface PuntoChart {
-  x: number;
-  y: number;
-  valor: number;
-  registro: RegistroPuntoDto;
-  indice: number;
-}
-
-interface LineChart {
-  points: PuntoChart[];
-  path: string;
-  min: number;
-  max: number;
-  width: number;
-  height: number;
-}
+import { MiniChartComponent, PuntoMiniChart } from '../../shared/mini-chart/mini-chart.component';
 
 interface CajaBigotes {
   min: number; q1: number; median: number; q3: number; max: number;
@@ -43,15 +26,15 @@ const FRECUENCIA_LABEL: Record<string, string> = {
 @Component({
   selector: 'app-evaluacion',
   standalone: true,
-  imports: [CommonModule, FormsModule, ShellComponent],
+  imports: [CommonModule, FormsModule, ShellComponent, MiniChartComponent],
   template: `
     <app-shell title="Evaluación">
 
       @if (!proyecto) {
-        <div class="text-center py-5 text-muted">
-          <i class="bi bi-folder-x fs-1 d-block mb-3 opacity-25"></i>
+        <div class="prox-empty-state">
+          <i class="bi bi-folder-x"></i>
           <p>Seleccioná un proyecto primero.</p>
-          <button class="btn btn-primary btn-sm" (click)="router.navigate(['/proyectos'])">
+          <button class="btn btn-primary btn-sm mt-3" (click)="router.navigate(['/proyectos'])">
             Ir a Proyectos
           </button>
         </div>
@@ -101,8 +84,8 @@ const FRECUENCIA_LABEL: Record<string, string> = {
             <span class="spinner-border spinner-border-sm me-2"></span>Calculando evaluación...
           </div>
         } @else if (datos.length === 0) {
-          <div class="text-center py-5 text-muted">
-            <i class="bi bi-bar-chart fs-1 d-block mb-3 opacity-25"></i>
+          <div class="prox-empty-state">
+            <i class="bi bi-bar-chart"></i>
             <p>No hay datos registrados aún. Completá la fase de Ejecución primero.</p>
           </div>
         } @else {
@@ -145,7 +128,7 @@ const FRECUENCIA_LABEL: Record<string, string> = {
                           Frecuencia: {{ frecuenciaLabel(m.frecuenciaCaptura) }}
                         </div>
                       </div>
-                      <span class="badge" [class]="badgeCat(m.categoria)" style="font-size:0.6rem">
+                      <span class="badge prox-badge-sm" [class]="badgeCat(m.categoria)">
                         {{ m.categoria }}
                       </span>
                     </div>
@@ -154,18 +137,7 @@ const FRECUENCIA_LABEL: Record<string, string> = {
                         @if (registrosVista.length === 0) {
                           <div class="text-center text-muted small py-3">Sin registros en este sprint.</div>
                         } @else {
-                          @if (buildChart(registrosVista, 320, 110); as chart) {
-                            <svg [attr.viewBox]="'0 0 320 110'" style="width:100%;height:110px">
-                              <polyline [attr.points]="polylinePoints(chart)"
-                                        fill="none" stroke="var(--bs-primary)" stroke-width="2"/>
-                              @for (p of chart.points; track p.registro.id) {
-                                <circle [attr.cx]="p.x" [attr.cy]="p.y" r="3.5"
-                                        [attr.fill]="colorTendencia(m.estadisticas.tendencia)">
-                                  <title>{{ tooltipTexto(m, p) }}</title>
-                                </circle>
-                              }
-                            </svg>
-                          }
+                          <app-mini-chart [puntos]="paraMiniChart(registrosVista)" [height]="110"></app-mini-chart>
                         }
                       }
                     </div>
@@ -187,8 +159,7 @@ const FRECUENCIA_LABEL: Record<string, string> = {
                             {{ labelTendencia(m.estadisticas.tendencia) }}
                           </span>
                           @if (m.estadisticas.variabilidad) {
-                            <span class="badge" [class]="badgeVariabilidad(m.estadisticas.variabilidad)"
-                                  style="font-size:0.6rem">
+                            <span class="badge prox-badge-sm" [class]="badgeVariabilidad(m.estadisticas.variabilidad)">
                               Variabilidad {{ m.estadisticas.variabilidad }}
                             </span>
                           }
@@ -225,7 +196,7 @@ const FRECUENCIA_LABEL: Record<string, string> = {
                       <tr>
                         <td class="ps-3 small fw-semibold align-middle">{{ m.variableNombre }}</td>
                         <td class="align-middle">
-                          <span class="badge" style="font-size:0.62rem" [class]="badgeCat(m.categoria)">
+                          <span class="badge prox-badge-sm" [class]="badgeCat(m.categoria)">
                             {{ m.categoria }}
                           </span>
                         </td>
@@ -266,65 +237,65 @@ const FRECUENCIA_LABEL: Record<string, string> = {
                 <div class="row g-2">
                   <div class="col-6 col-md-3">
                     <div class="card text-center border-primary">
-                      <div class="card-body py-2">
-                        <div class="text-muted small">Variables medidas</div>
-                        <div class="fs-3 fw-bold text-primary">{{ metricasFiltradas.length }}</div>
+                      <div class="card-body py-2 prox-stat">
+                        <div class="prox-stat-label">Variables medidas</div>
+                        <div class="prox-stat-value text-primary">{{ metricasFiltradas.length }}</div>
                       </div>
                     </div>
                   </div>
                   <div class="col-6 col-md-3">
                     <div class="card text-center border-success">
-                      <div class="card-body py-2">
-                        <div class="text-muted small">Sprints con datos</div>
-                        <div class="fs-3 fw-bold text-success">{{ sprintsDisponibles.length }}</div>
+                      <div class="card-body py-2 prox-stat">
+                        <div class="prox-stat-label">Sprints con datos</div>
+                        <div class="prox-stat-value text-success">{{ sprintsDisponibles.length }}</div>
                       </div>
                     </div>
                   </div>
                   <div class="col-6 col-md-3">
                     <div class="card text-center border-info">
-                      <div class="card-body py-2">
-                        <div class="text-muted small">Total de registros</div>
-                        <div class="fs-3 fw-bold text-info">{{ totalRegistrosGlobal }}</div>
+                      <div class="card-body py-2 prox-stat">
+                        <div class="prox-stat-label">Total de registros</div>
+                        <div class="prox-stat-value text-info">{{ totalRegistrosGlobal }}</div>
                       </div>
                     </div>
                   </div>
                   <div class="col-6 col-md-3">
                     <div class="card text-center border-secondary">
-                      <div class="card-body py-2">
-                        <div class="text-muted small">Promedio general*</div>
-                        <div class="fs-3 fw-bold text-secondary">{{ promedioGeneral }}</div>
+                      <div class="card-body py-2 prox-stat">
+                        <div class="prox-stat-label">Promedio general*</div>
+                        <div class="prox-stat-value text-secondary">{{ promedioGeneral }}</div>
                       </div>
                     </div>
                   </div>
                   <div class="col-6 col-md-3">
                     <div class="card text-center border-success">
-                      <div class="card-body py-2">
-                        <div class="text-muted small">Tendencia ascendente</div>
-                        <div class="fs-3 fw-bold text-success">{{ contarTendencia('ascendente') }}</div>
+                      <div class="card-body py-2 prox-stat">
+                        <div class="prox-stat-label">Tendencia ascendente</div>
+                        <div class="prox-stat-value text-success">{{ contarTendencia('ascendente') }}</div>
                       </div>
                     </div>
                   </div>
                   <div class="col-6 col-md-3">
                     <div class="card text-center border-danger">
-                      <div class="card-body py-2">
-                        <div class="text-muted small">Tendencia descendente</div>
-                        <div class="fs-3 fw-bold text-danger">{{ contarTendencia('descendente') }}</div>
+                      <div class="card-body py-2 prox-stat">
+                        <div class="prox-stat-label">Tendencia descendente</div>
+                        <div class="prox-stat-value text-danger">{{ contarTendencia('descendente') }}</div>
                       </div>
                     </div>
                   </div>
                   <div class="col-6 col-md-3">
                     <div class="card text-center border-warning">
-                      <div class="card-body py-2">
-                        <div class="text-muted small">Métricas estables</div>
-                        <div class="fs-3 fw-bold text-warning">{{ contarTendencia('estable') }}</div>
+                      <div class="card-body py-2 prox-stat">
+                        <div class="prox-stat-label">Métricas estables</div>
+                        <div class="prox-stat-value text-warning">{{ contarTendencia('estable') }}</div>
                       </div>
                     </div>
                   </div>
                   <div class="col-6 col-md-3">
                     <div class="card text-center border-dark">
-                      <div class="card-body py-2">
-                        <div class="text-muted small">Alta variabilidad</div>
-                        <div class="fs-3 fw-bold text-dark">{{ contarVariabilidad('alta') }}</div>
+                      <div class="card-body py-2 prox-stat">
+                        <div class="prox-stat-label">Alta variabilidad</div>
+                        <div class="prox-stat-value text-dark">{{ contarVariabilidad('alta') }}</div>
                       </div>
                     </div>
                   </div>
@@ -340,7 +311,7 @@ const FRECUENCIA_LABEL: Record<string, string> = {
                   <div class="col-md-6">
                     <div class="card h-100">
                       <div class="card-header py-2 small d-flex align-items-center gap-2">
-                        <span class="badge" [class]="badgeCat(cat)">{{ cat }}</span>
+                        <span class="badge prox-badge-sm" [class]="badgeCat(cat)">{{ cat }}</span>
                         <span class="fw-semibold">{{ filasPorCategoria(cat).length }} variable(s)</span>
                       </div>
                       <div class="card-body py-2">
@@ -374,32 +345,24 @@ const FRECUENCIA_LABEL: Record<string, string> = {
               <div class="modal-header">
                 <h5 class="modal-title">
                   {{ detalleAbierto.variableNombre }}
-                  <span class="badge ms-2" [class]="badgeCat(detalleAbierto.categoria)" style="font-size:0.6rem">
+                  <span class="badge ms-2 prox-badge-sm" [class]="badgeCat(detalleAbierto.categoria)">
                     {{ detalleAbierto.categoria }}
                   </span>
                 </h5>
                 <button type="button" class="btn-close" (click)="cerrarDetalle()"></button>
               </div>
               <div class="modal-body">
-                <div class="small text-muted mb-2">
-                  Frecuencia de captura: <strong>{{ frecuenciaLabel(detalleAbierto.frecuenciaCaptura) }}</strong>
+                <div class="small text-muted mb-2 d-flex align-items-center gap-2 flex-wrap">
+                  <span>Frecuencia de captura: <strong>{{ frecuenciaLabel(detalleAbierto.frecuenciaCaptura) }}</strong></span>
+                  <span class="badge bg-light text-dark border">
+                    {{ sprintFiltro === null ? 'Mostrando: todos los sprints (comparación)' : 'Mostrando: Sprint ' + sprintFiltro }}
+                  </span>
                 </div>
 
-                @if (buildChart(detalleAbierto.registros, 640, 220); as chartGrande) {
-                  <svg [attr.viewBox]="'0 0 640 220'" style="width:100%;height:220px">
-                    <polyline [attr.points]="polylinePoints(chartGrande)"
-                              fill="none" stroke="var(--bs-primary)" stroke-width="2"/>
-                    @for (p of chartGrande.points; track p.registro.id) {
-                      <circle [attr.cx]="p.x" [attr.cy]="p.y" r="4"
-                              [attr.fill]="colorTendencia(detalleAbierto.estadisticas.tendencia)">
-                        <title>{{ tooltipTexto(detalleAbierto, p) }}</title>
-                      </circle>
-                    }
-                  </svg>
-                }
+                <app-mini-chart [puntos]="paraMiniChart(registrosParaVista(detalleAbierto))" [width]="640" [height]="220"></app-mini-chart>
 
                 <!-- Diagrama de caja (distribución) -->
-                @if (detalleAbierto.registros.length >= 4 && calcularCaja(detalleAbierto.registros); as caja) {
+                @if (registrosParaVista(detalleAbierto).length >= 4 && calcularCaja(registrosParaVista(detalleAbierto)); as caja) {
                   <div class="mt-3">
                     <div class="small fw-semibold mb-1">Distribución de valores</div>
                     @if (escalaCaja(caja, 640); as esc) {
@@ -424,14 +387,23 @@ const FRECUENCIA_LABEL: Record<string, string> = {
                   </div>
                 }
 
-                <!-- Tarjeta de resumen -->
+                <!-- Tarjeta de resumen: Registros/Promedio/Mínimo-Máximo respetan el sprint
+                     seleccionado arriba; el resto (primer/último valor, cambio, tendencia,
+                     variabilidad) son conceptos de secuencia y se calculan siempre sobre el
+                     histórico completo, marcados explícitamente como tales para no
+                     confundirlos con la gráfica de un único sprint. -->
                 <div class="row g-2 mt-3 small">
-                  <div class="col-4"><span class="text-muted">Registros</span><br>
-                    <strong>{{ detalleAbierto.estadisticas.totalRegistros }}</strong></div>
-                  <div class="col-4"><span class="text-muted">Promedio</span><br>
-                    <strong>{{ detalleAbierto.estadisticas.promedio }}</strong></div>
-                  <div class="col-4"><span class="text-muted">Mínimo / Máximo</span><br>
-                    <strong>{{ detalleAbierto.estadisticas.minimo }} / {{ detalleAbierto.estadisticas.maximo }}</strong></div>
+                  @if (statsParaVista(detalleAbierto); as stats) {
+                    <div class="col-4"><span class="text-muted">Registros</span><br>
+                      <strong>{{ stats.totalRegistros }}</strong></div>
+                    <div class="col-4"><span class="text-muted">Promedio</span><br>
+                      <strong>{{ stats.promedio }}</strong></div>
+                    <div class="col-4"><span class="text-muted">Mínimo / Máximo</span><br>
+                      <strong>{{ stats.minimo }} / {{ stats.maximo }}</strong></div>
+                  }
+                  <div class="col-12"><hr class="my-1">
+                    <span class="text-muted" style="font-size:0.68rem">Histórico completo (todos los sprints):</span>
+                  </div>
                   <div class="col-4"><span class="text-muted">Primer valor</span><br>
                     <strong>{{ detalleAbierto.estadisticas.primerValor }}</strong></div>
                   <div class="col-4"><span class="text-muted">Último valor</span><br>
@@ -453,7 +425,7 @@ const FRECUENCIA_LABEL: Record<string, string> = {
                   <div class="col-6">
                     <span class="text-muted">Variabilidad</span><br>
                     @if (detalleAbierto.estadisticas.variabilidad) {
-                      <span class="badge" [class]="badgeVariabilidad(detalleAbierto.estadisticas.variabilidad)">
+                      <span class="badge prox-badge-sm" [class]="badgeVariabilidad(detalleAbierto.estadisticas.variabilidad)">
                         {{ detalleAbierto.estadisticas.variabilidad }}
                         ({{ detalleAbierto.estadisticas.coeficienteVariacion }}% CV)
                       </span>
@@ -578,6 +550,9 @@ export class EvaluacionComponent implements OnInit {
     if (this.proyecto) this.cargar();
   }
 
+  /** true una vez que sprintFiltro ya fue inicializado (con el sprint más reciente) al menos una vez. */
+  private sprintFiltroInicializado = false;
+
   cargar(): void {
     if (!this.proyecto) return;
     this.cargando = true;
@@ -586,6 +561,15 @@ export class EvaluacionComponent implements OnInit {
     ).subscribe(d => {
       this.datos = d;
       this.cargando = false;
+
+      // Por defecto se muestra el sprint más reciente (nunca se mezclan series
+      // de distintos sprints en una misma gráfica sin que el usuario lo pida
+      // explícitamente eligiendo "Todos los sprints"). Solo se fija una vez:
+      // refrescar ("Actualizar") no debe pisar una selección manual del usuario.
+      if (!this.sprintFiltroInicializado && this.sprintsDisponibles.length > 0) {
+        this.sprintFiltro = Math.max(...this.sprintsDisponibles);
+        this.sprintFiltroInicializado = true;
+      }
     });
   }
 
@@ -624,35 +608,11 @@ export class EvaluacionComponent implements OnInit {
     return [...registros].sort((a, b) => new Date(b.registradoAt).getTime() - new Date(a.registradoAt).getTime());
   }
 
-  // ── gráfica de líneas (SVG) ──────────────────────────────────────────
+  // ── gráfica temporal (MiniChartComponent, FASE 16) ──────────────────
 
-  buildChart(registros: RegistroPuntoDto[], width: number, height: number): LineChart {
-    const padL = 8, padR = 8, padT = 10, padB = 10;
-    const w = width - padL - padR, h = height - padT - padB;
-    const valores = registros.map(r => r.valor);
-    let min = Math.min(...valores), max = Math.max(...valores);
-    if (min === max) { min -= 1; max += 1; }
-    const n = registros.length;
-
-    const points: PuntoChart[] = registros.map((r, i) => ({
-      x: padL + (n === 1 ? w / 2 : (i / (n - 1)) * w),
-      y: padT + h - ((r.valor - min) / (max - min)) * h,
-      valor: r.valor,
-      registro: r,
-      indice: i
-    }));
-
-    return { points, path: '', min, max, width, height };
-  }
-
-  polylinePoints(chart: LineChart): string {
-    return chart.points.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
-  }
-
-  tooltipTexto(m: MetricaEvaluacionDetalleDto, p: PuntoChart): string {
-    const fecha = new Date(p.registro.registradoAt);
-    const fechaTxt = fecha.toLocaleDateString('es-CO') + ' ' + fecha.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
-    return `Fecha: ${fechaTxt}\nSprint: ${p.registro.sprintNumero}\nRegistro: #${p.indice + 1}\nValor: ${p.valor}\nFrecuencia: ${this.frecuenciaLabel(m.frecuenciaCaptura)}`;
+  /** Convierte los registros reales de una variable al formato que consume MiniChartComponent. */
+  paraMiniChart(registros: RegistroPuntoDto[]): PuntoMiniChart[] {
+    return registros.map(r => ({ fecha: r.registradoAt, valor: r.valor }));
   }
 
   // ── diagrama de caja (distribución) ─────────────────────────────────
@@ -728,13 +688,6 @@ export class EvaluacionComponent implements OnInit {
     if (t === 'descendente') return 'bi-arrow-down-right';
     if (t === 'estable')     return 'bi-arrow-right';
     return 'bi-dash';
-  }
-
-  colorTendencia(t: Tendencia): string {
-    if (t === 'ascendente')  return 'var(--bs-success)';
-    if (t === 'descendente') return 'var(--bs-danger)';
-    if (t === 'estable')     return 'var(--bs-warning)';
-    return 'var(--bs-primary)';
   }
 
   colorTendenciaTexto(t: Tendencia): string {

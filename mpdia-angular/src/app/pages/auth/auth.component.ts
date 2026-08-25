@@ -19,7 +19,7 @@ import { AuthService } from '../../services/auth.service';
                style="width:48px;height:48px;font-size:1.4rem">
             <i class="bi bi-speedometer2"></i>
           </div>
-          <h2 class="h5 fw-bold mb-0">MPDIA</h2>
+          <h2 class="h5 fw-bold mb-0">PRODOX AI</h2>
           <p class="text-muted small">Sistema de Medición de Productividad Ágil</p>
         </div>
 

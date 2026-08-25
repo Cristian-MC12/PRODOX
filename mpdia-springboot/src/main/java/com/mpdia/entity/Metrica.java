@@ -31,4 +31,12 @@ public class Metrica {
 
     @Column(columnDefinition = "TEXT")
     private String descripcion;
+
+    /*
+     * Metrica es EXCLUSIVAMENTE el catálogo global de definiciones de
+     * métrica — nunca tiene un proyecto propietario. La asociación entre un
+     * proyecto y una Metrica vive en ProyectoMetrica, nunca acá (revisión
+     * post-implementación de la Fase PRODOX AI: V30 había agregado una
+     * columna proyecto_id que contradecía este modelo — revertida en V31).
+     */
 }

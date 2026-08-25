@@ -1,0 +1,11 @@
+-- Autor: Cristian Santiago Martinez Cordoba — MPDIA
+-- V27 — FASE 15: secuencia para generar codigo único y seguro ante concurrencia
+--       para métricas creadas mediante "Crear métrica con IA" (prefijo IA-NNN).
+--
+-- No modifica ninguna fila ni columna existente de 'metricas'. Los códigos ya
+-- sembrados (SIG-*, FLE-*, IMP-*, FSH-*, etc.) permanecen exactamente iguales.
+--
+-- nextval() sobre una secuencia Postgres es atómico: dos transacciones
+-- concurrentes nunca reciben el mismo valor, sin necesidad de bloqueos ni de
+-- reintentos basados en MAX(codigo)+1 (que sí puede colisionar bajo concurrencia).
+CREATE SEQUENCE IF NOT EXISTS metrica_ia_codigo_seq START WITH 1 INCREMENT BY 1;

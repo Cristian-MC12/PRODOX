@@ -20,5 +20,13 @@ public record GuardarParametrizacionRequest(
     String tipoOperacion,
     String formulaAcademica,
     String unidadResultado,
-    String fuenteAcademica
+    String fuenteAcademica,
+    /**
+     * Revisión de frecuencia de captura: faltaba en este DTO, por lo que
+     * MetricRankingService.guardarPorMetrica() nunca podía propagarla —
+     * la entidad quedaba siempre en su default ("por_sprint") sin importar
+     * lo que el usuario eligiera en Planeación. Opcional por compatibilidad:
+     * null se interpreta como "por_sprint", igual que el resto del sistema.
+     */
+    String frecuenciaCaptura
 ) {}

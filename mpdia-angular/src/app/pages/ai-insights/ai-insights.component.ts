@@ -83,26 +83,57 @@ export class AIInsightsComponent implements OnInit {
           console.error('Error generando insights:', err);
           hadError = true;
           this.generationStep.set('');
-          
+
           if (err.status === 403) {
             this.showAlert('No tienes permisos para generar insights en este proyecto', 'alert-danger');
           } else {
             this.showAlert('Error al generar insights. Intentá nuevamente.', 'alert-danger');
           }
-          
-          return of([]);
+
+          return of(null);
         })
       )
-      .subscribe(data => {
-        if (!hadError) {
+      .subscribe(resultado => {
+        if (!hadError && resultado) {
           this.updateGenerationProgress('Finalizando...');
           setTimeout(() => {
             this.generating.set(false);
-            if (data.length === 0) {
-              this.showAlert('No se generaron insights. El proyecto puede no tener suficientes datos históricos.', 'alert-warning');
-            } else {
-              this.showAlert(`${data.length} insight(s) generado(s) exitosamente`, 'alert-success');
-              this.insights = data;
+            // Recarga la lista completa (persistida) en vez de reemplazarla
+            // solo con la tanda nueva, para que se vea el estado real acumulado.
+            // IMPORTANTE: loadInsights() limpia alertMsg al iniciar, así que
+            // debe llamarse ANTES de mostrar el mensaje de estado de esta
+            // generación — si se llamara después, borraría el mensaje recién
+            // mostrado apenas se disparara.
+            this.loadInsights();
+            // FASE 23: antes de esto la respuesta era solo AIInsight[] y un
+            // fallo parcial de Gemini se veía exactamente igual que una
+            // corrida completa con pocos resultados. Ahora el backend
+            // distingue el estado real de la corrida (ver
+            // GenerateInsightsResultDto) y se lo comunicamos al usuario.
+            switch (resultado.status) {
+              case 'SIN_DATOS':
+                this.showAlert('No se generaron insights. El proyecto todavía no tiene sprints finalizados.', 'alert-warning');
+                break;
+              case 'SIN_SENALES':
+                this.showAlert('No se generaron insights. El proyecto puede no tener suficientes datos históricos o señales significativas.', 'alert-warning');
+                break;
+              case 'FAILED':
+                this.showAlert('No se pudo generar ningún insight: el servicio de IA no respondió correctamente. Intentá nuevamente en unos segundos.', 'alert-danger');
+                break;
+              case 'PARTIAL':
+                this.showAlert(
+                  `Se generaron ${resultado.senalesNuevas} insight(s), pero ${resultado.errores.length} señal(es) no pudieron procesarse (el servicio de IA no respondió para todas). Podés reintentar más tarde.`,
+                  'alert-warning');
+                break;
+              default: { // COMPLETE
+                const nuevosTexto = resultado.senalesNuevas > 0
+                  ? `${resultado.senalesNuevas} insight(s) nuevo(s) generado(s)`
+                  : 'Sin novedades';
+                const omitidosTexto = resultado.senalesOmitidasPorDuplicado > 0
+                  ? ` (${resultado.senalesOmitidasPorDuplicado} señal(es) ya estaban cubiertas, no se duplicaron)`
+                  : '';
+                this.showAlert(`${nuevosTexto}${omitidosTexto}`, 'alert-success');
+              }
             }
           }, 500);
         } else {

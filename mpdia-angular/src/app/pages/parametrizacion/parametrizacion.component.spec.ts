@@ -229,6 +229,55 @@ describe('ParametrizacionComponent - Fase 16.5', () => {
       expect(component.form.indicadorVariable).toBe(mockTop3[0].indicadorVariable);
       expect(component.form.escala).toBe(mockTop3[0].escala);
     });
+
+    // Corrección: "Usar" debía reutilizar la parametrización COMPLETA, no
+    // solo objetivo/procedimiento/indicadorVariable/escala (el resto quedaba
+    // vacío aunque el registro original lo tuviera definido).
+    it('usarDelTop() reutiliza la parametrización completa (frecuencia + campos académicos), no solo el objetivo', () => {
+      component.metrica = mockMetrica;
+      const entradaCompleta: TopParametrizacion = {
+        id: '3', objetivo: 'Objetivo 3', escala: 'Numérica 1-5', userEmail: 'user3@test.com',
+        usos: 5, procedimiento: 'P3', indicadorVariable: 'I3', createdAt: '2026-01-01',
+        frecuenciaCaptura: 'semanal',
+        fuenteAcademica: 'Scrum Guide 2020',
+        formulaAcademica: 'SUMA(I3)',
+        tipoOperacion: 'SUMA',
+        unidadResultado: 'puntos'
+      };
+      component.top3 = [entradaCompleta];
+
+      component.usarDelTop(entradaCompleta);
+
+      httpMock.expectOne(`${environment.apiBaseUrl}/metric-ranking/${mockMetrica.factorId}/uso`).flush({});
+
+      expect(component.form.frecuenciaCaptura).toBe('semanal');
+      expect(component.form.fuenteAcademica).toBe('Scrum Guide 2020');
+      expect(component.form.formulaAcademica).toBe('SUMA(I3)');
+      expect(component.form.tipoOperacion).toBe('SUMA');
+      expect(component.form.unidadResultado).toBe('puntos');
+    });
+
+    // Si el registro original tiene un campo realmente vacío, "Usar" no debe
+    // inventar un valor — debe quedar sin definir (la UI lo muestra como
+    // "No definido").
+    it('usarDelTop() conserva como vacío un campo académico que el original no tenía', () => {
+      component.metrica = mockMetrica;
+      const sinAcademicos: TopParametrizacion = {
+        id: '4', objetivo: 'Objetivo 4', escala: 'Escala 4', userEmail: 'user4@test.com',
+        usos: 1, procedimiento: 'P4', indicadorVariable: 'I4', createdAt: '2026-01-01'
+        // sin frecuenciaCaptura ni campos académicos — como mockTop3 original.
+      };
+      component.top3 = [sinAcademicos];
+
+      component.usarDelTop(sinAcademicos);
+
+      httpMock.expectOne(`${environment.apiBaseUrl}/metric-ranking/${mockMetrica.factorId}/uso`).flush({});
+
+      expect(component.form.fuenteAcademica).toBeUndefined();
+      expect(component.form.formulaAcademica).toBeUndefined();
+      expect(component.form.tipoOperacion).toBeUndefined();
+      expect(component.form.unidadResultado).toBeUndefined();
+    });
   });
 
   describe('Formulario de parametrización', () => {
@@ -243,6 +292,45 @@ describe('ParametrizacionComponent - Fase 16.5', () => {
 
     it('debe inicializar formulario con frecuencia por_sprint', () => {
       expect(component.form.frecuenciaCaptura).toBe('por_sprint');
+    });
+
+    // Revisión de frecuencia de captura: guardar() (botón "Guardar parametrización",
+    // el flujo legado vía MetricRankingService) no incluía frecuenciaCaptura en el
+    // request — el backend la persistía siempre como "por_sprint" sin importar lo
+    // elegido acá, aunque el usuario hubiera seleccionado "Diariamente".
+    it('guardar() envía la frecuenciaCaptura elegida en el formulario al backend', () => {
+      component.metrica = mockMetrica;
+      component.form.objetivo = 'obj';
+      component.form.procedimiento = 'proc';
+      component.form.indicadorVariable = 'ind';
+      component.form.escala = 'escala';
+      component.form.frecuenciaCaptura = 'diaria';
+      localStorage.setItem('mpdia_proyecto_activo', JSON.stringify({ id: 'proj-1' }));
+
+      component.guardar();
+
+      const req = httpMock.expectOne(`${environment.apiBaseUrl}/metric-ranking/parametrizacion`);
+      expect(req.request.body.frecuenciaCaptura).toBe('diaria');
+      req.flush({ id: 'p1', status: 'pendiente' });
+
+      localStorage.removeItem('mpdia_proyecto_activo');
+    });
+
+    it('guardar() sin frecuencia elegida explícitamente sigue enviando "por_sprint" (comportamiento preexistente)', () => {
+      component.metrica = mockMetrica;
+      component.form.objetivo = 'obj';
+      component.form.procedimiento = 'proc';
+      component.form.indicadorVariable = 'ind';
+      component.form.escala = 'escala';
+      localStorage.setItem('mpdia_proyecto_activo', JSON.stringify({ id: 'proj-1' }));
+
+      component.guardar();
+
+      const req = httpMock.expectOne(`${environment.apiBaseUrl}/metric-ranking/parametrizacion`);
+      expect(req.request.body.frecuenciaCaptura).toBe('por_sprint');
+      req.flush({ id: 'p1', status: 'pendiente' });
+
+      localStorage.removeItem('mpdia_proyecto_activo');
     });
   });
 

@@ -94,7 +94,7 @@ describe('SidebarComponent', () => {
     expect(icon).toBeTruthy();
   });
 
-  it('debería mostrar AI Insights en sección IA', () => {
+  it('NO debería mostrar AI Insights como entrada independiente (reorganización de navegación)', () => {
     component.proyectoActivo.set({
       id: 'proyecto-123',
       nombre: 'Proyecto Test',
@@ -114,7 +114,7 @@ describe('SidebarComponent', () => {
 
     const compiled = fixture.nativeElement;
     const aiInsightsLink = compiled.querySelector('a[routerLink="/ai-insights"]');
-    expect(aiInsightsLink).toBeTruthy();
+    expect(aiInsightsLink).toBeFalsy();
   });
 
   it('debería mostrar Reportes en sección IA', () => {
@@ -141,7 +141,7 @@ describe('SidebarComponent', () => {
     expect(reportLink.textContent).toContain('Reportes');
   });
 
-  it('debería mostrar Retrospectivas en sección IA', () => {
+  it('NO debería mostrar Retrospectivas como entrada independiente (reorganización de navegación)', () => {
     component.proyectoActivo.set({
       id: 'proyecto-123',
       nombre: 'Proyecto Test',
@@ -161,8 +161,25 @@ describe('SidebarComponent', () => {
 
     const compiled = fixture.nativeElement;
     const retroLink = compiled.querySelector('a[routerLink="/ai-retrospective"]');
-    expect(retroLink).toBeTruthy();
-    expect(retroLink.textContent).toContain('Retrospectivas');
+    expect(retroLink).toBeFalsy();
+  });
+
+  it('NO debería mostrar Copiloto en el menú (deshabilitado)', () => {
+    fixture.detectChanges();
+    const compiled = fixture.nativeElement;
+    const copilotoLink = compiled.querySelector('a[routerLink="/configuracion"]');
+    expect(copilotoLink).toBeFalsy();
+  });
+
+  it('debería mostrar Equipo inmediatamente debajo de Proyectos', () => {
+    fixture.detectChanges();
+    const compiled = fixture.nativeElement;
+    const navLinks: NodeListOf<HTMLAnchorElement> = compiled.querySelectorAll('ul.nav > li.nav-item > a.nav-link');
+    const labels = Array.from(navLinks).map(a => a.textContent?.trim());
+    const proyectosIdx = labels.findIndex(l => l?.includes('Proyectos'));
+    const equipoIdx = labels.findIndex(l => l?.includes('Equipo'));
+    expect(proyectosIdx).toBeGreaterThan(-1);
+    expect(equipoIdx).toBe(proyectosIdx + 1);
   });
 
   it('NO debería mostrar Dashboard sin proyecto activo', () => {

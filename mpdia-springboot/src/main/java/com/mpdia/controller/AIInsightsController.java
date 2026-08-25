@@ -2,6 +2,7 @@
 package com.mpdia.controller;
 
 import com.mpdia.dto.ai.AIInsightDto;
+import com.mpdia.dto.ai.GenerateInsightsResultDto;
 import com.mpdia.service.AIInsightsService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -64,21 +65,24 @@ public class AIInsightsController {
      * 
      * @param proyectoId ID del proyecto
      * @param auth Usuario autenticado (obtenido del JWT)
-     * @return Lista de insights recién generados
+     * @return Insights recién generados junto con el estado real de la corrida
+     *         (COMPLETE/PARTIAL/FAILED/SIN_SENALES/SIN_DATOS — FASE 23, ver
+     *         GenerateInsightsResultDto) — antes solo se devolvía la lista,
+     *         sin forma de distinguir una generación completa de una parcial.
      * @throws SecurityException si el usuario no tiene acceso al proyecto (403)
      * @throws IllegalArgumentException si el proyecto no existe (400)
      */
     @PostMapping("/generate/{proyectoId}")
-    public ResponseEntity<List<AIInsightDto>> generateInsights(
+    public ResponseEntity<GenerateInsightsResultDto> generateInsights(
             @PathVariable UUID proyectoId,
             Authentication auth) {
-        
+
         String userId = auth.getName();
         log.info("POST generate insights para proyecto={} usuario={}", proyectoId, userId);
-        
-        List<AIInsightDto> insights = insightsService.generateInsights(proyectoId, userId);
-        
-        return ResponseEntity.ok(insights);
+
+        GenerateInsightsResultDto result = insightsService.generateInsights(proyectoId, userId);
+
+        return ResponseEntity.ok(result);
     }
 
     /**

@@ -7,8 +7,9 @@ import { Observable } from 'rxjs';
 import { environment } from '../../environments/environment';
 import { AuthRequest, AuthResponse } from '../models/auth.model';
 
-const TOKEN_KEY = 'mpdia_token';
-const USER_KEY  = 'mpdia_user';
+const TOKEN_KEY    = 'mpdia_token';
+const USER_KEY     = 'mpdia_user';
+const PROYECTO_KEY = 'mpdia_proyecto_activo';
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {
@@ -35,6 +36,10 @@ export class AuthService {
   logout(): void {
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(USER_KEY);
+    // El proyecto activo también se limpia: si no, sobrevive a un logout/login
+    // y el próximo inicio de sesión intenta cargar datos de un proyecto que
+    // puede ya no existir o no pertenecerle al usuario que inició sesión.
+    localStorage.removeItem(PROYECTO_KEY);
     this.currentUser.set(null);
     this.router.navigate(['/auth']);
   }

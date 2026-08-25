@@ -159,6 +159,39 @@ describe('PlaneacionComponent', () => {
       expect(resultado.length).toBe(0);
     });
 
+    // Revisión de Planeación: antes, una métrica de IA ya seleccionada en ESTE
+    // proyecto seguía en el catálogo (solo se ocultaba el botón "Seleccionar").
+    // Ahora se excluye directamente del catálogo — su estado ya se representa
+    // en "Seleccionadas"/"Historial" (ver test 3), y ofrecerla también acá
+    // generaba la confusión de "métrica duplicada" reportada.
+    it('7. (FASE 15) una métrica creada con IA y ya seleccionada en este proyecto ya NO aparece en el catálogo', () => {
+      const metricaIA = metrica('ia-metrica-1', 'Estado de ánimo del equipo', 'Socio-Humano FSH', {
+        codigo: 'IA-001', seleccionada: true, aprobada: false
+      });
+      component.metricas = [...CATALOGO_MOCK, metricaIA];
+
+      const todas = component.categorias.flatMap(cat => component.metricasFiltradas(cat));
+      expect(todas.some(m => m.metricaId === 'ia-metrica-1')).toBe(false);
+    });
+
+    // Corrección post-implementación (V31, catálogo global de métricas): Metrica
+    // es un catálogo GLOBAL — una métrica creada con IA por OTRO proyecto debe
+    // seguir apareciendo como DISPONIBLE en este proyecto (para poder
+    // reutilizarla vía ProyectoMetrica), nunca ocultarse. Antes ocurría lo
+    // opuesto (ver historial de este test): eso era el bug que esta corrección
+    // resuelve.
+    it('8. una métrica creada con IA por OTRO proyecto aparece DISPONIBLE (reutilizable), no seleccionada', () => {
+      const metricaIADeOtroProyecto = metrica('ia-metrica-2', 'Métrica de otro proyecto', 'Socio-Humano FSH', {
+        codigo: 'IA-002', seleccionada: false, aprobada: false
+      });
+      component.metricas = [...CATALOGO_MOCK, metricaIADeOtroProyecto];
+
+      const todas = component.categorias.flatMap(cat => component.metricasFiltradas(cat));
+      const encontrada = todas.find(m => m.metricaId === 'ia-metrica-2');
+      expect(encontrada).toBeTruthy();
+      expect(component.estaSeleccionada(encontrada!)).toBe(false);
+    });
+
     it('6. las 5 métricas permitidas pueden seguir seleccionándose normalmente', () => {
       component.proyecto = { id: 'proj-1' } as any;
       planeacionService.seleccionar.and.returnValue(of(undefined as any));
@@ -170,6 +203,87 @@ describe('PlaneacionComponent', () => {
       expect(planeacionService.seleccionar).toHaveBeenCalledWith(
         'proj-1', 'ec0d74fe-0bf4-4970-af89-dcaa0736c8ed'
       );
+    });
+
+    // El componente nunca calcula "seleccionada" por su cuenta: refleja
+    // exactamente lo que ya viene scopeado por proyecto desde el backend
+    // (PlaneacionService.listarMetricasConEstado). Si el mismo metricaId
+    // llega con seleccionada=true (como lo vería el Proyecto A) o
+    // seleccionada=false (como lo vería el Proyecto B para la misma
+    // métrica), el estado mostrado es exactamente ese — sin lógica cruzada.
+    it('estaSeleccionada refleja exactamente el campo seleccionada del backend, sin lógica propia', () => {
+      const vistaProyectoA = metrica('ia-metrica-3', 'Estado de ánimo', 'Socio-Humano FSH', {
+        codigo: 'IA-003', seleccionada: true
+      });
+      const vistaProyectoB = metrica('ia-metrica-3', 'Estado de ánimo', 'Socio-Humano FSH', {
+        codigo: 'IA-003', seleccionada: false
+      });
+
+      expect(component.estaSeleccionada(vistaProyectoA)).toBe(true);
+      expect(component.estaSeleccionada(vistaProyectoB)).toBe(false);
+    });
+
+    it('no permite volver a seleccionar una métrica ya seleccionada (la fila ya no está en el catálogo)', () => {
+      const yaSeleccionada = metrica('ia-metrica-4', 'Retrabajo', 'Impacto', {
+        codigo: 'IA-004', seleccionada: true, aprobada: false
+      });
+      component.metricas = [...CATALOGO_MOCK, yaSeleccionada];
+
+      const todas = component.categorias.flatMap(cat => component.metricasFiltradas(cat));
+      // Ya no hace falta ocultar el botón "Seleccionar": la fila entera se
+      // excluye del catálogo, así que no hay forma de intentar re-seleccionarla desde acá.
+      expect(todas.some(m => m.metricaId === 'ia-metrica-4')).toBe(false);
+    });
+
+    // ══════════════════════════════════════════════════════════════════════
+    // Revisión de Planeación — el catálogo (izquierda) deja de listar lo que
+    // el proyecto ACTUAL ya seleccionó, sin afectar el resto de las reglas:
+    // otro proyecto sigue viéndola disponible, y "Seleccionadas"/"Historial"
+    // (derecha) no cambian en absoluto.
+    // ══════════════════════════════════════════════════════════════════════
+
+    it('una métrica seleccionada por el proyecto actual NO aparece en metricasFiltradas(), aunque esté en la whitelist', () => {
+      const yaSeleccionadaEnEsteProyecto: ProyectoMetricaDto = {
+        ...CATALOGO_MOCK.find(m => m.metricaId === 'ec0d74fe-0bf4-4970-af89-dcaa0736c8ed')!, // Defectos, whitelisteada
+        seleccionada: true,
+        aprobada: false
+      };
+      component.metricas = CATALOGO_MOCK.map(m =>
+        m.metricaId === 'ec0d74fe-0bf4-4970-af89-dcaa0736c8ed' ? yaSeleccionadaEnEsteProyecto : m
+      );
+
+      const todas = component.categorias.flatMap(cat => component.metricasFiltradas(cat));
+      expect(todas.some(m => m.metricaId === 'ec0d74fe-0bf4-4970-af89-dcaa0736c8ed')).toBe(false);
+    });
+
+    it('una métrica seleccionada por OTRO proyecto (seleccionada=false para este) SÍ aparece en metricasFiltradas()', () => {
+      const deOtroProyecto = metrica('ia-metrica-5', 'Métrica usada por otro proyecto', 'Impacto', {
+        codigo: 'IA-005', seleccionada: false, aprobada: false
+      });
+      component.metricas = [...CATALOGO_MOCK, deOtroProyecto];
+
+      const todas = component.categorias.flatMap(cat => component.metricasFiltradas(cat));
+      expect(todas.some(m => m.metricaId === 'ia-metrica-5')).toBe(true);
+    });
+
+    it('una métrica no seleccionada por nadie SÍ aparece en metricasFiltradas()', () => {
+      const sinUsar = CATALOGO_MOCK.find(m => m.metricaId === 'beb22a94-0e1b-496a-8b9e-a08a8f6d77c3')!; // Aprendizaje organizacional (FAT)
+      expect(sinUsar.seleccionada).toBe(false);
+
+      const todas = component.categorias.flatMap(cat => component.metricasFiltradas(cat));
+      expect(todas.some(m => m.metricaId === sinUsar.metricaId)).toBe(true);
+    });
+
+    it('el nuevo filtro no altera "Seleccionadas"/"Historial": siguen mostrando lo ya seleccionado en este proyecto', () => {
+      // Mismo caso que el test 3, repetido explícitamente acá para dejar constancia
+      // de que la exclusión en metricasFiltradas() no afecta a estos getters —
+      // no la usan, filtran this.metricas directamente.
+      expect(
+        component.historialSeleccionadas.some(m => m.metricaId === '20bcc976-ede7-40bd-aa51-e56511f9e32d')
+      ).toBe(true);
+      expect(
+        component.seleccionadasList.some(m => m.metricaId === '2345492b-16a3-464e-983d-0176c0f911c2')
+      ).toBe(true);
     });
   });
 });

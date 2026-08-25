@@ -201,6 +201,43 @@ describe('AIRetrospectiveComponent', () => {
     expect(component.alertMsg()).toContain('límite');
   });
 
+  it('debería manejar error 503 (servicio de IA no disponible) sin caer en el mensaje genérico', () => {
+    sprintService.listar.and.returnValue(of(mockSprints));
+    reportService.generateRetrospective.and.returnValue(
+      throwError(() => ({ status: 503, error: { error: 'No se pudo generar la retrospectiva: el servicio de IA no respondió correctamente. Intenta nuevamente en unos segundos.' } }))
+    );
+
+    fixture.detectChanges();
+
+    component.selectedSprintId = 'sprint-2';
+    component.generateRetrospective();
+
+    expect(component.retrospective).toBeNull(); // no se fabrica una retrospectiva falsa
+    expect(component.generating()).toBe(false); // el usuario puede reintentar
+    expect(component.alertMsg()).toContain('servicio de IA no respondió correctamente');
+  });
+
+  it('debería permitir reintentar después de un 503 y generar correctamente', () => {
+    sprintService.listar.and.returnValue(of(mockSprints));
+    reportService.generateRetrospective.and.returnValue(
+      throwError(() => ({ status: 503, error: { error: 'El servicio de IA no está disponible en este momento.' } }))
+    );
+
+    fixture.detectChanges();
+    component.selectedSprintId = 'sprint-2';
+    component.generateRetrospective();
+
+    expect(component.retrospective).toBeNull();
+    expect(component.generating()).toBe(false);
+
+    // Reintento: ahora Gemini responde bien.
+    reportService.generateRetrospective.and.returnValue(of(mockRetro));
+    component.generateRetrospective();
+
+    expect(component.retrospective).toEqual(mockRetro);
+    expect(component.generating()).toBe(false);
+  });
+
   it('debería detectar datos insuficientes', () => {
     const retroWithInsufficientData: AIRetrospective = {
       ...mockRetro,

@@ -31,6 +31,44 @@ public class GlobalExceptionHandler {
         return buildResponse(HttpStatus.BAD_REQUEST, ex.getMessage());
     }
 
+    /**
+     * FASE 19: Gemini no pudo generar una propuesta de métrica con IA (503/429/
+     * timeout/respuesta no parseable). HTTP 503 refleja que la dependencia externa
+     * (Gemini) no está disponible en este momento — nunca se traduce en un 200
+     * con una propuesta disfrazada de válida.
+     */
+    @ExceptionHandler(com.mpdia.service.PropuestaIANoDisponibleException.class)
+    public ResponseEntity<Map<String, Object>> handlePropuestaIANoDisponible(
+            com.mpdia.service.PropuestaIANoDisponibleException ex) {
+        log.warn("Propuesta de IA no disponible: {}", ex.getMessage());
+        return buildResponse(HttpStatus.SERVICE_UNAVAILABLE, ex.getMessage());
+    }
+
+    /**
+     * FASE 23: Gemini no pudo generar un reporte ejecutivo de sprint (error
+     * HTTP del proveedor, cuota agotada, respuesta vacía o no interpretable).
+     * HTTP 503 refleja que la dependencia externa (Gemini) no está disponible
+     * en este momento — nunca se traduce en un 200 con un reporte disfrazado
+     * de válido. Ver AIReportService.generateReport().
+     */
+    @ExceptionHandler(com.mpdia.service.ReporteIANoDisponibleException.class)
+    public ResponseEntity<Map<String, Object>> handleReporteIANoDisponible(
+            com.mpdia.service.ReporteIANoDisponibleException ex) {
+        log.warn("Reporte de IA no disponible: {}", ex.getMessage());
+        return buildResponse(HttpStatus.SERVICE_UNAVAILABLE, ex.getMessage());
+    }
+
+    /**
+     * FASE 24: mismo defecto que ReporteIANoDisponibleException (FASE 23),
+     * confirmado en vivo para AIRetrospectiveService.generateRetrospective().
+     */
+    @ExceptionHandler(com.mpdia.service.RetrospectivaIANoDisponibleException.class)
+    public ResponseEntity<Map<String, Object>> handleRetrospectivaIANoDisponible(
+            com.mpdia.service.RetrospectivaIANoDisponibleException ex) {
+        log.warn("Retrospectiva de IA no disponible: {}", ex.getMessage());
+        return buildResponse(HttpStatus.SERVICE_UNAVAILABLE, ex.getMessage());
+    }
+
     /** Conflictos de estado (IllegalStateException) */
     @ExceptionHandler(IllegalStateException.class)
     public ResponseEntity<Map<String, Object>> handleConflict(IllegalStateException ex) {

@@ -9,6 +9,7 @@ import { MetricsOverviewCardComponent } from '../../components/dashboard/metrics
 import { RisksAlertsCardComponent } from '../../components/dashboard/risks-alerts-card/risks-alerts-card.component';
 import { InsightsQuickViewComponent } from '../../components/dashboard/insights-quick-view/insights-quick-view.component';
 import { QuickActionsPanelComponent } from '../../components/dashboard/quick-actions-panel/quick-actions-panel.component';
+import { RetrospectivePanelComponent } from '../../components/dashboard/retrospective-panel/retrospective-panel.component';
 import { AnalyticsService } from '../../services/analytics.service';
 import { AIInsightsService } from '../../services/ai-insights.service';
 import { SprintService } from '../../services/sprint.service';
@@ -41,7 +42,8 @@ type DashboardState = 'loading' | 'success' | 'empty' | 'insufficient-data' | 'e
     MetricsOverviewCardComponent,
     RisksAlertsCardComponent,
     InsightsQuickViewComponent,
-    QuickActionsPanelComponent
+    QuickActionsPanelComponent,
+    RetrospectivePanelComponent
   ],
   templateUrl: './dashboard.component.html',
   styleUrl: './dashboard.component.css'

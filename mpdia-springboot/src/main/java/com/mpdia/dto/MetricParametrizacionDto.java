@@ -24,5 +24,9 @@ public record MetricParametrizacionDto(
     UUID    proyectoId,
     Instant createdAt,
     String  propuestaIAJson,
-    String  configuracionAprobadaJson
+    String  configuracionAprobadaJson,
+    String  fuenteAcademica,
+    String  formulaAcademica,
+    String  tipoOperacion,
+    String  unidadResultado
 ) {}

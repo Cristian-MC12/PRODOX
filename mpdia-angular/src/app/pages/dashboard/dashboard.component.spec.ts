@@ -121,7 +121,11 @@ describe('DashboardComponent', () => {
       'getProjectInsights',
       'generateInsights'
     ]);
-    mockSprintService = jasmine.createSpyObj('SprintService', ['getActivo']);
+    // 'listar' es necesario porque Dashboard ahora incluye <app-retrospective-panel>,
+    // que llama a SprintService.listar() en su propio ngOnInit para poblar el
+    // selector de sprints finalizados (panel autocontenido, no orquestado por Dashboard).
+    mockSprintService = jasmine.createSpyObj('SprintService', ['getActivo', 'listar']);
+    mockSprintService.listar.and.returnValue(of([]));
 
     await TestBed.configureTestingModule({
       imports: [

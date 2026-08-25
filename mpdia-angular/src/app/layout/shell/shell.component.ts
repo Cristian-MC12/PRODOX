@@ -2,7 +2,6 @@
 import { Component, Input, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { SidebarComponent } from '../sidebar/sidebar.component';
-import { AICopilotComponent } from '../../components/ai-copilot/ai-copilot.component';
 import { SprintService } from '../../services/sprint.service';
 import { ProyectoDto } from '../../models/proyecto.model';
 import { SprintDto } from '../../models/sprint.model';
@@ -11,7 +10,7 @@ import { catchError, of } from 'rxjs';
 @Component({
   selector: 'app-shell',
   standalone: true,
-  imports: [CommonModule, SidebarComponent, AICopilotComponent],
+  imports: [CommonModule, SidebarComponent],
   template: `
     <div class="d-flex">
       <app-sidebar #sidebar></app-sidebar>
@@ -30,7 +29,7 @@ import { catchError, of } from 'rxjs';
         @if (showBanner && proyecto) {
           <div class="px-3 pt-2">
             <div class="alert alert-primary py-2 mb-0 d-flex align-items-center gap-3 flex-wrap"
-                 style="font-size:0.82rem;border-radius:8px">
+                 style="font-size:var(--text-sm)">
               <div class="d-flex align-items-center gap-2">
                 <i class="bi bi-folder2-open text-primary"></i>
                 <strong>{{ proyecto.nombre }}</strong>
@@ -65,8 +64,14 @@ import { catchError, of } from 'rxjs';
       </div>
     </div>
 
-    <!-- AI Copilot (flotante) -->
-    <app-ai-copilot></app-ai-copilot>
+    <!-- AI Copilot deshabilitado (reorganización de navegación): el Copiloto
+         no se usa en esta versión y sus preguntas abiertas podían generar
+         consumo innecesario de cuota de Gemini durante pruebas con múltiples
+         equipos. Componente AICopilotComponent preservado sin cambios en
+         components/ai-copilot/ — solo se dejó de instanciar aquí, que era el
+         único punto de la app que lo montaba. Al no instanciarse, su
+         ngOnInit/sendMessage nunca corren, por lo que no puede disparar
+         ninguna llamada a Gemini desde la interfaz. -->
   `
 })
 export class ShellComponent implements OnInit {

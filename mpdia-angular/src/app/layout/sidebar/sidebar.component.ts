@@ -15,21 +15,21 @@ import { filter, Subscription } from 'rxjs';
 
       <!-- Brand -->
       <a routerLink="/" class="sidebar-brand">
-        <i class="bi bi-speedometer2 me-2"></i>MPDIA
+        <i class="bi bi-speedometer2 me-2"></i>PRODOX AI
       </a>
 
       <!-- Proyecto activo -->
       @if (proyectoActivo()) {
         <div class="px-3 pb-2">
-          <div class="small text-muted" style="font-size:0.7rem">Proyecto activo:</div>
+          <div class="small text-muted" style="font-size:var(--text-xs)">Proyecto activo:</div>
           <div class="small fw-semibold text-truncate">{{ proyectoActivo()!.nombre }}</div>
           <div class="d-flex gap-1 mt-1 flex-wrap">
             <span class="badge"
                   [class]="proyectoActivo()!.metodo === 'scrum' ? 'bg-primary' : 'bg-info text-dark'"
-                  style="font-size:0.6rem">
+                  style="font-size:var(--text-3xs)">
               {{ proyectoActivo()!.metodo === 'scrum' ? 'Scrum' : 'XP' }}
             </span>
-            <span class="badge bg-light text-dark border" style="font-size:0.6rem">
+            <span class="badge bg-light text-dark border" style="font-size:var(--text-3xs)">
               {{ proyectoActivo()!.numeroSprints }} sprints
             </span>
           </div>
@@ -47,6 +47,13 @@ import { filter, Subscription } from 'rxjs';
 
       <!-- Nav links -->
       <ul class="nav flex-column mt-1 flex-grow-1">
+        <!-- Separador Proyecto -->
+        <li class="nav-item px-3 pt-1">
+          <small class="text-muted text-uppercase" style="font-size:var(--text-2xs);letter-spacing:.05em">
+            Proyecto
+          </small>
+        </li>
+
         <!-- Proyectos siempre visible -->
         <li class="nav-item">
           <a class="nav-link" routerLink="/proyectos" routerLinkActive="active" (click)="close()">
@@ -54,10 +61,17 @@ import { filter, Subscription } from 'rxjs';
           </a>
         </li>
 
+        <!-- Equipo: inmediatamente debajo de Proyectos (reorganización de navegación) -->
+        <li class="nav-item">
+          <a class="nav-link" routerLink="/equipo" routerLinkActive="active" (click)="close()">
+            <i class="bi bi-people"></i>Equipo
+          </a>
+        </li>
+
         @if (proyectoActivo()) {
           <!-- Separador de fase -->
           <li class="nav-item px-3 pt-2">
-            <small class="text-muted text-uppercase" style="font-size:0.65rem;letter-spacing:.05em">
+            <small class="text-muted text-uppercase" style="font-size:var(--text-2xs);letter-spacing:.05em">
               Fases del proyecto
             </small>
           </li>
@@ -85,7 +99,7 @@ import { filter, Subscription } from 'rxjs';
 
           <!-- Separador IA -->
           <li class="nav-item px-3 pt-2">
-            <small class="text-muted text-uppercase" style="font-size:0.65rem;letter-spacing:.05em">
+            <small class="text-muted text-uppercase" style="font-size:var(--text-2xs);letter-spacing:.05em">
               Análisis IA
             </small>
           </li>
@@ -97,12 +111,10 @@ import { filter, Subscription } from 'rxjs';
             </a>
           </li>
 
-          <li class="nav-item">
-            <a class="nav-link" routerLink="/ai-insights" routerLinkActive="active" (click)="close()">
-              <i class="bi bi-stars"></i>
-              <span>AI Insights</span>
-            </a>
-          </li>
+          <!-- AI Insights: sin entrada propia (reorganización de navegación) —
+               su funcionalidad ya está integrada en Dashboard vía
+               app-insights-quick-view. Ruta /ai-insights preservada e intacta,
+               solo dejó de listarse aquí. -->
 
           <li class="nav-item">
             <a class="nav-link" routerLink="/ai-report" routerLinkActive="active" (click)="close()">
@@ -111,36 +123,22 @@ import { filter, Subscription } from 'rxjs';
             </a>
           </li>
 
-          <li class="nav-item">
-            <a class="nav-link" routerLink="/ai-retrospective" routerLinkActive="active" (click)="close()">
-              <i class="bi bi-arrow-repeat"></i>
-              <span>Retrospectivas</span>
-            </a>
-          </li>
-
-          <!-- Separador general -->
-          <li class="nav-item px-3 pt-2">
-            <small class="text-muted text-uppercase" style="font-size:0.65rem;letter-spacing:.05em">
-              General
-            </small>
-          </li>
-
-          <li class="nav-item">
-            <a class="nav-link" routerLink="/equipo" routerLinkActive="active" (click)="close()">
-              <i class="bi bi-people"></i>Equipo
-            </a>
-          </li>
+          <!-- Retrospectivas: sin entrada propia (reorganización de navegación) —
+               su acceso ahora vive dentro de Dashboard (app-retrospective-panel).
+               Ruta /ai-retrospective preservada e intacta, solo dejó de listarse aquí. -->
         }
 
-        <li class="nav-item">
-          <a class="nav-link" routerLink="/configuracion" routerLinkActive="active" (click)="close()">
-            <i class="bi bi-robot"></i>Copiloto
-          </a>
-        </li>
+        <!-- Copiloto deshabilitado (no se usa en esta versión): entrada de menú
+             removida. La ruta /configuracion (config. de sincronización del
+             Copiloto) se preserva intacta, solo queda inaccesible desde la
+             navegación. -->
       </ul>
 
       <!-- User / logout -->
       <div class="border-top p-3">
+        <small class="text-muted text-uppercase d-block mb-2" style="font-size:var(--text-2xs);letter-spacing:.05em">
+          General
+        </small>
         <div class="d-flex align-items-center gap-2 mb-2">
           <i class="bi bi-person-circle text-secondary"></i>
           <small class="text-muted text-truncate" style="max-width:160px">

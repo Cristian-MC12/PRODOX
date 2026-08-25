@@ -88,6 +88,20 @@ describe('AuthService', () => {
     expect(routerSpy.navigate).toHaveBeenCalledWith(['/auth']);
   });
 
+  // Corrección: un proyecto activo que ya no existe (o ya no es del usuario)
+  // no debe sobrevivir a un logout — si no, el siguiente login vuelve a
+  // apuntar a ese mismo proyecto inválido y las llamadas que dependen de él
+  // (ej. GET /sprints/{proyectoId}/activo) devuelven 403 apenas se entra.
+  it('logout: debe limpiar también el proyecto activo en localStorage', () => {
+    localStorage.setItem('mpdia_token', 'algún_token');
+    localStorage.setItem('mpdia_user', JSON.stringify(mockResponse));
+    localStorage.setItem('mpdia_proyecto_activo', JSON.stringify({ id: 'proyecto-eliminado' }));
+
+    service.logout();
+
+    expect(localStorage.getItem('mpdia_proyecto_activo')).toBeNull();
+  });
+
   // ── getToken ────────────────────────────────────────────────────────────
 
   it('getToken: retorna el token almacenado en localStorage', () => {

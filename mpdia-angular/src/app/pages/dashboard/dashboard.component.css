@@ -1,12 +1,12 @@
 /* Autor: Cristian Santiago Martinez Cordoba — MPDIA */
 
 .card {
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  box-shadow: var(--shadow-sm);
   transition: box-shadow 0.2s ease;
 }
 
 .card:hover {
-  box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+  box-shadow: var(--shadow-md);
 }
 
 .bg-light {
@@ -15,11 +15,6 @@
 
 .border-start {
   border-left-width: 4px !important;
-}
-
-.display-1 {
-  font-size: 4rem;
-  opacity: 0.7;
 }
 
 .gap-2 {
@@ -41,9 +36,3 @@
   }
 }
 
-/* Responsive adjustments */
-@media (max-width: 768px) {
-  .display-1 {
-    font-size: 3rem;
-  }
-}

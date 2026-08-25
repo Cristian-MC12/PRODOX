@@ -61,10 +61,24 @@ public class AIReportService {
         
         // 4. Construir contexto para Gemini
         String context = buildReportContext(sprint, metricas, insights);
-        
+
         // 5. Generar interpretación con Gemini
-        String geminiResponse = geminiService.generate(buildReportPrompt(context));
-        
+        // FASE 23: a diferencia de getSprintMetrics/getSprintInsights (que sí
+        // degradan con valores por defecto), esta llamada NO tenía try/catch —
+        // cualquier fallo de Gemini (cuota agotada, HTTP error, red, texto
+        // vacío — ver GeminiService.generate()) se propagaba sin capturar y
+        // terminaba como un HTTP 500 opaco (causa raíz confirmada en FASE 22
+        // con un 429 RESOURCE_EXHAUSTED real de la API de Gemini).
+        String geminiResponse;
+        try {
+            geminiResponse = geminiService.generate(buildReportPrompt(context));
+        } catch (Exception e) {
+            log.error("Gemini falló generando reporte para sprint {}: {}", sprintId, e.getMessage(), e);
+            throw new ReporteIANoDisponibleException(
+                    "No se pudo generar el reporte: el servicio de IA no respondió correctamente. Intenta nuevamente en unos segundos.",
+                    e);
+        }
+
         // 6. Parsear respuesta
         ReportContent content = parseReportResponse(geminiResponse);
         
@@ -175,27 +189,31 @@ public class AIReportService {
     }
     
     private ReportContent parseReportResponse(String response) {
-        try {
-            String resumen = extractSection(response, "RESUMEN:", "HIGHLIGHTS:");
-            List<String> highlights = extractList(response, "HIGHLIGHTS:", "CONCERNS:");
-            List<String> concerns = extractList(response, "CONCERNS:", "RECOMENDACIONES:");
-            String recomendaciones = extractSection(response, "RECOMENDACIONES:", null);
-            
-            return new ReportContent(
-                    resumen != null ? resumen : "Datos insuficientes para generar resumen",
-                    highlights,
-                    concerns,
-                    recomendaciones != null ? recomendaciones : "No se pudieron generar recomendaciones"
-            );
-        } catch (Exception e) {
-            log.warn("Error parseando respuesta de Gemini: {}", e.getMessage());
-            return new ReportContent(
-                    "Error procesando el reporte",
-                    List.of("No se pudo procesar la respuesta de IA"),
-                    List.of(),
-                    "Intente generar el reporte nuevamente"
-            );
+        String resumen = extractSection(response, "RESUMEN:", "HIGHLIGHTS:");
+        List<String> highlights = extractList(response, "HIGHLIGHTS:", "CONCERNS:");
+        List<String> concerns = extractList(response, "CONCERNS:", "RECOMENDACIONES:");
+        String recomendaciones = extractSection(response, "RECOMENDACIONES:", null);
+
+        // FASE 23: si NINGUNA de las 4 secciones esperadas aparece en la
+        // respuesta, Gemini no siguió el formato solicitado — no es el caso
+        // legítimo de "datos insuficientes" (que Gemini sí reporta dentro de
+        // RESUMEN: siguiendo el formato pedido), sino una respuesta que no se
+        // puede interpretar. Antes esto se disfrazaba de reporte válido con
+        // texto de relleno ("Error procesando el reporte"); ahora se trata
+        // igual que un fallo de Gemini: no se persiste nada (este servicio
+        // nunca persiste) y no se le muestra al usuario un reporte falso.
+        if (resumen == null && highlights.isEmpty() && concerns.isEmpty() && recomendaciones == null) {
+            throw new ReporteIANoDisponibleException(
+                    "La IA devolvió una respuesta que no se pudo interpretar. Intenta generar el reporte nuevamente.",
+                    null);
         }
+
+        return new ReportContent(
+                resumen != null ? resumen : "Datos insuficientes para generar resumen",
+                highlights,
+                concerns,
+                recomendaciones != null ? recomendaciones : "No se pudieron generar recomendaciones"
+        );
     }
     
     private String extractSection(String response, String startMarker, String endMarker) {

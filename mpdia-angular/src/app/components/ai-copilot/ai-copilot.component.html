@@ -38,8 +38,8 @@
       </div>
     }
 
-    <!-- Sugerencias rápidas (solo cuando no hay conversación) -->
-    @if (messages.length === 1 && !loading()) {
+    <!-- Sugerencias rápidas: al inicio, o de nuevo tras una respuesta fuera de dominio -->
+    @if (shouldShowQuickPrompts) {
       <div class="quick-prompts">
         <small class="text-muted d-block mb-2">
           <i class="bi bi-lightbulb me-1"></i>

@@ -12,6 +12,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -157,6 +158,27 @@ public class VariableDinamicaService {
                 throw new IllegalStateException("indicadorVariable no está definido en la parametrización");
             }
 
+            // FASE 17 (corrección del defecto documentado): valida la longitud de cada
+            // nombre ANTES de persistir, reutilizando el mismo límite (120, columna
+            // variables.nombre VARCHAR(120)) y el mismo tipo de excepción
+            // (NombreVariableInvalidoException) que ya usa ParametrizacionService para
+            // esta misma situación. Antes, un indicadorVariable demasiado largo (frecuente
+            // en propuestas de IA, que describen el indicador en prosa) llegaba sin
+            // validar hasta variableRepo.save(...), donde fallaba con
+            // DataIntegrityViolationException — error que MetricRankingService.verificar()
+            // solo registraba en log, dejando la parametrización marcada "aprobada" sin
+            // variable funcional y sin aviso alguno al Scrum Master.
+            for (String nombreVar : nombresVariables) {
+                if (nombreVar.length() > 120) {
+                    throw new NombreVariableInvalidoException(
+                        "El campo \"Indicador y Variables\" contiene el valor \"" +
+                        (nombreVar.length() > 60 ? nombreVar.substring(0, 60) + "..." : nombreVar) +
+                        "\" con " + nombreVar.length() + " caracteres, que excede el máximo de 120 " +
+                        "permitido para el nombre técnico de la variable. Rechace esta parametrización " +
+                        "indicando este motivo para que se acorte el indicador antes de reenviarla.");
+                }
+            }
+
             List<Variable> resultado = new ArrayList<>();
             for (String nombreVar : nombresVariables) {
                 Variable variable = new Variable();
@@ -178,6 +200,11 @@ public class VariableDinamicaService {
             }
             return resultado;
 
+        } catch (NombreVariableInvalidoException e) {
+            // No envolver: debe propagarse tal cual (es un IllegalArgumentException,
+            // GlobalExceptionHandler ya la mapea a HTTP 400 con mensaje claro) en vez
+            // de perderse dentro de un RuntimeException genérico de "parseo".
+            throw e;
         } catch (Exception e) {
             throw new RuntimeException("Error parseando configuración aprobada: " + e.getMessage(), e);
         }
@@ -224,7 +251,8 @@ public class VariableDinamicaService {
             variable.getEscalaMax(),
             ultimoRegistro != null ? ultimoRegistro.getValorNum() : null,
             ultimoRegistro != null ? ultimoRegistro.getValorTexto() : null,
-            ultimoRegistro != null ? ultimoRegistro.getValorBool() : null
+            ultimoRegistro != null ? ultimoRegistro.getValorBool() : null,
+            variable.getFrecuenciaCaptura()
         );
     }
 
@@ -297,12 +325,26 @@ public class VariableDinamicaService {
     /**
      * Guarda o actualiza un registro de valor (FASE 16.11: único camino de
      * escritura, ver EjecucionService.guardarOActualizarValor()).
+     *
+     * FASE 16: si el request trae fechaCaptura explícita, se parsea y se
+     * propaga a la sobrecarga aditiva de EjecucionService — misma variable +
+     * sprint + fecha actualiza esa captura; fecha distinta crea una nueva.
+     * Sin fechaCaptura, comportamiento idéntico al existente (Instant.now()).
+     *
+     * Revisión de Ejecución: registroId (opcional) se propaga tal cual —
+     * null es "captura nueva" (sin cambios); informado, identifica de forma
+     * inequívoca la fila que se está editando, ver EjecucionService.
      */
     private void guardarRegistroValor(Variable variable, Sprint sprint, String userId,
                                       GuardarValoresRequest.ValorVariable valorRequest) {
+        Instant fechaCaptura = valorRequest.fechaCaptura() != null && !valorRequest.fechaCaptura().isBlank()
+            ? Instant.parse(valorRequest.fechaCaptura())
+            : null;
+
         ejecucionService.guardarOActualizarValor(
             variable, sprint.getId(), userId,
             valorRequest.valorNum(), valorRequest.valorTexto(),
-            valorRequest.valorBool(), valorRequest.observacion());
+            valorRequest.valorBool(), valorRequest.observacion(), fechaCaptura,
+            valorRequest.registroId());
     }
 }

@@ -1,0 +1,70 @@
+# ============================================================
+# SCRIPT HTTP: Crear parametrización SIG-SC-02 mediante API REST
+# Métrica: Problemas reportados por el cliente
+# Fase: 16.9.3-B E2E
+# ============================================================
+
+### PASO 1: Login (obtener JWT token)
+POST http://localhost:8080/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "sm9130109@gmail.com",
+  "password": "tu_password_aqui"
+}
+
+### PASO 2: Verificar que existe la métrica SIG-SC-02
+# Usar el token obtenido en PASO 1
+GET http://localhost:8080/api/metricas
+Authorization: Bearer {{token}}
+
+### PASO 3: Obtener ID del proyecto "Trabajo 1"
+GET http://localhost:8080/api/proyectos
+Authorization: Bearer {{token}}
+
+### PASO 4: Generar propuesta de parametrización con Gemini
+POST http://localhost:8080/api/parametrizacion/generar-propuestas
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "factorNombre": "Significado",
+  "factorCategoria": "Significado",
+  "metricaNombre": "SIG-SC-02 — Problemas reportados por el cliente",
+  "metricaDescripcion": "Mide la cantidad de problemas reportados por el cliente durante el sprint",
+  "proyectoId": "fce0340c-74f2-4219-a727-5bae4d842496"
+}
+
+### PASO 5: Guardar propuesta de parametrización (sin aprobar todavía)
+POST http://localhost:8080/api/parametrizacion/guardar-propuesta
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "metricaId": "2ba0cf34-0bec-4e7d-8dc5-40795f050ec9",
+  "proyectoId": "fce0340c-74f2-4219-a727-5bae4d842496",
+  "objetivo": "Medir la cantidad de problemas reportados por el cliente durante el sprint",
+  "procedimiento": "Suma de todos los problemas reportados por el cliente durante el sprint",
+  "indicadorVariable": "problemas_reportados",
+  "escala": "Numérica >= 0",
+  "frecuenciaCaptura": "por_sprint",
+  "propuestaIAJson": "{}"
+}
+
+### PASO 6: Aprobar parametrización
+# Usar el ID de parametrización retornado en PASO 5
+POST http://localhost:8080/api/parametrizacion/{{parametrizacionId}}/aprobar
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "objetivo": "Medir la cantidad de problemas reportados por el cliente durante el sprint",
+  "procedimiento": "Suma de todos los problemas reportados por el cliente durante el sprint",
+  "indicadorVariable": "problemas_reportados",
+  "escala": "Numérica >= 0",
+  "frecuenciaCaptura": "por_sprint"
+}
+
+### PASO 7: Verificar parametrización aprobada
+GET http://localhost:8080/api/parametrizacion/ultima-aprobada?metricaId=2ba0cf34-0bec-4e7d-8dc5-40795f050ec9&proyectoId=fce0340c-74f2-4219-a727-5bae4d842496
+Authorization: Bearer {{token}}

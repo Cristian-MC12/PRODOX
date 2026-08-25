@@ -1,18 +1,18 @@
 /* Autor: Cristian Santiago Martinez Cordoba — MPDIA */
 
 .metric-card {
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  box-shadow: var(--shadow-sm);
   transition: all 0.2s ease;
   border: none;
 }
 
 .metric-card:hover {
-  box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+  box-shadow: var(--shadow-md);
   transform: translateY(-2px);
 }
 
 .metric-value {
-  color: #0d6efd;
+  color: var(--brand);
   font-weight: 600;
 }
 

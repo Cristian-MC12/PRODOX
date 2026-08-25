@@ -2,7 +2,7 @@
 import { TestBed } from '@angular/core/testing';
 import { HttpClientTestingModule, HttpTestingController } from '@angular/common/http/testing';
 import { AIInsightsService } from './ai-insights.service';
-import { AIInsight } from '../models/ai-insights.model';
+import { AIInsight, GenerateInsightsResult } from '../models/ai-insights.model';
 import { environment } from '../../environments/environment';
 
 describe('AIInsightsService', () => {
@@ -106,25 +106,43 @@ describe('AIInsightsService', () => {
         }
       ];
 
-      service.generateInsights(proyectoId).subscribe(insights => {
-        expect(insights).toEqual(mockInsights);
+      const mockResultado: GenerateInsightsResult = {
+        insights: mockInsights,
+        status: 'COMPLETE',
+        senalesDetectadas: 1,
+        senalesNuevas: 1,
+        senalesOmitidasPorDuplicado: 0,
+        errores: []
+      };
+
+      service.generateInsights(proyectoId).subscribe(resultado => {
+        expect(resultado).toEqual(mockResultado);
       });
 
       const req = httpMock.expectOne(`${baseUrl}/generate/${proyectoId}`);
       expect(req.request.method).toBe('POST');
       expect(req.request.body).toEqual({});
-      req.flush(mockInsights);
+      req.flush(mockResultado);
     });
 
     it('should handle insufficient data gracefully', () => {
       const proyectoId = 'proyecto-new';
+      const mockResultado: GenerateInsightsResult = {
+        insights: [],
+        status: 'SIN_DATOS',
+        senalesDetectadas: 0,
+        senalesNuevas: 0,
+        senalesOmitidasPorDuplicado: 0,
+        errores: []
+      };
 
-      service.generateInsights(proyectoId).subscribe(insights => {
-        expect(insights).toEqual([]);
+      service.generateInsights(proyectoId).subscribe(resultado => {
+        expect(resultado.insights).toEqual([]);
+        expect(resultado.status).toBe('SIN_DATOS');
       });
 
       const req = httpMock.expectOne(`${baseUrl}/generate/${proyectoId}`);
-      req.flush([]);
+      req.flush(mockResultado);
     });
 
     it('should handle generation error', () => {

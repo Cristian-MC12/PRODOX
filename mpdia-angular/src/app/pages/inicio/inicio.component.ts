@@ -16,7 +16,7 @@ import { CopilotConfig } from '../../models/copilot.model';
   template: `
     <app-shell title="Inicio">
       <div class="mb-4">
-        <h2 class="h5 fw-semibold">Bienvenido al sistema MPDIA</h2>
+        <h2 class="h5 fw-semibold">Bienvenido al sistema PRODOX AI</h2>
         <p class="text-muted small">
           Sistema de Medición de Productividad para equipos Scrum.
           Actualmente en la <strong>Fase de Planeación</strong>: definí cómo vas a medir

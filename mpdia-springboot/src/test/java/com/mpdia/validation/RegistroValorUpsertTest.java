@@ -17,6 +17,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
@@ -145,5 +146,79 @@ class RegistroValorUpsertTest {
             assertThat(r.getUserId()).isEqualTo("user-b");
             assertThat(r.getValorNum()).isEqualByComparingTo("2");
         });
+    }
+
+    /**
+     * Revisión de Ejecución — reproduce contra Postgres real el bug
+     * reportado: una variable 'por_sprint' con una captura ya registrada, al
+     * "Editar valor" y cambiar la fecha, el backend la rechazaba con "Ya
+     * existe un valor... en este sprint. Editá ese valor en vez de crear una
+     * captura nueva" — sobre el MISMO registro que se estaba editando.
+     * Verifica de punta a punta (con persistencia real, no mocks) que editar
+     * cambiando la fecha actualiza la ÚNICA fila existente.
+     */
+    @Test
+    void guardarOActualizarValor_editarPorSprintCambiandoFecha_actualizaLaMismaFilaSinDuplicar() {
+        Metrica metrica = metricaRepo.findById(METRICA_VEL).orElseThrow();
+        Variable variable = nuevaVariableGrupal(metrica, "variable_edicion_test_" + UUID.randomUUID());
+        // frecuenciaCaptura por defecto de Variable es 'por_sprint' (ver entidad).
+        UUID sprintId = nuevoSprintConRango(LocalDate.of(2026, 8, 17), LocalDate.of(2026, 8, 23));
+
+        Instant fechaOriginal = LocalDate.of(2026, 8, 23).atStartOfDay(java.time.ZoneOffset.UTC).toInstant();
+        Instant fechaEditada  = LocalDate.of(2026, 8, 20).atStartOfDay(java.time.ZoneOffset.UTC).toInstant();
+
+        RegistroValor primeraCaptura = ejecucionService.guardarOActualizarValor(
+            variable, sprintId, "user-test", new BigDecimal("3"), null, null, null,
+            fechaOriginal, null);
+
+        // "Editar valor": misma variable/sprint, cambia la fecha dentro del rango del sprint.
+        RegistroValor editada = ejecucionService.guardarOActualizarValor(
+            variable, sprintId, "user-test", new BigDecimal("4"), null, null, null,
+            fechaEditada, primeraCaptura.getId());
+
+        assertThat(editada.getId()).isEqualTo(primeraCaptura.getId()); // MISMA fila (UPDATE)
+        assertThat(editada.getRegistradoAt()).isEqualTo(fechaEditada);
+        assertThat(editada.getValorNum()).isEqualByComparingTo("4");
+
+        List<RegistroValor> registros =
+            registroRepo.findBySprintIdAndVariable_Id(sprintId, variable.getId());
+        assertThat(registros).hasSize(1); // sigue existiendo UNA sola fila, no dos
+        assertThat(registros.get(0).getRegistradoAt()).isEqualTo(fechaEditada);
+    }
+
+    @Test
+    void guardarOActualizarValor_editarPorSprintMoviendoFechaFueraDelSprint_seRechaza() {
+        Metrica metrica = metricaRepo.findById(METRICA_VEL).orElseThrow();
+        Variable variable = nuevaVariableGrupal(metrica, "variable_edicion_rango_test_" + UUID.randomUUID());
+        UUID sprintId = nuevoSprintConRango(LocalDate.of(2026, 8, 17), LocalDate.of(2026, 8, 23));
+
+        Instant fechaOriginal = LocalDate.of(2026, 8, 23).atStartOfDay(java.time.ZoneOffset.UTC).toInstant();
+        Instant fechaFueraDeRango = LocalDate.of(2026, 8, 25).atStartOfDay(java.time.ZoneOffset.UTC).toInstant();
+
+        RegistroValor captura = ejecucionService.guardarOActualizarValor(
+            variable, sprintId, "user-test", new BigDecimal("3"), null, null, null,
+            fechaOriginal, null);
+
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class, () ->
+            ejecucionService.guardarOActualizarValor(
+                variable, sprintId, "user-test", new BigDecimal("5"), null, null, null,
+                fechaFueraDeRango, captura.getId()));
+
+        List<RegistroValor> registros =
+            registroRepo.findBySprintIdAndVariable_Id(sprintId, variable.getId());
+        assertThat(registros).hasSize(1);
+        assertThat(registros.get(0).getRegistradoAt()).isEqualTo(fechaOriginal); // sin cambios
+        assertThat(registros.get(0).getValorNum()).isEqualByComparingTo("3");    // sin cambios
+    }
+
+    private UUID nuevoSprintConRango(LocalDate inicio, LocalDate fin) {
+        Sprint sprint = new Sprint();
+        sprint.setProyectoId(PROYECTO_1);
+        sprint.setNumero(numeroSprint.getAndIncrement());
+        sprint.setSprintGoal("Sprint sintético de test — RegistroValorUpsertTest (edición)");
+        sprint.setEstado("en_ejecucion");
+        sprint.setFechaInicio(inicio);
+        sprint.setFechaFin(fin);
+        return sprintRepo.saveAndFlush(sprint).getId();
     }
 }

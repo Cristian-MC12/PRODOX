@@ -11,6 +11,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -183,7 +184,8 @@ class AIRetrospectiveServiceTest {
         );
 
         when(analyticsService.getSprintMetricsSummary(sprintId)).thenReturn(summary);
-        when(analyticsService.compareSprints(sprintId, previousSprintId)).thenReturn(comparison);
+        // FASE 12.8: el orden correcto es (anterior, actual).
+        when(analyticsService.compareSprints(previousSprintId, sprintId)).thenReturn(comparison);
         when(insightsService.getProjectInsights(proyectoId, userId)).thenReturn(List.of());
         when(analyticsService.identifyRisks(proyectoId)).thenReturn(List.of());
 
@@ -208,7 +210,7 @@ class AIRetrospectiveServiceTest {
 
         assertThat(result).isNotNull();
         assertThat(result.whatWentWell()).anyMatch(item -> item.contains("12.5%"));
-        verify(analyticsService).compareSprints(sprintId, previousSprintId);
+        verify(analyticsService).compareSprints(previousSprintId, sprintId);
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -315,33 +317,139 @@ class AIRetrospectiveServiceTest {
     }
 
     // ═══════════════════════════════════════════════════════════════════════
-    // MANEJO DE ERRORES
+    // MANEJO DE ERRORES (FASE 24 — corrección del HTTP 500 opaco confirmado
+    // en vivo: mismo defecto que Reportes tenía antes de FASE 23)
     // ═══════════════════════════════════════════════════════════════════════
 
-    @Test
-    @DisplayName("generateRetrospective: error en Gemini genera retrospectiva con fallback")
-    void generateRetrospective_errorGemini_generaFallback() {
-        when(sprintRepository.findById(sprintId)).thenReturn(Optional.of(sprint));
-        when(projectMemberRepository.existsByProyectoIdAndUserId(proyectoId, userId)).thenReturn(true);
-        when(sprintRepository.findByProyectoIdOrderByNumeroDesc(proyectoId)).thenReturn(List.of(sprint));
-
-        SprintMetricsSummaryDto summary = new SprintMetricsSummaryDto(
+    private SprintMetricsSummaryDto summaryConDatos() {
+        return new SprintMetricsSummaryDto(
                 sprintId, 5, "Goal", "finalizado",
                 LocalDate.now().minusWeeks(2), LocalDate.now().minusWeeks(1),
                 14, Map.of("Calidad", BigDecimal.TEN), 10, true
         );
+    }
 
-        when(analyticsService.getSprintMetricsSummary(sprintId)).thenReturn(summary);
+    private void mockDatosBasicos() {
+        when(sprintRepository.findById(sprintId)).thenReturn(Optional.of(sprint));
+        when(projectMemberRepository.existsByProyectoIdAndUserId(proyectoId, userId)).thenReturn(true);
+        when(sprintRepository.findByProyectoIdOrderByNumeroDesc(proyectoId)).thenReturn(List.of(sprint));
+        when(analyticsService.getSprintMetricsSummary(sprintId)).thenReturn(summaryConDatos());
         when(insightsService.getProjectInsights(proyectoId, userId)).thenReturn(List.of());
         when(analyticsService.identifyRisks(proyectoId)).thenReturn(List.of());
-        when(geminiService.generate(anyString())).thenReturn("RESPUESTA INVALIDA");
+    }
+
+    @Test
+    @DisplayName("generateRetrospective: Gemini 429 (cuota agotada) -> RetrospectivaIANoDisponibleException, NO HTTP 500 opaco")
+    void generateRetrospective_gemini429_lanzaRetrospectivaIANoDisponible() {
+        mockDatosBasicos();
+        when(geminiService.generate(anyString()))
+                .thenThrow(new RuntimeException("Gemini error 429 TOO_MANY_REQUESTS: quota exceeded"));
+
+        assertThatThrownBy(() -> service.generateRetrospective(sprintId, userId))
+                .isInstanceOf(RetrospectivaIANoDisponibleException.class)
+                .hasMessageNotContaining("500")
+                .hasMessageContaining("Intenta nuevamente")
+                .hasCauseInstanceOf(RuntimeException.class);
+    }
+
+    @Test
+    @DisplayName("generateRetrospective: Gemini 503 (servicio no disponible) -> RetrospectivaIANoDisponibleException")
+    void generateRetrospective_gemini503_lanzaRetrospectivaIANoDisponible() {
+        mockDatosBasicos();
+        when(geminiService.generate(anyString()))
+                .thenThrow(new RuntimeException("Gemini error 503 SERVICE_UNAVAILABLE: overloaded"));
+
+        assertThatThrownBy(() -> service.generateRetrospective(sprintId, userId))
+                .isInstanceOf(RetrospectivaIANoDisponibleException.class);
+    }
+
+    @Test
+    @DisplayName("generateRetrospective: timeout/error inesperado de Gemini -> RetrospectivaIANoDisponibleException")
+    void generateRetrospective_timeoutInesperado_lanzaRetrospectivaIANoDisponible() {
+        mockDatosBasicos();
+        when(geminiService.generate(anyString()))
+                .thenThrow(new RuntimeException("Error al llamar Gemini: Read timed out"));
+
+        assertThatThrownBy(() -> service.generateRetrospective(sprintId, userId))
+                .isInstanceOf(RetrospectivaIANoDisponibleException.class);
+    }
+
+    @Test
+    @DisplayName("generateRetrospective: respuesta sin NINGÚN marcador reconocible -> RetrospectivaIANoDisponibleException, no fabrica una retrospectiva falsa")
+    void generateRetrospective_respuestaSinMarcadoresReconocibles_lanzaRetrospectivaIANoDisponible() {
+        mockDatosBasicos();
+        when(geminiService.generate(anyString())).thenReturn("RESPUESTA INVALIDA SIN FORMATO");
+
+        assertThatThrownBy(() -> service.generateRetrospective(sprintId, userId))
+                .isInstanceOf(RetrospectivaIANoDisponibleException.class)
+                .hasMessageContaining("no se pudo interpretar");
+    }
+
+    @Test
+    @DisplayName("generateRetrospective: fallo de Gemini no persiste ni retorna ninguna retrospectiva (falsa o real)")
+    void generateRetrospective_fallo_noPersisteNiRetornaNada() {
+        mockDatosBasicos();
+        when(geminiService.generate(anyString()))
+                .thenThrow(new RuntimeException("Gemini error 429 TOO_MANY_REQUESTS"));
+
+        assertThatThrownBy(() -> service.generateRetrospective(sprintId, userId))
+                .isInstanceOf(RetrospectivaIANoDisponibleException.class);
+        // AIRetrospectiveService nunca persiste (no hay repositorio de retrospectivas):
+        // el único requisito verificable es que ninguna excepción distinta a la
+        // dedicada escape y que no exista ningún otro efecto secundario además
+        // de la llamada a Gemini ya verificada arriba.
+    }
+
+    @Test
+    @DisplayName("generateRetrospective: reintento tras fallo de Gemini funciona correctamente")
+    void generateRetrospective_reintentoTrasFallo_funcionaCorrectamente() {
+        mockDatosBasicos();
+
+        String geminiResponseValido = """
+                WHAT WENT WELL:
+                - Sprint completado dentro del tiempo
+                WHAT COULD IMPROVE:
+                - Mejorar tracking
+                RISKS:
+                RECOMMENDATIONS:
+                - Continuar con las prácticas actuales
+                QUESTIONS FOR TEAM:
+                - ¿Qué aprendimos este sprint?
+                """;
+
+        when(geminiService.generate(anyString()))
+                .thenThrow(new RuntimeException("Gemini error 429 TOO_MANY_REQUESTS"))
+                .thenReturn(geminiResponseValido);
+
+        // Primer intento: falla de forma controlada
+        assertThatThrownBy(() -> service.generateRetrospective(sprintId, userId))
+                .isInstanceOf(RetrospectivaIANoDisponibleException.class);
+
+        // Segundo intento (reintento del usuario): funciona con normalidad,
+        // el servicio no arrastra estado del intento fallido (es stateless).
+        AIRetrospectiveDto result = service.generateRetrospective(sprintId, userId);
+        assertThat(result).isNotNull();
+        assertThat(result.whatWentWell()).anyMatch(item -> item.contains("Sprint completado"));
+
+        verify(geminiService, times(2)).generate(anyString());
+    }
+
+    @Test
+    @DisplayName("generateRetrospective: sección con marcador presente pero vacío (datos insuficientes real) sigue siendo exitosa, no se confunde con fallo de IA")
+    void generateRetrospective_marcadoresPresentesPeroVacios_sigueSiendoExitosa() {
+        mockDatosBasicos();
+        when(geminiService.generate(anyString())).thenReturn("""
+                WHAT WENT WELL:
+                WHAT COULD IMPROVE:
+                RISKS:
+                RECOMMENDATIONS:
+                QUESTIONS FOR TEAM:
+                """);
 
         AIRetrospectiveDto result = service.generateRetrospective(sprintId, userId);
 
         assertThat(result).isNotNull();
-        // El parseo defensivo retorna defaults cuando no encuentra las secciones
-        assertThat(result.whatWentWell()).isNotEmpty();
-        assertThat(result.recommendations()).isNotEmpty();
+        assertThat(result.whatWentWell().get(0)).contains("Datos insuficientes");
     }
 
     @Test
@@ -359,7 +467,8 @@ class AIRetrospectiveServiceTest {
         );
 
         when(analyticsService.getSprintMetricsSummary(sprintId)).thenReturn(summary);
-        when(analyticsService.compareSprints(sprintId, previousSprintId))
+        // FASE 12.8: el orden correcto es (anterior, actual).
+        when(analyticsService.compareSprints(previousSprintId, sprintId))
                 .thenThrow(new RuntimeException("Comparison error"));
         when(insightsService.getProjectInsights(proyectoId, userId)).thenReturn(List.of());
         when(analyticsService.identifyRisks(proyectoId)).thenReturn(List.of());
@@ -380,6 +489,121 @@ class AIRetrospectiveServiceTest {
         AIRetrospectiveDto result = service.generateRetrospective(sprintId, userId);
 
         assertThat(result).isNotNull();
-        verify(analyticsService).compareSprints(sprintId, previousSprintId);
+        verify(analyticsService).compareSprints(previousSprintId, sprintId);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // FASE 12.8 — Corrección de dirección temporal en compareSprints()
+    // Antes: compareSprints(sprintId, previousSprintId) → actual→anterior (invertido).
+    // Ahora: compareSprints(previousSprintId, sprintId) → anterior→actual (correcto).
+    // ═══════════════════════════════════════════════════════════════════════
+
+    @Test
+    @DisplayName("FASE 12.8: anterior=4, actual=3 → variación -25.00% DOWN, orden anterior→actual")
+    void generateRetrospective_anterior4Actual3_variacionMenos25PorcientoDown() {
+        when(sprintRepository.findById(sprintId)).thenReturn(Optional.of(sprint));
+        when(projectMemberRepository.existsByProyectoIdAndUserId(proyectoId, userId)).thenReturn(true);
+        when(sprintRepository.findByProyectoIdOrderByNumeroDesc(proyectoId))
+                .thenReturn(List.of(sprint, previousSprint));
+
+        SprintMetricsSummaryDto summary = new SprintMetricsSummaryDto(
+                sprintId, 5, "Goal", "finalizado",
+                LocalDate.now().minusWeeks(2), LocalDate.now().minusWeeks(1),
+                14, Map.of("Significado", new BigDecimal("3.00")), 10, true
+        );
+
+        // Refleja exactamente lo que AgileAnalyticsService.compareSprints(anterior, actual)
+        // calcularía para anterior=4.00, actual=3.00: (3-4)/4*100 = -25.00%.
+        SprintComparisonDto comparison = new SprintComparisonDto(
+                previousSprintId, 4, sprintId, 5,
+                Map.of("Significado", new BigDecimal("4.00")),
+                Map.of("Significado", new BigDecimal("3.00")),
+                Map.of("Significado", new BigDecimal("-1.00")),
+                Map.of("Significado", new BigDecimal("-25.00")),
+                Map.of("Significado", "DOWN"),
+                true
+        );
+
+        when(analyticsService.getSprintMetricsSummary(sprintId)).thenReturn(summary);
+        when(analyticsService.compareSprints(previousSprintId, sprintId)).thenReturn(comparison);
+        when(insightsService.getProjectInsights(proyectoId, userId)).thenReturn(List.of());
+        when(analyticsService.identifyRisks(proyectoId)).thenReturn(List.of());
+
+        ArgumentCaptor<String> promptCaptor = ArgumentCaptor.forClass(String.class);
+        when(geminiService.generate(promptCaptor.capture())).thenReturn("""
+                WHAT WENT WELL:
+                - N/A
+                WHAT COULD IMPROVE:
+                - N/A
+                RISKS:
+                RECOMMENDATIONS:
+                - N/A
+                QUESTIONS FOR TEAM:
+                - N/A
+                """);
+
+        service.generateRetrospective(sprintId, userId);
+
+        // Verifica explícitamente el orden correcto de argumentos (anterior, actual) y que
+        // NUNCA se llame con el orden invertido (actual, anterior) que tenía el bug.
+        verify(analyticsService).compareSprints(previousSprintId, sprintId);
+        verify(analyticsService, never()).compareSprints(sprintId, previousSprintId);
+
+        String prompt = promptCaptor.getValue();
+        assertThat(prompt).contains("-25.00");
+        assertThat(prompt).contains("DOWN");
+    }
+
+    @Test
+    @DisplayName("FASE 12.8: anterior=3, actual=4 → variación +33.33% UP, orden anterior→actual")
+    void generateRetrospective_anterior3Actual4_variacionMas33_33PorcientoUp() {
+        when(sprintRepository.findById(sprintId)).thenReturn(Optional.of(sprint));
+        when(projectMemberRepository.existsByProyectoIdAndUserId(proyectoId, userId)).thenReturn(true);
+        when(sprintRepository.findByProyectoIdOrderByNumeroDesc(proyectoId))
+                .thenReturn(List.of(sprint, previousSprint));
+
+        SprintMetricsSummaryDto summary = new SprintMetricsSummaryDto(
+                sprintId, 5, "Goal", "finalizado",
+                LocalDate.now().minusWeeks(2), LocalDate.now().minusWeeks(1),
+                14, Map.of("Significado", new BigDecimal("4.00")), 10, true
+        );
+
+        // anterior=3.00, actual=4.00: (4-3)/3*100 = +33.33%.
+        SprintComparisonDto comparison = new SprintComparisonDto(
+                previousSprintId, 4, sprintId, 5,
+                Map.of("Significado", new BigDecimal("3.00")),
+                Map.of("Significado", new BigDecimal("4.00")),
+                Map.of("Significado", new BigDecimal("1.00")),
+                Map.of("Significado", new BigDecimal("33.33")),
+                Map.of("Significado", "UP"),
+                true
+        );
+
+        when(analyticsService.getSprintMetricsSummary(sprintId)).thenReturn(summary);
+        when(analyticsService.compareSprints(previousSprintId, sprintId)).thenReturn(comparison);
+        when(insightsService.getProjectInsights(proyectoId, userId)).thenReturn(List.of());
+        when(analyticsService.identifyRisks(proyectoId)).thenReturn(List.of());
+
+        ArgumentCaptor<String> promptCaptor = ArgumentCaptor.forClass(String.class);
+        when(geminiService.generate(promptCaptor.capture())).thenReturn("""
+                WHAT WENT WELL:
+                - N/A
+                WHAT COULD IMPROVE:
+                - N/A
+                RISKS:
+                RECOMMENDATIONS:
+                - N/A
+                QUESTIONS FOR TEAM:
+                - N/A
+                """);
+
+        service.generateRetrospective(sprintId, userId);
+
+        verify(analyticsService).compareSprints(previousSprintId, sprintId);
+        verify(analyticsService, never()).compareSprints(sprintId, previousSprintId);
+
+        String prompt = promptCaptor.getValue();
+        assertThat(prompt).contains("33.33");
+        assertThat(prompt).contains("UP");
     }
 }

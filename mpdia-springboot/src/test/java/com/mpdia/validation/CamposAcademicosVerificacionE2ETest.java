@@ -106,7 +106,7 @@ class CamposAcademicosVerificacionE2ETest {
         GuardarParametrizacionRequest req = new GuardarParametrizacionRequest(
                 null, "objetivo test", "procedimiento test", indicadorVariable, "escala test",
                 null, proyectoId, metricaId,
-                tipoOperacion, formula, unidad, "fuente test FASE 11");
+                tipoOperacion, formula, unidad, "fuente test FASE 11", null);
 
         MetricParametrizacionDto guardado = rankingService.guardar(req, userEmail, userEmail);
         assertThat(guardado.status()).isEqualTo("pendiente");

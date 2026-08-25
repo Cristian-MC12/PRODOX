@@ -16,6 +16,8 @@ export interface VariableConValor {
   valorNum?: number;
   valorTexto?: string;
   valorBool?: boolean;
+  /** FASE 16 — diaria | semanal | por_sprint | ilimitada. */
+  frecuenciaCaptura?: string;
 }
 
 export interface VariablesMetricaResponse {
@@ -31,6 +33,21 @@ export interface ValorVariable {
   valorTexto?: string;
   valorBool?: boolean;
   observacion?: string;
+  /**
+   * FASE 16 — fecha de captura explícita (ISO-8601 instant, ej.
+   * "2026-08-21T00:00:00Z"). Opcional: si se omite, el backend usa
+   * Instant.now() (comportamiento previo, sin cambios). Permite registrar
+   * varias capturas de la misma variable dentro del mismo sprint sin que la
+   * fecha real del servidor las sustituya silenciosamente.
+   */
+  fechaCaptura?: string;
+  /**
+   * Revisión de Ejecución — id del RegistroValor que se está editando.
+   * Omitido/undefined = captura nueva (sin cambios). Informado = el backend
+   * actualiza SIEMPRE esa misma fila por ID y la excluye de la comprobación
+   * de duplicados por frecuencia, sin importar si la fecha cambió.
+   */
+  registroId?: string;
 }
 
 export interface GuardarValoresRequest {
