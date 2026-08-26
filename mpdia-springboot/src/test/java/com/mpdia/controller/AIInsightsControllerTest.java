@@ -3,6 +3,7 @@ package com.mpdia.controller;
 
 import com.mpdia.dto.ai.AIInsightDto;
 import com.mpdia.dto.ai.GenerateInsightsResultDto;
+import com.mpdia.security.JwtUtil;
 import com.mpdia.service.AIInsightsService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -33,6 +34,15 @@ class AIInsightsControllerTest {
 
     @MockBean
     AIInsightsService insightsService;
+
+    // FASE 16: @WebMvcTest solo carga el slice web — SecurityConfig (sí incluida
+    // por defecto) intenta construir el bean jwtAuthFilter, cuyo constructor
+    // requiere JwtUtil (un @Component fuera del slice web). Sin este mock, el
+    // ApplicationContext falla al arrancar para los 13 tests de esta clase.
+    // Ningún test aquí envía un header Authorization: Bearer, así que JwtAuthFilter
+    // nunca invoca a jwtUtil — no se necesita ningún stubbing sobre este mock.
+    @MockBean
+    JwtUtil jwtUtil;
 
     private UUID proyectoId;
     private UUID insightId;

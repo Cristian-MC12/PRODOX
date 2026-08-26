@@ -1,32 +1,74 @@
 /* Autor: Cristian Santiago Martinez Cordoba — MPDIA */
+/* FASE 9A — KPI protagonistas: valor grande, tarjeta suave, sin badges
+   de más. La primera métrica recibe un tratamiento destacado (color de
+   marca), igual que en la referencia visual proporcionada. */
 
-.metric-card {
+.kpi-tile {
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5) var(--space-4);
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: .4rem;
   box-shadow: var(--shadow-sm);
-  transition: all 0.2s ease;
-  border: none;
+  transition: box-shadow .2s ease, transform .2s ease;
 }
 
-.metric-card:hover {
+.kpi-tile:hover {
   box-shadow: var(--shadow-md);
   transform: translateY(-2px);
 }
 
-.metric-value {
-  color: var(--brand);
+.kpi-tile-label {
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: .05em;
   font-weight: 600;
+  color: var(--text-secondary);
 }
 
-.metric-interpretation {
-  margin-top: 0.25rem;
-  min-height: 1.2em;
+.kpi-tile-value {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 2.25rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.1;
 }
 
-.bg-light {
-  background-color: #f8f9fa !important;
+.kpi-tile-pill {
+  display: inline-flex;
+  align-self: flex-start;
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  padding: .25em .6em;
+  border-radius: 999px;
+}
+
+.kpi-tile-hero {
+  background: linear-gradient(135deg, var(--brand) 0%, var(--brand-hover) 100%);
+  box-shadow: var(--shadow-md);
+}
+
+.kpi-tile-hero .kpi-tile-label,
+.kpi-tile-hero .kpi-tile-value {
+  color: #fff;
+}
+
+.kpi-tile-hero .kpi-tile-pill {
+  background: rgba(255, 255, 255, .18);
+  color: #fff;
+}
+
+.kpi-tile-hero .bi-info-circle {
+  color: rgba(255, 255, 255, .8);
 }
 
 .bi-info-circle {
   opacity: 0.7;
+  font-size: .75em;
+  cursor: help;
   transition: opacity 0.2s ease;
 }
 

@@ -31,7 +31,7 @@ export const routes: Routes = [
     path: 'resumen-seleccion',
     canActivate: [authGuard, proyectoGuard],
     loadComponent: () => import('./pages/resumen-seleccion/resumen-seleccion.component').then(m => m.ResumenSeleccionComponent),
-    title: 'Resumen Selección — PRODOX AI'
+    title: 'Resumen de Selección — PRODOX AI'
   },
   {
     path: 'parametrizacion/:id',

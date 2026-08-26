@@ -46,4 +46,17 @@ export class MetricsOverviewCardComponent {
       return '🔴 Crítico';
     }
   }
+
+  /**
+   * FASE 9A — clase de color para el pill de interpretación, usando
+   * exactamente los mismos umbrales que getMetricInterpretation() (no es
+   * una escala nueva, solo un color para el mismo texto que ya se muestra).
+   */
+  getMetricTrendClass(valor: number): string {
+    if (valor >= 8.5) return 'bg-success-subtle text-success-emphasis';
+    if (valor >= 7.0) return 'bg-info-subtle text-info-emphasis';
+    if (valor >= 5.5) return 'bg-warning-subtle text-warning-emphasis';
+    if (valor >= 4.0) return 'bg-warning-subtle text-warning-emphasis';
+    return 'bg-danger-subtle text-danger-emphasis';
+  }
 }

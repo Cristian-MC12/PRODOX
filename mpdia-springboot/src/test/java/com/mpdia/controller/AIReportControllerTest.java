@@ -3,6 +3,7 @@ package com.mpdia.controller;
 
 import com.mpdia.dto.ai.AISprintReportDto;
 import com.mpdia.ratelimit.RateLimitService;
+import com.mpdia.security.JwtUtil;
 import com.mpdia.service.AIReportService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -39,6 +40,11 @@ class AIReportControllerTest {
 
     @MockBean
     RateLimitService rateLimitService;
+
+    // FASE 16: ver AIInsightsControllerTest — mismo motivo (JwtUtil ausente del
+    // slice @WebMvcTest, requerido por el bean jwtAuthFilter de SecurityConfig).
+    @MockBean
+    JwtUtil jwtUtil;
 
     private UUID sprintId;
     private String userId;
@@ -126,7 +132,11 @@ class AIReportControllerTest {
 
         mockMvc.perform(post("/api/ai/reports/sprint/{sprintId}/generate", sprintId)
                         .with(csrf()))
-                .andExpect(status().is5xxServerError());
+                // FASE 16: GlobalExceptionHandler.handleSecurityException() mapea
+                // SecurityException a 403 (no a un 5xx) — la aserción original nunca
+                // se había ejecutado de verdad porque el ApplicationContext fallaba
+                // antes de llegar a correr este test.
+                .andExpect(status().isForbidden());
 
         verify(reportService).generateReport(sprintId, userId);
     }
@@ -141,7 +151,9 @@ class AIReportControllerTest {
 
         mockMvc.perform(post("/api/ai/reports/sprint/{sprintId}/generate", sprintId)
                         .with(csrf()))
-                .andExpect(status().is5xxServerError());
+                // FASE 16: GlobalExceptionHandler.handleBadRequest() mapea
+                // IllegalArgumentException a 400 (no a un 5xx) — misma causa que arriba.
+                .andExpect(status().isBadRequest());
 
         verify(reportService).generateReport(sprintId, userId);
     }

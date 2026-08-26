@@ -9,6 +9,7 @@ import { AIReportService } from '../../services/ai-report.service';
 import { SprintService } from '../../services/sprint.service';
 import { AISprintReport } from '../../models/ai-reports.model';
 import { SprintDto } from '../../models/sprint.model';
+import { AIInsight } from '../../models/ai-insights.model';
 
 describe('AIReportComponent', () => {
   let component: AIReportComponent;
@@ -221,6 +222,156 @@ describe('AIReportComponent', () => {
     it('debería tener signal de generationStep', () => {
       expect(component.generationStep).toBeDefined();
       expect(typeof component.generationStep()).toBe('string');
+    });
+  });
+
+  // FASE 7C.2 — limpieza de Markdown en los insights embebidos del reporte
+  describe('presentación de insights embebidos (limpieza de Markdown — FASE 7C.2)', () => {
+    beforeEach(() => {
+      // ngOnInit dispara loadSprints() en el primer detectChanges(); estos
+      // tests no ejercitan esa carga, solo el renderizado de component.report.
+      sprintService.listar.and.returnValue(of([]));
+    });
+
+    const mockInsightSucio: AIInsight = {
+      id: 'insight-1',
+      proyectoId: 'proyecto-1',
+      sprintId: 'sprint-2',
+      type: 'RISK',
+      severity: 'HIGH',
+      title: '**Riesgo crítico** detectado',
+      description: 'Esto es --- una descripción con markdown crudo',
+      evidence: [],
+      recommendation: null,
+      confidence: 'MEDIUM',
+      dismissed: false,
+      createdAt: '2026-08-11T22:00:00Z',
+      dismissedAt: null
+    };
+
+    it('muestra el título y la descripción del insight sin marcadores Markdown crudos', () => {
+      component.report = { ...mockReport, insights: [mockInsightSucio] };
+      fixture.detectChanges();
+
+      const texto: string = fixture.nativeElement.textContent;
+      expect(texto).toContain('Riesgo crítico detectado');
+      expect(texto).not.toContain('**Riesgo crítico**');
+      expect(texto).not.toMatch(/---/);
+    });
+
+    it('no altera el texto de un insight que ya llega limpio', () => {
+      const insightLimpio: AIInsight = { ...mockInsightSucio, title: 'Riesgo estable', description: 'Sin cambios relevantes en el sprint.' };
+      component.report = { ...mockReport, insights: [insightLimpio] };
+      fixture.detectChanges();
+
+      const texto: string = fixture.nativeElement.textContent;
+      expect(texto).toContain('Riesgo estable');
+      expect(texto).toContain('Sin cambios relevantes en el sprint.');
+    });
+
+    it('no modifica la severidad ni otros metadatos del insight al limpiar el texto', () => {
+      component.report = { ...mockReport, insights: [mockInsightSucio] };
+      fixture.detectChanges();
+
+      const texto: string = fixture.nativeElement.textContent;
+      expect(texto).toContain('HIGH');
+      expect(component.report.insights[0].severity).toBe('HIGH');
+      expect(component.report.insights[0].title).toBe('**Riesgo crítico** detectado'); // el dato original en memoria no cambia, solo la presentación
+    });
+
+    it('no altera los textos estáticos de la sección de insights', () => {
+      component.report = { ...mockReport, insights: [mockInsightSucio] };
+      fixture.detectChanges();
+
+      const texto: string = fixture.nativeElement.textContent;
+      expect(texto).toContain('Insights Relacionados');
+    });
+  });
+
+  // FASE 7C.3 — limpieza de Markdown en el contenido de nivel de reporte
+  describe('presentación del contenido de nivel de reporte (limpieza de Markdown — FASE 7C.3)', () => {
+    beforeEach(() => {
+      sprintService.listar.and.returnValue(of([]));
+    });
+
+    it('resumenEjecutivo: se muestra sin ** y conserva el contenido semántico', () => {
+      component.report = {
+        ...mockReport,
+        resumenEjecutivo: '**El Sprint concluyó con una caída crítica y sostenida** en el Impacto del producto (20.00).'
+      };
+      fixture.detectChanges();
+
+      const texto: string = fixture.nativeElement.textContent;
+      expect(texto).not.toContain('**');
+      expect(texto).toContain('El Sprint concluyó con una caída crítica y sostenida en el Impacto del producto (20.00).');
+    });
+
+    it('highlights[]: Markdown crudo se muestra limpio y los elementos siguen siendo los mismos', () => {
+      component.report = {
+        ...mockReport,
+        highlights: ['**Calidad superior** al promedio', 'Productividad --- estable']
+      };
+      fixture.detectChanges();
+
+      const texto: string = fixture.nativeElement.textContent;
+      expect(texto).not.toContain('**Calidad superior**');
+      expect(texto).toContain('Calidad superior al promedio');
+      expect(texto).toContain('Productividad');
+      expect(texto).toContain('estable');
+      expect(component.report.highlights.length).toBe(2); // el array original no cambia
+    });
+
+    it('concerns[]: Markdown crudo se muestra limpio sin eliminar palabras del contenido', () => {
+      component.report = {
+        ...mockReport,
+        concerns: ['**Severa Desvalorización del Producto (Impacto):** la disminución del 75% representa una alerta crítica.']
+      };
+      fixture.detectChanges();
+
+      const texto: string = fixture.nativeElement.textContent;
+      expect(texto).not.toContain('**Severa Desvalorización del Producto (Impacto):**');
+      expect(texto).toContain('Severa Desvalorización del Producto (Impacto):');
+      expect(texto).toContain('la disminución del 75% representa una alerta crítica.');
+    });
+
+    it('recomendaciones: Markdown crudo se muestra limpio sin alterar el dato original en memoria', () => {
+      const sucio = '**Priorizar** la revisión del Product Backlog --- antes del próximo sprint.';
+      component.report = { ...mockReport, recomendaciones: sucio };
+      fixture.detectChanges();
+
+      const texto: string = fixture.nativeElement.textContent;
+      expect(texto).not.toContain('**Priorizar**');
+      expect(texto).toContain('Priorizar la revisión del Product Backlog');
+      expect(texto).toContain('antes del próximo sprint.');
+      expect(component.report.recomendaciones).toBe(sucio); // el dato original no se muta
+    });
+
+    it('no modifica severidad, métricas ni fechas del reporte al limpiar el contenido de nivel de reporte', () => {
+      component.report = {
+        ...mockReport,
+        resumenEjecutivo: '**Texto sucio**',
+        highlights: ['**Otro** texto sucio'],
+        concerns: ['Con --- separador'],
+        recomendaciones: '**Recomendación sucia**'
+      };
+      fixture.detectChanges();
+
+      expect(component.report.metricas).toEqual(mockReport.metricas);
+      expect(component.report.sprintNumero).toBe(mockReport.sprintNumero);
+      expect(component.report.fechaInicio).toBe(mockReport.fechaInicio);
+      expect(component.report.fechaFin).toBe(mockReport.fechaFin);
+      const texto: string = fixture.nativeElement.textContent;
+      expect(texto).toContain('8.50'); // valor de la métrica "Calidad", sin alterar
+    });
+
+    it('un reporte que ya llega limpio permanece exactamente igual', () => {
+      component.report = mockReport;
+      fixture.detectChanges();
+
+      const texto: string = fixture.nativeElement.textContent;
+      expect(texto).toContain(mockReport.resumenEjecutivo);
+      expect(texto).toContain(mockReport.highlights[0]);
+      expect(texto).toContain(mockReport.recomendaciones);
     });
   });
 });

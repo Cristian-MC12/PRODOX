@@ -158,25 +158,25 @@ public class VariableDinamicaService {
                 throw new IllegalStateException("indicadorVariable no está definido en la parametrización");
             }
 
-            // FASE 17 (corrección del defecto documentado): valida la longitud de cada
-            // nombre ANTES de persistir, reutilizando el mismo límite (120, columna
-            // variables.nombre VARCHAR(120)) y el mismo tipo de excepción
-            // (NombreVariableInvalidoException) que ya usa ParametrizacionService para
-            // esta misma situación. Antes, un indicadorVariable demasiado largo (frecuente
-            // en propuestas de IA, que describen el indicador en prosa) llegaba sin
-            // validar hasta variableRepo.save(...), donde fallaba con
-            // DataIntegrityViolationException — error que MetricRankingService.verificar()
+            // FASE 17 (corrección del defecto documentado): valida cada nombre ANTES de
+            // persistir, reutilizando el mismo tipo de excepción (NombreVariableInvalidoException)
+            // que ya usaba ParametrizacionService para esta misma situación. Antes, un
+            // indicadorVariable demasiado largo (frecuente en propuestas de IA, que describen
+            // el indicador en prosa) llegaba sin validar hasta variableRepo.save(...), donde
+            // fallaba con DataIntegrityViolationException — error que MetricRankingService.verificar()
             // solo registraba en log, dejando la parametrización marcada "aprobada" sin
             // variable funcional y sin aviso alguno al Scrum Master.
+            //
+            // FASE 13 (auditoría de Fase 12): esa validación solo comprobaba longitud, no
+            // formato — permitía que fragmentos de frase humana (ej. "Problemas reportados
+            // en el sprint") o mitades de un indicadorVariable con coma (ej. "...escala
+            // numérica de 1 a 5" + "donde 1 es muy bajo...") se persistieran como Variable.nombre
+            // sin ser identificadores técnicos. Se reemplaza por
+            // ParametrizacionService.validarNombreVariableIndividual(...) — exactamente la misma
+            // regla snake_case ya probada en ese servicio, sin duplicar el patrón con un segundo
+            // comportamiento independiente.
             for (String nombreVar : nombresVariables) {
-                if (nombreVar.length() > 120) {
-                    throw new NombreVariableInvalidoException(
-                        "El campo \"Indicador y Variables\" contiene el valor \"" +
-                        (nombreVar.length() > 60 ? nombreVar.substring(0, 60) + "..." : nombreVar) +
-                        "\" con " + nombreVar.length() + " caracteres, que excede el máximo de 120 " +
-                        "permitido para el nombre técnico de la variable. Rechace esta parametrización " +
-                        "indicando este motivo para que se acorte el indicador antes de reenviarla.");
-                }
+                ParametrizacionService.validarNombreVariableIndividual(nombreVar, indicadorVariable);
             }
 
             List<Variable> resultado = new ArrayList<>();

@@ -21,6 +21,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.*;
 
@@ -653,6 +654,70 @@ class AIInsightsServiceTest {
         assertThat(guardado.getTitulo()).isEqualTo("Caída sostenida de Impacto");
         assertThat(guardado.getDescripcion()).contains("bajó 75%");
         assertThat(guardado.getRecomendacion()).isNull(); // no inventa una recomendación que Gemini no dio
+    }
+
+    // ── FASE 8B: recommendation de insights RISK debe limpiar Markdown ─────
+    // A diferencia de TREND/ANOMALY/COMPARISON (que usan parseTrendResponse,
+    // el cual ya invoca limpiarMarkdown en título/descripción/recomendación),
+    // RISK arma título y descripción de forma determinística a partir de
+    // RiskDto (nunca pasan por Gemini) y solo la recomendación viene de
+    // Gemini directo — por eso es el único campo de este generador que
+    // necesitaba pasar por limpiarMarkdown antes de persistirse.
+
+    private void mockTresSprintsParaRiesgo(RiskDto risk) {
+        Sprint sprint1 = crearSprint(1, "finalizado");
+        Sprint sprint2 = crearSprint(2, "finalizado");
+        Sprint sprint3 = crearSprint(3, "finalizado");
+
+        when(projectMemberRepo.existsByProyectoIdAndUserId(proyectoId, userId)).thenReturn(true);
+        when(proyectoRepo.findById(proyectoId)).thenReturn(Optional.of(proyecto));
+        when(sprintRepo.findByProyectoIdOrderByNumeroDesc(proyectoId))
+                .thenReturn(List.of(sprint3, sprint2, sprint1));
+
+        // Sin tendencias ni anomalías: aísla el escenario al generador de RISK.
+        when(analyticsService.getSprintTrends(eq(proyectoId), isNull(), eq(3))).thenReturn(List.of());
+        when(sprintRepo.findByProyectoIdAndEstado(proyectoId, "en_ejecucion")).thenReturn(Optional.empty());
+        when(analyticsService.detectAnomalies(any())).thenReturn(List.of());
+
+        // Comparación sin datos disponibles: evita generar insights COMPARISON.
+        when(analyticsService.compareSprints(any(), any())).thenReturn(
+                new SprintComparisonDto(sprint3.getId(), 3, sprint2.getId(), 2,
+                        Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), false));
+
+        when(analyticsService.identifyRisks(proyectoId)).thenReturn(List.of(risk));
+        when(insightRepo.findByProyectoIdAndTipoAndCategoriaAfectadaAndDismissedFalse(any(), any(), any()))
+                .thenReturn(List.of());
+        when(insightRepo.save(any(AIInsight.class))).thenAnswer(invocation -> {
+            AIInsight insight = invocation.getArgument(0);
+            if (insight.getId() == null) insight.setId(UUID.randomUUID());
+            return insight;
+        });
+    }
+
+    @Test
+    @DisplayName("RISK: recommendation generada por Gemini pasa por limpiarMarkdown antes de persistirse")
+    void generateRiskInsights_recomendacionConMarkdown_seLimpiaAntesDePersistir() {
+        RiskDto risk = new RiskDto(proyectoId, "DECLINING_PRODUCTIVITY", "HIGH",
+                "Productividad en declive sostenido", "La productividad bajó 30% en 3 sprints.",
+                "Productividad", Instant.now());
+        mockTresSprintsParaRiesgo(risk);
+        // Mismo patrón de Markdown crudo ya reproducido en los tests de "parser" de arriba
+        // (bloque envuelto en asteriscos), aplicado aquí a la recomendación de un RISK.
+        when(geminiService.generate(anyString()))
+                .thenReturn("**Priorizar la revisión del backlog antes del próximo sprint.**");
+
+        GenerateInsightsResultDto resultado = service.generateInsights(proyectoId, userId);
+
+        assertThat(resultado.senalesNuevas()).isEqualTo(1);
+        AIInsight guardado = capturarInsightGuardado();
+        assertThat(guardado.getTipo()).isEqualTo("RISK");
+        assertThat(guardado.getRecomendacion()).isEqualTo("Priorizar la revisión del backlog antes del próximo sprint.");
+        assertThat(guardado.getRecomendacion()).doesNotContain("**");
+        // Título y descripción son determinísticos (vienen de RiskDto, nunca de Gemini) y no cambian:
+        assertThat(guardado.getTitulo()).isEqualTo("Productividad en declive sostenido");
+        assertThat(guardado.getDescripcion()).isEqualTo("La productividad bajó 30% en 3 sprints.");
+        // La severidad tampoco se altera por la limpieza del texto:
+        assertThat(guardado.getSeveridad()).isEqualTo("HIGH");
     }
 
     private AIInsight capturarInsightGuardado() {

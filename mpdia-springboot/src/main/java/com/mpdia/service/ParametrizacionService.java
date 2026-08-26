@@ -111,7 +111,13 @@ public class ParametrizacionService {
         }
     }
 
-    private void validarNombreVariableIndividual(String nombre, String nombreVariableOriginal) {
+    /**
+     * FASE 13: visibilidad de paquete (no ya `private`) para que
+     * VariableDinamicaService.crearVariablesDesdeParametrizacion() reutilice
+     * exactamente esta misma regla — sin duplicar el patrón NOMBRE_VARIABLE_PATTERN
+     * con un segundo comportamiento independiente (ver auditoría de Fase 12).
+     */
+    static void validarNombreVariableIndividual(String nombre, String nombreVariableOriginal) {
         if (nombre.isBlank()) {
             throw new NombreVariableInvalidoException(
                 "nombreVariable contiene un elemento vacío en la lista separada por comas: '" +

@@ -47,6 +47,20 @@ describe('InsightsQuickViewComponent', () => {
     expect(compiled.textContent).toContain('Insight 1');
   });
 
+  it('debería mostrar el título/descripción sin marcadores Markdown crudos (FASE 7C.1)', () => {
+    component.insights = [{
+      ...mockInsights[0],
+      title: '**Alerta** de riesgo',
+      description: 'Cambio del 20% --- revisar el sprint'
+    }];
+    fixture.detectChanges();
+
+    const texto: string = fixture.nativeElement.textContent;
+    expect(texto).toContain('Alerta de riesgo');
+    expect(texto).not.toContain('**Alerta**');
+    expect(texto).not.toMatch(/---/);
+  });
+
   it('debería mostrar tipos correctamente', () => {
     component.insights = mockInsights.slice(0, 2);
     fixture.detectChanges();

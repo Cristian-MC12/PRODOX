@@ -94,14 +94,14 @@ function hoyISO(): string {
         <div class="card mb-3">
           <div class="card-body py-2">
             <div class="d-flex flex-wrap gap-3 align-items-center">
-              <div class="d-flex align-items-end gap-2">
-                <button type="button" class="btn btn-outline-secondary btn-sm"
+              <div class="d-flex flex-wrap align-items-end gap-2">
+                <button type="button" class="btn btn-outline-secondary btn-sm text-nowrap"
                         [disabled]="!haySprintAnterior"
                         (click)="irASprintAnterior()"
                         title="Ir al sprint anterior">
                   <i class="bi bi-chevron-left me-1"></i>Sprint anterior
                 </button>
-                <div style="min-width:260px">
+                <div style="min-width:260px" class="flex-grow-1 flex-sm-grow-0">
                   <label class="form-label small fw-semibold mb-1">Sprint</label>
                   <select class="form-select form-select-sm"
                           [(ngModel)]="sprintSeleccionadoId"
@@ -116,7 +116,7 @@ function hoyISO(): string {
                     }
                   </select>
                 </div>
-                <button type="button" class="btn btn-outline-secondary btn-sm"
+                <button type="button" class="btn btn-outline-secondary btn-sm text-nowrap"
                         [disabled]="!haySprintSiguiente"
                         (click)="irASprintSiguiente()"
                         title="Ir al sprint siguiente">

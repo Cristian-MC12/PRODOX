@@ -11,7 +11,7 @@ import { CopilotConfig } from '../../models/copilot.model';
   standalone: true,
   imports: [CommonModule, ReactiveFormsModule, ShellComponent],
   template: `
-    <app-shell title="Configuración del Copiloto (HU3)">
+    <app-shell title="Configuración del Copiloto">
       <div style="max-width:720px">
 
         @if (alertMsg) {

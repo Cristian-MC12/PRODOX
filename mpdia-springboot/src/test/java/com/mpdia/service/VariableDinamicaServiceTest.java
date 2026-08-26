@@ -126,13 +126,28 @@ class VariableDinamicaServiceTest {
     @Test
     void debeCrearVariablesOnDemandSiNoExisten() {
         // Given
+        // FASE 13: el indicadorVariable del fixture por defecto de setUp() ("Story Points
+        // Completados") es prosa, no un identificador técnico — con la nueva validación de
+        // formato sería rechazado. Este test no verifica el formato del nombre (eso lo cubren
+        // los tests dedicados de FASE 13 más abajo); solo verifica que la materialización
+        // on-demand ocurre, así que se le da un indicador snake_case válido.
+        parametrizacion.setConfiguracionAprobadaJson("""
+            {
+                "objetivo": "Medir velocidad del equipo",
+                "procedimiento": "Sumar story points completados",
+                "indicadorVariable": "story_points_completados",
+                "escala": "Numérica 0-100 puntos",
+                "frecuenciaCaptura": "por_sprint"
+            }
+            """);
+
         when(proyectoRepo.findById(proyectoId)).thenReturn(Optional.of(proyecto));
         when(sprintRepo.findById(sprintId)).thenReturn(Optional.of(sprint));
         when(parametrizacionRepo.findUltimaVersionAprobada(metricaId, proyectoId))
             .thenReturn(Optional.of(parametrizacion));
         when(variableRepo.findByParametrizacionIdAndParametrizacionVersion(parametrizacionId, 1))
             .thenReturn(List.of());  // No existen
-        
+
         when(metricaRepo.findById(metricaId)).thenReturn(Optional.of(metrica));
         
         Variable variableGuardada = crearVariable();
@@ -377,11 +392,241 @@ class VariableDinamicaServiceTest {
         assertThatThrownBy(() ->
             service.obtenerVariables(metricaId, proyectoId, sprintId, "test@example.com"))
             .isInstanceOf(NombreVariableInvalidoException.class)
-            .hasMessageContaining("Indicador y Variables")
-            .hasMessageContaining("120")
+            // FASE 13: el mensaje ahora es el de ParametrizacionService.validarNombreVariableIndividual()
+            // (reutilizado, no duplicado) — ya no el texto propio "El campo \"Indicador y Variables\"...".
+            .hasMessageContaining("excede el máximo de 120 caracteres")
             .hasMessageContaining("121");
 
         verify(variableRepo, never()).save(any(Variable.class));
+    }
+
+    /**
+     * FASE 13 (auditoría de Fase 12): crearVariablesDesdeParametrizacion() debe rechazar
+     * ahora también nombres que, sin exceder 120 caracteres, no cumplen el formato técnico
+     * snake_case — reutilizando exactamente ParametrizacionService.validarNombreVariableIndividual(),
+     * la misma regla ya probada en ParametrizacionService. split(",", -1) permanece intacto:
+     * estos tests cubren tanto el caso legítimo de lista corta separada por coma como los
+     * casos reales de frase humana / fragmento de indicadorVariable con coma encontrados en
+     * la auditoría de Fase 12 (variables 62d1ef80-... y ce8c16be-..., métrica "Pulso de
+     * Ánimo del Equipo").
+     */
+    @Test
+    void debeCrearVariableConNombreCortoValidoSinComas() {
+        parametrizacion.setConfiguracionAprobadaJson("""
+            {
+                "objetivo": "Medir algo",
+                "procedimiento": "Procedimiento de prueba",
+                "indicadorVariable": "acat",
+                "escala": "Numérica 0-100 puntos",
+                "frecuenciaCaptura": "por_sprint"
+            }
+            """);
+
+        when(proyectoRepo.findById(proyectoId)).thenReturn(Optional.of(proyecto));
+        when(sprintRepo.findById(sprintId)).thenReturn(Optional.of(sprint));
+        when(parametrizacionRepo.findUltimaVersionAprobada(metricaId, proyectoId))
+            .thenReturn(Optional.of(parametrizacion));
+        when(variableRepo.findByParametrizacionIdAndParametrizacionVersion(parametrizacionId, 1))
+            .thenReturn(List.of());
+        when(metricaRepo.findById(metricaId)).thenReturn(Optional.of(metrica));
+        when(variableRepo.save(any(Variable.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(registroRepo.findBySprintIdAndVariable_Id(any(), any())).thenReturn(List.of());
+
+        VariablesMetricaResponse response =
+            service.obtenerVariables(metricaId, proyectoId, sprintId, "test@example.com");
+
+        assertThat(response.variables()).hasSize(1);
+        assertThat(response.variables().get(0).nombre()).isEqualTo("acat");
+        verify(variableRepo, times(1)).save(any(Variable.class));
+    }
+
+    @Test
+    void debeCrearVariablesParaListaValidaSeparadaPorComas() {
+        // Demuestra que split(",", -1) NO fue eliminado: un indicadorVariable de varios
+        // nombres técnicos cortos válidos ("acat, acr") sigue creando una Variable por cada uno.
+        parametrizacion.setConfiguracionAprobadaJson("""
+            {
+                "objetivo": "Medir algo",
+                "procedimiento": "Procedimiento de prueba",
+                "indicadorVariable": "acat, acr",
+                "escala": "Numérica 0-100 puntos",
+                "frecuenciaCaptura": "por_sprint"
+            }
+            """);
+
+        when(proyectoRepo.findById(proyectoId)).thenReturn(Optional.of(proyecto));
+        when(sprintRepo.findById(sprintId)).thenReturn(Optional.of(sprint));
+        when(parametrizacionRepo.findUltimaVersionAprobada(metricaId, proyectoId))
+            .thenReturn(Optional.of(parametrizacion));
+        when(variableRepo.findByParametrizacionIdAndParametrizacionVersion(parametrizacionId, 1))
+            .thenReturn(List.of());
+        when(metricaRepo.findById(metricaId)).thenReturn(Optional.of(metrica));
+        when(variableRepo.save(any(Variable.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(registroRepo.findBySprintIdAndVariable_Id(any(), any())).thenReturn(List.of());
+
+        VariablesMetricaResponse response =
+            service.obtenerVariables(metricaId, proyectoId, sprintId, "test@example.com");
+
+        assertThat(response.variables()).hasSize(2);
+        assertThat(response.variables()).extracting("nombre").containsExactly("acat", "acr");
+        verify(variableRepo, times(2)).save(any(Variable.class));
+    }
+
+    @Test
+    void debeRechazarFraseHumanaComoNombreDeVariable() {
+        parametrizacion.setConfiguracionAprobadaJson("""
+            {
+                "objetivo": "Medir algo",
+                "procedimiento": "Procedimiento de prueba",
+                "indicadorVariable": "Problemas reportados en el sprint",
+                "escala": "Numérica 0-100 puntos",
+                "frecuenciaCaptura": "por_sprint"
+            }
+            """);
+
+        when(proyectoRepo.findById(proyectoId)).thenReturn(Optional.of(proyecto));
+        when(sprintRepo.findById(sprintId)).thenReturn(Optional.of(sprint));
+        when(parametrizacionRepo.findUltimaVersionAprobada(metricaId, proyectoId))
+            .thenReturn(Optional.of(parametrizacion));
+        when(variableRepo.findByParametrizacionIdAndParametrizacionVersion(parametrizacionId, 1))
+            .thenReturn(List.of());
+        when(metricaRepo.findById(metricaId)).thenReturn(Optional.of(metrica));
+
+        assertThatThrownBy(() ->
+            service.obtenerVariables(metricaId, proyectoId, sprintId, "test@example.com"))
+            .isInstanceOf(NombreVariableInvalidoException.class)
+            .hasMessageContaining("formato técnico válido");
+
+        verify(variableRepo, never()).save(any(Variable.class));
+    }
+
+    @Test
+    void debeRechazarNombreConMayusculasYEspacios() {
+        parametrizacion.setConfiguracionAprobadaJson("""
+            {
+                "objetivo": "Medir algo",
+                "procedimiento": "Procedimiento de prueba",
+                "indicadorVariable": "Calidad del Trabajo",
+                "escala": "Numérica 0-100 puntos",
+                "frecuenciaCaptura": "por_sprint"
+            }
+            """);
+
+        when(proyectoRepo.findById(proyectoId)).thenReturn(Optional.of(proyecto));
+        when(sprintRepo.findById(sprintId)).thenReturn(Optional.of(sprint));
+        when(parametrizacionRepo.findUltimaVersionAprobada(metricaId, proyectoId))
+            .thenReturn(Optional.of(parametrizacion));
+        when(variableRepo.findByParametrizacionIdAndParametrizacionVersion(parametrizacionId, 1))
+            .thenReturn(List.of());
+        when(metricaRepo.findById(metricaId)).thenReturn(Optional.of(metrica));
+
+        assertThatThrownBy(() ->
+            service.obtenerVariables(metricaId, proyectoId, sprintId, "test@example.com"))
+            .isInstanceOf(NombreVariableInvalidoException.class)
+            .hasMessageContaining("formato técnico válido");
+
+        verify(variableRepo, never()).save(any(Variable.class));
+    }
+
+    @Test
+    void debeRechazarPrimeraMitadDeUnIndicadorHistoricoFragmentado() {
+        // Caso representativo del incidente real de Fase 12 (métrica "Pulso de Ánimo del
+        // Equipo", variables 62d1ef80-... / ce8c16be-...): esta mitad, usada sola como
+        // indicadorVariable completo (sin coma), no debe poder persistirse como nombre técnico.
+        parametrizacion.setConfiguracionAprobadaJson("""
+            {
+                "objetivo": "Medir algo",
+                "procedimiento": "Procedimiento de prueba",
+                "indicadorVariable": "Califica ánimo de cada miembro del equipo (ej: escala numérica de 1 a 5",
+                "escala": "Numérica 0-100 puntos",
+                "frecuenciaCaptura": "por_sprint"
+            }
+            """);
+
+        when(proyectoRepo.findById(proyectoId)).thenReturn(Optional.of(proyecto));
+        when(sprintRepo.findById(sprintId)).thenReturn(Optional.of(sprint));
+        when(parametrizacionRepo.findUltimaVersionAprobada(metricaId, proyectoId))
+            .thenReturn(Optional.of(parametrizacion));
+        when(variableRepo.findByParametrizacionIdAndParametrizacionVersion(parametrizacionId, 1))
+            .thenReturn(List.of());
+        when(metricaRepo.findById(metricaId)).thenReturn(Optional.of(metrica));
+
+        assertThatThrownBy(() ->
+            service.obtenerVariables(metricaId, proyectoId, sprintId, "test@example.com"))
+            .isInstanceOf(NombreVariableInvalidoException.class);
+
+        verify(variableRepo, never()).save(any(Variable.class));
+    }
+
+    @Test
+    void debeRechazarSegundaMitadDeUnIndicadorHistoricoFragmentado() {
+        parametrizacion.setConfiguracionAprobadaJson("""
+            {
+                "objetivo": "Medir algo",
+                "procedimiento": "Procedimiento de prueba",
+                "indicadorVariable": "donde 1 es muy bajo y 5 es muy alto).",
+                "escala": "Numérica 0-100 puntos",
+                "frecuenciaCaptura": "por_sprint"
+            }
+            """);
+
+        when(proyectoRepo.findById(proyectoId)).thenReturn(Optional.of(proyecto));
+        when(sprintRepo.findById(sprintId)).thenReturn(Optional.of(sprint));
+        when(parametrizacionRepo.findUltimaVersionAprobada(metricaId, proyectoId))
+            .thenReturn(Optional.of(parametrizacion));
+        when(variableRepo.findByParametrizacionIdAndParametrizacionVersion(parametrizacionId, 1))
+            .thenReturn(List.of());
+        when(metricaRepo.findById(metricaId)).thenReturn(Optional.of(metrica));
+
+        assertThatThrownBy(() ->
+            service.obtenerVariables(metricaId, proyectoId, sprintId, "test@example.com"))
+            .isInstanceOf(NombreVariableInvalidoException.class);
+
+        verify(variableRepo, never()).save(any(Variable.class));
+    }
+
+    @Test
+    void noDebeAlterarOtrosCamposDeVariableAlValidarNombre() {
+        // No-regresión: la nueva validación solo debe decidir si se persiste o no la
+        // Variable — el resto de los campos que crearVariablesDesdeParametrizacion() ya
+        // asignaba (descripcion, tipoAlcance, tipoDato, frecuenciaCaptura, parametrizacionId/
+        // Version) deben seguir asignándose exactamente igual que antes de este cambio.
+        parametrizacion.setConfiguracionAprobadaJson("""
+            {
+                "objetivo": "Medir algo",
+                "procedimiento": "Sumar story points completados",
+                "indicadorVariable": "acat",
+                "escala": "Numérica 0-100 puntos",
+                "frecuenciaCaptura": "semanal"
+            }
+            """);
+
+        when(proyectoRepo.findById(proyectoId)).thenReturn(Optional.of(proyecto));
+        when(sprintRepo.findById(sprintId)).thenReturn(Optional.of(sprint));
+        when(parametrizacionRepo.findUltimaVersionAprobada(metricaId, proyectoId))
+            .thenReturn(Optional.of(parametrizacion));
+        when(variableRepo.findByParametrizacionIdAndParametrizacionVersion(parametrizacionId, 1))
+            .thenReturn(List.of());
+        when(metricaRepo.findById(metricaId)).thenReturn(Optional.of(metrica));
+        when(variableRepo.save(any(Variable.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(registroRepo.findBySprintIdAndVariable_Id(any(), any())).thenReturn(List.of());
+
+        service.obtenerVariables(metricaId, proyectoId, sprintId, "test@example.com");
+
+        org.mockito.ArgumentCaptor<Variable> captor = org.mockito.ArgumentCaptor.forClass(Variable.class);
+        verify(variableRepo, times(1)).save(captor.capture());
+        Variable guardada = captor.getValue();
+
+        assertThat(guardada.getNombre()).isEqualTo("acat");
+        assertThat(guardada.getDescripcion()).isEqualTo("Sumar story points completados");
+        assertThat(guardada.getTipoAlcance()).isEqualTo("grupal");
+        assertThat(guardada.getTipoDato()).isEqualTo("numerico");
+        assertThat(guardada.getFrecuenciaCaptura()).isEqualTo("semanal");
+        assertThat(guardada.getActiva()).isTrue();
+        assertThat(guardada.getProyectoId()).isEqualTo(proyectoId);
+        assertThat(guardada.getMetrica()).isEqualTo(metrica);
+        assertThat(guardada.getParametrizacionId()).isEqualTo(parametrizacionId);
+        assertThat(guardada.getParametrizacionVersion()).isEqualTo(1);
     }
 
     private Variable crearVariable() {

@@ -135,7 +135,7 @@ public class EvaluacionService {
             List<BigDecimal> valores = puntos.stream().map(RegistroPuntoDto::valor).toList();
 
             resultado.add(new MetricaEvaluacionDetalleDto(
-                    variable.getId(), variable.getNombre(),
+                    variable.getId(), variable.getNombre(), variable.getDescripcion(),
                     variable.getMetrica().getCategoria().getNombre(),
                     variable.getTipoAlcance(),
                     variable.getFrecuenciaCaptura(),

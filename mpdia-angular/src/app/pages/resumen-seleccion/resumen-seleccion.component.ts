@@ -25,7 +25,7 @@ import { environment } from '../../../environments/environment';
               <i class="bi bi-layers me-1"></i>Planeación
             </a>
           </li>
-          <li class="breadcrumb-item active">Resumen de parametrización</li>
+          <li class="breadcrumb-item active">Resumen de Selección</li>
         </ol>
       </nav>
 
@@ -33,17 +33,6 @@ import { environment } from '../../../environments/environment';
         Estas son las métricas seleccionadas para el sprint. Parametrizá cada una con GenAI
         y luego enviá al Scrum Master para verificación.
       </p>
-
-      <!-- Botón de limpieza de emergencia (solo para debug) -->
-      <div class="alert alert-warning py-2 small d-flex align-items-center justify-content-between mb-3">
-        <div>
-          <i class="bi bi-exclamation-triangle me-2"></i>
-          <strong>¿No ves todas tus métricas?</strong> Puede haber un problema con el almacenamiento local.
-        </div>
-        <button class="btn btn-sm btn-outline-danger" (click)="limpiarStorage()" title="Limpiar y recargar">
-          <i class="bi bi-trash me-1"></i>Limpiar datos
-        </button>
-      </div>
 
       <!-- Leyenda de colores -->
       <div class="d-flex gap-3 mb-3 flex-wrap">
@@ -97,8 +86,7 @@ import { environment } from '../../../environments/environment';
                         </div>
                       </td>
                       <td>
-                        <span class="badge mb-1" [class]="categoryBadge(s.factorCategoria)"
-                              style="font-size:0.62rem">
+                        <span class="badge mb-1 prox-badge-sm" [class]="categoryBadge(s.factorCategoria)">
                           {{ s.factorCategoria }}
                         </span>
                         <div class="small fw-semibold">{{ s.metricaNombre }}</div>
@@ -111,17 +99,17 @@ import { environment } from '../../../environments/environment';
                       <td class="align-middle">
                         @switch (s.estadoParametrizacion) {
                           @case ('completa') {
-                            <span class="badge bg-success">
+                            <span class="badge bg-success prox-badge-sm">
                               <i class="bi bi-check-circle me-1"></i>Completa
                             </span>
                           }
                           @case ('parcial') {
-                            <span class="badge bg-warning text-dark">
+                            <span class="badge bg-warning text-dark prox-badge-sm">
                               <i class="bi bi-exclamation-circle me-1"></i>Parcial
                             </span>
                           }
                           @default {
-                            <span class="badge bg-danger">
+                            <span class="badge bg-danger prox-badge-sm">
                               <i class="bi bi-x-circle me-1"></i>Sin parametrizar
                             </span>
                           }
@@ -303,14 +291,6 @@ export class ResumenSeleccionComponent implements OnInit {
 
   esDetalleVisible(id: string): boolean {
     return this.detallesVisibles.has(id);
-  }
-
-  /** Limpia el almacenamiento local y recarga la página */
-  limpiarStorage(): void {
-    if (confirm('¿Estás seguro? Esto eliminará todas las selecciones y parametrizaciones no guardadas.')) {
-      this.seleccionService.limpiar();
-      this.router.navigate(['/planeacion']);
-    }
   }
 
   /**

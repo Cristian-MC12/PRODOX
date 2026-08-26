@@ -55,7 +55,7 @@ interface Pendiente {
               </a>
             </li>
             <li class="breadcrumb-item">
-              <a href="#" (click)="$event.preventDefault(); router.navigate(['/resumen-seleccion'])">Resumen</a>
+              <a href="#" (click)="$event.preventDefault(); router.navigate(['/resumen-seleccion'])">Resumen de Selección</a>
             </li>
             <li class="breadcrumb-item active">Verificación</li>
           </ol>
@@ -156,9 +156,8 @@ interface Pendiente {
                     @for (p of pendientes; track p.id) {
                       <tr>
                         <td>
-                          <span class="badge mb-1"
-                                [class]="categoryBadge(factorCategoriaNombre(p))"
-                                style="font-size:0.65rem">
+                          <span class="badge prox-badge-sm mb-1"
+                                [class]="categoryBadge(factorCategoriaNombre(p))">
                             {{ factorCategoriaNombre(p) }}
                           </span>
                           <div class="small fw-semibold">{{ p.factorNombre }}</div>

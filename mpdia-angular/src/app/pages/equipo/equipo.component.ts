@@ -151,42 +151,43 @@ import { ProyectoDto } from '../../models/proyecto.model';
                 <span class="spinner-border spinner-border-sm me-2"></span>Cargando...
               </div>
             } @else if (miembros.length === 0) {
-              <div class="text-center py-4 text-muted small">
-                No hay miembros registrados.
+              <div class="prox-empty-state">
+                <p>No hay miembros registrados.</p>
               </div>
             } @else {
-              <table class="table table-sm table-hover mb-0">
-                <thead class="table-light">
-                  <tr>
-                    <th class="ps-3">Email</th>
-                    <th>Rol</th>
-                    <th>Desde</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  @for (m of miembros; track m.userId) {
+              <div class="table-responsive">
+                <table class="table table-sm table-hover mb-0">
+                  <thead class="table-light">
                     <tr>
-                      <td class="ps-3 small align-middle">
-                        <i class="bi bi-person-circle me-1 text-secondary"></i>
-                        {{ m.userEmail }}
-                        @if (m.userEmail === proyecto.scrumMasterEmail) {
-                          <span class="badge bg-primary ms-1" style="font-size:0.6rem">SM</span>
-                        }
-                      </td>
-                      <td class="align-middle">
-                        <span class="badge"
-                              [class]="m.rol === 'scrum_master' ? 'bg-primary' : 'bg-secondary'"
-                              style="font-size:0.65rem">
-                          {{ m.rol === 'scrum_master' ? 'Scrum Master' : 'Scrum Member' }}
-                        </span>
-                      </td>
-                      <td class="small text-muted align-middle">
-                        {{ m.joinedAt | date:'dd/MM/yyyy' }}
-                      </td>
+                      <th class="ps-3">Email</th>
+                      <th>Rol</th>
+                      <th>Desde</th>
                     </tr>
-                  }
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    @for (m of miembros; track m.userId) {
+                      <tr>
+                        <td class="ps-3 small align-middle text-nowrap">
+                          <i class="bi bi-person-circle me-1 text-secondary"></i>
+                          {{ m.userEmail }}
+                          @if (m.userEmail === proyecto.scrumMasterEmail) {
+                            <span class="badge bg-primary ms-1" style="font-size:0.6rem">SM</span>
+                          }
+                        </td>
+                        <td class="align-middle text-nowrap">
+                          <span class="badge prox-badge-sm"
+                                [class]="m.rol === 'scrum_master' ? 'bg-primary' : 'bg-secondary'">
+                            {{ m.rol === 'scrum_master' ? 'Scrum Master' : 'Scrum Member' }}
+                          </span>
+                        </td>
+                        <td class="small text-muted align-middle text-nowrap">
+                          {{ m.joinedAt | date:'dd/MM/yyyy' }}
+                        </td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
             }
           </div>
         </div>

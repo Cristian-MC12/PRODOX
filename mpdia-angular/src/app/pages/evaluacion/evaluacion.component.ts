@@ -123,7 +123,7 @@ const FRECUENCIA_LABEL: Record<string, string> = {
                   <div class="card h-100 metrica-card" (click)="abrirDetalle(m)" role="button">
                     <div class="card-header py-2 d-flex justify-content-between align-items-start">
                       <div>
-                        <div class="fw-semibold small">{{ m.variableNombre }}</div>
+                        <div class="fw-semibold small">{{ m.variableDescripcion || m.variableNombre }}</div>
                         <div class="text-muted" style="font-size:0.68rem">
                           Frecuencia: {{ frecuenciaLabel(m.frecuenciaCaptura) }}
                         </div>
@@ -194,7 +194,7 @@ const FRECUENCIA_LABEL: Record<string, string> = {
                   <tbody>
                     @for (m of metricasFiltradas; track m.variableId) {
                       <tr>
-                        <td class="ps-3 small fw-semibold align-middle">{{ m.variableNombre }}</td>
+                        <td class="ps-3 small fw-semibold align-middle">{{ m.variableDescripcion || m.variableNombre }}</td>
                         <td class="align-middle">
                           <span class="badge prox-badge-sm" [class]="badgeCat(m.categoria)">
                             {{ m.categoria }}
@@ -317,7 +317,7 @@ const FRECUENCIA_LABEL: Record<string, string> = {
                       <div class="card-body py-2">
                         @for (m of filasPorCategoria(cat); track m.variableId) {
                           <div class="d-flex justify-content-between align-items-center mb-2">
-                            <span class="small">{{ m.variableNombre }}</span>
+                            <span class="small">{{ m.variableDescripcion || m.variableNombre }}</span>
                             <div class="d-flex align-items-center gap-2">
                               <span class="small fw-semibold">{{ m.estadisticas.ultimoValor }}</span>
                               <span [class]="colorTendenciaTexto(m.estadisticas.tendencia)">
@@ -344,7 +344,7 @@ const FRECUENCIA_LABEL: Record<string, string> = {
             <div class="modal-content">
               <div class="modal-header">
                 <h5 class="modal-title">
-                  {{ detalleAbierto.variableNombre }}
+                  {{ detalleAbierto.variableDescripcion || detalleAbierto.variableNombre }}
                   <span class="badge ms-2 prox-badge-sm" [class]="badgeCat(detalleAbierto.categoria)">
                     {{ detalleAbierto.categoria }}
                   </span>
@@ -377,7 +377,7 @@ const FRECUENCIA_LABEL: Record<string, string> = {
                         <line [attr.x1]="esc(caja.max)" y1="18" [attr.x2]="esc(caja.max)" y2="42" stroke="var(--bs-secondary)"/>
                       </svg>
                     }
-                    <div class="d-flex justify-content-between text-muted" style="font-size:0.65rem">
+                    <div class="d-flex flex-wrap gap-2 justify-content-between text-muted" style="font-size:0.65rem">
                       <span>Mín: {{ caja.min }}</span>
                       <span>Q1: {{ caja.q1 }}</span>
                       <span>Mediana: {{ caja.median }}</span>

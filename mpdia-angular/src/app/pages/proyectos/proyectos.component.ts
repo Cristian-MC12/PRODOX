@@ -157,8 +157,8 @@ import { ProyectoDto } from '../../models/proyecto.model';
           <span class="spinner-border me-2"></span>Cargando proyectos...
         </div>
       } @else if (proyectos.length === 0) {
-        <div class="text-center py-5 text-muted">
-          <i class="bi bi-folder-x fs-1 d-block mb-3 opacity-25"></i>
+        <div class="prox-empty-state">
+          <i class="bi bi-folder-x"></i>
           @if (esScrumMaster) {
             <p>No tenés proyectos aún. Creá uno para comenzar.</p>
             <button class="btn btn-primary btn-sm" (click)="mostrarFormulario = true">
@@ -182,14 +182,12 @@ import { ProyectoDto } from '../../models/proyecto.model';
                 <div class="card-header d-flex justify-content-between align-items-center py-2">
                   <span class="fw-semibold small text-truncate me-2">{{ p.nombre }}</span>
                   <div class="d-flex gap-1 flex-shrink-0">
-                    <span class="badge"
-                          [class]="p.metodo === 'scrum' ? 'bg-primary' : 'bg-info text-dark'"
-                          style="font-size:0.65rem">
+                    <span class="badge prox-badge-sm"
+                          [class]="p.metodo === 'scrum' ? 'bg-primary' : 'bg-info text-dark'">
                       {{ p.metodo === 'scrum' ? 'Scrum' : 'XP' }}
                     </span>
-                    <span class="badge"
-                          [class]="p.estado === 'activo' ? 'bg-success' : 'bg-secondary'"
-                          style="font-size:0.65rem">
+                    <span class="badge prox-badge-sm"
+                          [class]="p.estado === 'activo' ? 'bg-success' : 'bg-secondary'">
                       {{ p.estado }}
                     </span>
                   </div>
@@ -204,10 +202,10 @@ import { ProyectoDto } from '../../models/proyecto.model';
                     <div>{{ p.productGoal | slice:0:100 }}{{ p.productGoal.length > 100 ? '...' : '' }}</div>
                   </div>
                 </div>
-                <div class="card-footer py-2 d-flex justify-content-between align-items-center">
-                  <small class="text-muted">{{ p.scrumMasterEmail }}</small>
+                <div class="card-footer py-2 d-flex justify-content-between align-items-center gap-2">
+                  <small class="text-muted text-truncate">{{ p.scrumMasterEmail }}</small>
                   @if (p.estado === 'activo') {
-                    <button class="btn btn-primary btn-sm py-0 px-2" (click)="seleccionarProyecto(p)">
+                    <button class="btn btn-primary btn-sm py-0 px-2 flex-shrink-0" (click)="seleccionarProyecto(p)">
                       <i class="bi bi-arrow-right me-1"></i>Trabajar
                     </button>
                   }

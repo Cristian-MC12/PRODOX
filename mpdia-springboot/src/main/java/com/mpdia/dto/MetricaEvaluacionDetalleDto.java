@@ -12,6 +12,9 @@ import java.util.UUID;
 public record MetricaEvaluacionDetalleDto(
     UUID       variableId,
     String     variableNombre,
+    /** Variable.descripcion tal cual está persistida (puede ser null); el fallback a
+     *  variableNombre cuando no hay descripción amigable se resuelve en presentación. */
+    String     variableDescripcion,
     String     categoria,
     String     tipoAlcance,
     /** diaria | semanal | por_sprint | ilimitada (valor real de Variable.frecuenciaCaptura) */

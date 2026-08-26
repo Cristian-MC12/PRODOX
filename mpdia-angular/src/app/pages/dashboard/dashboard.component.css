@@ -25,6 +25,37 @@
   animation: fadeIn 0.3s ease-in;
 }
 
+/* FASE 9A — header de identidad del proyecto: título grande + contexto +
+   acción principal, encima del resto del contenido del Dashboard. */
+.dash-hero {
+  display: flex;
+  flex-wrap: wrap;
+  /* flex-start (no flex-end): si el header envuelve en viewports medios,
+     el título debe seguir leyéndose primero, no quedar empujado debajo
+     de las acciones por una alineación pensada solo para una sola fila. */
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.dash-hero-title {
+  font-size: 1.65rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0 0 .25rem;
+  line-height: 1.2;
+}
+
+.dash-hero-subtitle {
+  font-size: .875rem;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.dash-hero-actions {
+  flex-shrink: 0;
+}
+
 @keyframes fadeIn {
   from {
     opacity: 0;

@@ -108,12 +108,12 @@ type Paso = 'metricas' | 'variables' | 'sprints';
             <!-- Panel izquierdo: catálogo agrupado -->
             <div class="col-lg-7">
               <div class="card h-100">
-                <div class="card-header d-flex align-items-center justify-content-between py-2">
+                <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-2 py-2">
                   <span class="fw-semibold small">
                     <i class="bi bi-grid me-1"></i>Catálogo de Métricas
                   </span>
-                  <div class="d-flex gap-2 ms-2 align-items-center">
-                    <button class="btn btn-outline-primary btn-sm"
+                  <div class="d-flex flex-wrap gap-2 align-items-center">
+                    <button class="btn btn-outline-primary btn-sm text-nowrap"
                             (click)="router.navigate(['/crear-metrica-ia'])"
                             title="Proponer una nueva métrica con IA">
                       <i class="bi bi-robot me-1"></i>Crear métrica con IA
@@ -238,6 +238,7 @@ type Paso = 'metricas' | 'variables' | 'sprints';
                       Hacé click en <i class="bi bi-plus-lg"></i> para agregar métricas.
                     </div>
                   } @else {
+                    <div class="table-responsive">
                     <table class="table table-sm mb-0">
                       <tbody>
                         @for (m of seleccionadasList; track m.metricaId) {
@@ -294,6 +295,7 @@ type Paso = 'metricas' | 'variables' | 'sprints';
                         }
                       </tbody>
                     </table>
+                    </div>
                   }
                 </div>
                 @if (seleccionadasList.length > 0) {

@@ -29,8 +29,22 @@ class AIAgentServiceTest {
     private AIAgentService aiAgentService;
 
     @BeforeEach
-    void setUp() {
+    void setUp() throws Exception {
         aiAgentService = new AIAgentService(geminiService);
+
+        // FASE 16: maxToolIterations es un campo @Value (por defecto 5, ver
+        // AIAgentService), poblado por Spring solo cuando el bean se crea vía el
+        // contenedor. Al construir el servicio con `new` (test unitario sin
+        // contexto Spring), el campo queda en 0 — el bucle de processMessage()
+        // (`while (iteration < maxToolIterations)`) nunca se ejecuta ni una vez,
+        // por lo que geminiService.chatWithTools(...) nunca se invoca y todos los
+        // tests de processMessage() caían directo al mensaje de "límite de
+        // iteraciones", sin importar lo que se stubeara. Mismo patrón de
+        // reflexión ya usado en VariableDinamicaServiceTest para su campo
+        // objectMapper.
+        var maxIterationsField = AIAgentService.class.getDeclaredField("maxToolIterations");
+        maxIterationsField.setAccessible(true);
+        maxIterationsField.set(aiAgentService, 5);
     }
 
     @Test

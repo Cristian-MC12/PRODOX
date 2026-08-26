@@ -7,11 +7,12 @@ import { ShellComponent } from '../../layout/shell/shell.component';
 import { AIInsightsService } from '../../services/ai-insights.service';
 import { ProyectoDto } from '../../models/proyecto.model';
 import { AIInsight, InsightEvidence } from '../../models/ai-insights.model';
+import { LimpiarMarkdownIAPipe } from '../../core/limpiar-markdown-ia.pipe';
 
 @Component({
   selector: 'app-ai-insights',
   standalone: true,
-  imports: [CommonModule, ShellComponent],
+  imports: [CommonModule, ShellComponent, LimpiarMarkdownIAPipe],
   templateUrl: './ai-insights.component.html',
   styleUrl: './ai-insights.component.css'
 })

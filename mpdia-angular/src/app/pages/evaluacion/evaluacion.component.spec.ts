@@ -114,4 +114,80 @@ describe('EvaluacionComponent', () => {
     expect(fixture.nativeElement.textContent).toContain('Completá la fase de Ejecución primero');
     expect(fixture.nativeElement.querySelector('app-mini-chart')).toBeFalsy();
   });
+
+  // FASE 8C — título de card usa variableDescripcion (nombre amigable) cuando existe,
+  // con fallback a variableNombre (el dato crudo, sin formatear) cuando no.
+  describe('título de card: variableDescripcion con fallback a variableNombre (FASE 8C)', () => {
+    it('si variableDescripcion existe, se muestra en vez del nombre crudo', () => {
+      const metrica = metricaDetalle({
+        variableNombre: 'tareas_retrabajadas',
+        variableDescripcion: 'Tareas retrabajadas por sprint'
+      });
+      evaluacionService.detalle.and.returnValue(of([metrica]));
+      fixture.detectChanges();
+
+      const texto: string = fixture.nativeElement.textContent;
+      expect(texto).toContain('Tareas retrabajadas por sprint');
+      expect(texto).not.toContain('tareas_retrabajadas');
+    });
+
+    it('si variableDescripcion no existe (null), se muestra variableNombre tal cual', () => {
+      const metrica = metricaDetalle({
+        variableNombre: 'tareas_retrabajadas',
+        variableDescripcion: null
+      });
+      evaluacionService.detalle.and.returnValue(of([metrica]));
+      fixture.detectChanges();
+
+      expect(fixture.nativeElement.textContent).toContain('tareas_retrabajadas');
+    });
+
+    it('no muta variableNombre ni ningún otro dato del objeto recibido', () => {
+      const metrica = metricaDetalle({
+        variableNombre: 'tareas_retrabajadas',
+        variableDescripcion: 'Tareas retrabajadas por sprint'
+      });
+      evaluacionService.detalle.and.returnValue(of([metrica]));
+      fixture.detectChanges();
+
+      // El dato en memoria permanece exactamente igual al que devolvió el servicio;
+      // la sustitución es solo de presentación en el template, nunca una reasignación.
+      expect(component.datos[0].variableNombre).toBe('tareas_retrabajadas');
+      expect(component.datos[0].variableDescripcion).toBe('Tareas retrabajadas por sprint');
+    });
+
+    it('los datos estadísticos de la métrica no se alteran por el nombre mostrado', () => {
+      const metrica = metricaDetalle({
+        variableDescripcion: 'Tareas retrabajadas por sprint'
+      });
+      evaluacionService.detalle.and.returnValue(of([metrica]));
+      fixture.detectChanges();
+
+      expect(component.datos[0].estadisticas).toEqual(metrica.estadisticas);
+      expect(component.datos[0].registros).toEqual(metrica.registros);
+    });
+
+    it('filtros (categoría) y tabs existentes siguen funcionando igual con el nuevo campo presente', () => {
+      const conDescripcion = metricaDetalle({
+        variableId: 'v1', categoria: 'Significado', variableDescripcion: 'Tareas retrabajadas por sprint'
+      });
+      const sinDescripcion = metricaDetalle({
+        variableId: 'v2', categoria: 'Impacto', variableDescripcion: null
+      });
+      evaluacionService.detalle.and.returnValue(of([conDescripcion, sinDescripcion]));
+      fixture.detectChanges();
+
+      expect(component.metricasFiltradas.length).toBe(2);
+
+      component.categoriaFiltro = 'Impacto';
+      expect(component.metricasFiltradas.length).toBe(1);
+      expect(component.metricasFiltradas[0].variableId).toBe('v2');
+
+      component.categoriaFiltro = '';
+      component.tab = 'estadisticas';
+      fixture.detectChanges();
+      const activo = fixture.nativeElement.querySelector('.nav-link.active');
+      expect(activo?.textContent).toContain('Estadísticas');
+    });
+  });
 });

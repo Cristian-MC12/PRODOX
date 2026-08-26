@@ -142,6 +142,36 @@ describe('AIInsightsComponent', () => {
     });
   });
 
+  describe('presentación de insights (limpieza de Markdown — FASE 7C.1)', () => {
+    it('renderiza título y descripción sin marcadores Markdown crudos cuando el insight los trae', () => {
+      spyOn(localStorage, 'getItem').and.returnValue(JSON.stringify(mockProyecto));
+      insightsService.getProjectInsights.and.returnValue(of([{
+        ...mockInsights[0],
+        title: '**Riesgo crítico** detectado',
+        description: 'Esto es --- una descripción con * viñeta suelta',
+        recommendation: 'Revisar **urgente** este punto'
+      }]));
+
+      fixture.detectChanges();
+
+      const texto: string = fixture.nativeElement.textContent;
+      expect(texto).toContain('Riesgo crítico detectado');
+      expect(texto).not.toContain('**Riesgo crítico**');
+      expect(texto).not.toMatch(/---/);
+    });
+
+    it('no altera el texto de un insight que ya llega limpio', () => {
+      spyOn(localStorage, 'getItem').and.returnValue(JSON.stringify(mockProyecto));
+      insightsService.getProjectInsights.and.returnValue(of(mockInsights));
+
+      fixture.detectChanges();
+
+      const texto: string = fixture.nativeElement.textContent;
+      expect(texto).toContain(mockInsights[0].title);
+      expect(texto).toContain(mockInsights[0].description);
+    });
+  });
+
   describe('generateInsights', () => {
     beforeEach(() => {
       component.proyecto = mockProyecto;

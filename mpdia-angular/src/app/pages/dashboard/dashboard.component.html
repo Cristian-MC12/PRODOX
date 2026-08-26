@@ -82,7 +82,27 @@
     <!-- Success State - Dashboard completo -->
     @if (state() === 'success' && projectOverview) {
       <div class="dashboard-content">
-        
+
+        <!-- Header: identidad del proyecto + contexto + acción principal -->
+        <div class="dash-hero mb-4">
+          <div class="dash-hero-text">
+            <h2 class="dash-hero-title">{{ projectOverview.proyectoNombre }}</h2>
+            <p class="dash-hero-subtitle">
+              @if (projectOverview.sprintActualNumero) {
+                Sprint {{ projectOverview.sprintActualNumero }} en curso ·
+              }
+              {{ projectOverview.sprintsFinalizados }} de {{ projectOverview.totalSprints }} sprints finalizados
+            </p>
+          </div>
+          <div class="dash-hero-actions">
+            <app-quick-actions-panel
+              (generateInsightsClick)="generateInsights()"
+              (viewReportsClick)="navigateToReports()"
+              (viewRetrospectivesClick)="navigateToRetrospectives()"
+              (viewInsightsClick)="navigateToInsights()" />
+          </div>
+        </div>
+
         <!-- Resumen del proyecto -->
         <div class="row mb-4">
           <div class="col-12">
@@ -90,7 +110,7 @@
           </div>
         </div>
 
-        <!-- Métricas promedio -->
+        <!-- Métricas promedio: KPI protagonistas -->
         @if (Object.keys(projectOverview.promedioHistorico).length > 0) {
           <div class="row mb-4">
             <div class="col-12">
@@ -99,30 +119,18 @@
           </div>
         }
 
-        <!-- Riesgos detectados -->
-        <div class="row mb-4">
-          <div class="col-12">
+        <!-- Riesgos + Insights: contenido principal, lado a lado. align-items-start
+             porque el contenido de cada columna puede tener alturas muy distintas
+             (ej. "Sin riesgos" vs. varios insights largos) — evita que una columna
+             corta quede estirada con espacio vacío para igualar a la más larga. -->
+        <div class="row mb-4 g-4 align-items-start">
+          <div class="col-lg-6">
             <app-risks-alerts-card [risks]="risks" />
           </div>
-        </div>
-
-        <!-- Insights recientes -->
-        <div class="row mb-4">
-          <div class="col-12">
-            <app-insights-quick-view 
+          <div class="col-lg-6">
+            <app-insights-quick-view
               [insights]="recentInsights"
               (viewAllClick)="navigateToInsights()" />
-          </div>
-        </div>
-
-        <!-- Acciones rápidas -->
-        <div class="row mb-4">
-          <div class="col-12">
-            <app-quick-actions-panel
-              (generateInsightsClick)="generateInsights()"
-              (viewReportsClick)="navigateToReports()"
-              (viewRetrospectivesClick)="navigateToRetrospectives()"
-              (viewInsightsClick)="navigateToInsights()" />
           </div>
         </div>
 

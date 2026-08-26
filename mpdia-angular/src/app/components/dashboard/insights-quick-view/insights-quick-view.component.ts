@@ -2,6 +2,7 @@
 import { Component, Input, Output, EventEmitter } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { AIInsight } from '../../../models/ai-insights.model';
+import { LimpiarMarkdownIAPipe } from '../../../core/limpiar-markdown-ia.pipe';
 
 /**
  * Componente presentacional para mostrar insights recientes.
@@ -13,7 +14,7 @@ import { AIInsight } from '../../../models/ai-insights.model';
 @Component({
   selector: 'app-insights-quick-view',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, LimpiarMarkdownIAPipe],
   templateUrl: './insights-quick-view.component.html',
   styleUrl: './insights-quick-view.component.css'
 })

@@ -21,7 +21,7 @@
     }
 
     <!-- Acciones -->
-    <div class="d-flex gap-2 mb-4">
+    <div class="d-flex flex-wrap gap-2 mb-4">
       <button 
         class="btn btn-primary btn-sm"
         (click)="generateInsights()"
@@ -82,7 +82,7 @@
                    [class.text-info]="insight.type === 'TREND'"
                    [class.text-primary]="insight.type === 'COMPARISON'"></i>
                 <div class="flex-grow-1">
-                  <h6 class="mb-1">{{ insight.title }}</h6>
+                  <h6 class="mb-1">{{ insight.title | limpiarMarkdownIA }}</h6>
                   <div class="d-flex flex-wrap gap-2 small">
                     <span class="badge {{ getSeverityBadgeClass(insight.severity) }}">
                       {{ getSeverityLabel(insight.severity) }}
@@ -112,7 +112,7 @@
                   <i class="bi bi-info-circle me-1"></i>
                   Observación
                 </h6>
-                <p class="mb-0 small">{{ insight.description }}</p>
+                <p class="mb-0 small">{{ insight.description | limpiarMarkdownIA }}</p>
               </div>
 
               <!-- Evidencia -->
@@ -177,7 +177,7 @@
                     <i class="bi bi-lightbulb-fill text-primary me-1"></i>
                     Recomendación
                   </h6>
-                  <p class="mb-0 small">{{ insight.recommendation }}</p>
+                  <p class="mb-0 small">{{ insight.recommendation | limpiarMarkdownIA }}</p>
                 </div>
               }
 

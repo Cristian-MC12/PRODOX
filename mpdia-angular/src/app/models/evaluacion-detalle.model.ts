@@ -40,6 +40,10 @@ export interface VariableEstadisticasDto {
 export interface MetricaEvaluacionDetalleDto {
   variableId:        string;
   variableNombre:    string;
+  /** Variable.descripcion tal cual la persiste el backend (puede venir null/ausente en datos
+   *  antiguos). El fallback a variableNombre cuando no hay descripción amigable se resuelve
+   *  en la presentación (componente), nunca mutando este dato. */
+  variableDescripcion?: string | null;
   categoria:         string;
   tipoAlcance:       string;
   frecuenciaCaptura: string;

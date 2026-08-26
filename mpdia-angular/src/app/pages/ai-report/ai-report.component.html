@@ -1,12 +1,8 @@
 <!-- Autor: Cristian Santiago Martinez Cordoba — MPDIA -->
-<app-shell>
+<app-shell title="Reporte Ejecutivo de Sprint">
   <div class="container-fluid p-4">
     <div class="row mb-4">
       <div class="col">
-        <h2 class="mb-1">
-          <i class="bi bi-file-earmark-bar-graph me-2"></i>
-          Reporte Ejecutivo de Sprint
-        </h2>
         <p class="text-muted mb-0">
           Genera un reporte ejecutivo combinando métricas reales con análisis de IA
         </p>
@@ -117,7 +113,7 @@
               <i class="bi bi-file-text me-2"></i>
               Resumen Ejecutivo
             </h5>
-            <p class="lead">{{report.resumenEjecutivo}}</p>
+            <p class="lead">{{report.resumenEjecutivo | limpiarMarkdownIA}}</p>
           </div>
 
           <!-- Métricas -->
@@ -153,7 +149,7 @@
                 @for (highlight of report.highlights; track $index) {
                   <li class="mb-2">
                     <i class="bi bi-check-circle-fill text-success me-2"></i>
-                    {{highlight}}
+                    {{highlight | limpiarMarkdownIA}}
                   </li>
                 }
               </ul>
@@ -171,7 +167,7 @@
                 @for (concern of report.concerns; track $index) {
                   <li class="mb-2">
                     <i class="bi bi-exclamation-triangle text-warning me-2"></i>
-                    {{concern}}
+                    {{concern | limpiarMarkdownIA}}
                   </li>
                 }
               </ul>
@@ -194,9 +190,9 @@
                           <span class="badge bg-{{insight.severity === 'HIGH' ? 'warning' : 'info'}} me-2">
                             {{insight.severity}}
                           </span>
-                          {{insight.title}}
+                          {{insight.title | limpiarMarkdownIA}}
                         </h6>
-                        <p class="card-text small">{{insight.description}}</p>
+                        <p class="card-text small">{{insight.description | limpiarMarkdownIA}}</p>
                       </div>
                     </div>
                   </div>
@@ -212,7 +208,7 @@
               Recomendaciones
             </h5>
             <div class="alert alert-info">
-              <p class="mb-0">{{report.recomendaciones}}</p>
+              <p class="mb-0">{{report.recomendaciones | limpiarMarkdownIA}}</p>
             </div>
           </div>
 

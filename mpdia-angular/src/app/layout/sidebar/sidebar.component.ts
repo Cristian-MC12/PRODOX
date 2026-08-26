@@ -15,7 +15,7 @@ import { filter, Subscription } from 'rxjs';
 
       <!-- Brand -->
       <a routerLink="/" class="sidebar-brand">
-        <i class="bi bi-speedometer2 me-2"></i>PRODOX AI
+        <img src="assets/images/logos/Logo-PRODOX-AI.jpg" alt="PRODOX AI" class="sidebar-brand-logo">
       </a>
 
       <!-- Proyecto activo -->

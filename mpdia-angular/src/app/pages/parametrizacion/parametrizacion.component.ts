@@ -32,7 +32,7 @@ import { environment } from '../../../environments/environment';
               </a>
             </li>
             <li class="breadcrumb-item">
-              <a href="#" (click)="$event.preventDefault(); volver()">Resumen</a>
+              <a href="#" (click)="$event.preventDefault(); volver()">Resumen de Selección</a>
             </li>
             <li class="breadcrumb-item active">{{ metrica.metricaNombre }}</li>
           </ol>
@@ -64,7 +64,7 @@ import { environment } from '../../../environments/environment';
                [class.border-warning]="estadoActual === 'propuesta'" 
                [class.border-success]="estadoActual === 'aprobada'">
             <div class="card-body py-2">
-              <div class="d-flex align-items-center justify-content-between">
+              <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
                 <div>
                   <span class="badge me-2 prox-badge-sm"
                         [class.bg-warning]="estadoActual === 'propuesta'"
@@ -86,7 +86,7 @@ import { environment } from '../../../environments/environment';
                 </div>
                 <div>
                   @if (estadoActual === 'propuesta') {
-                    <button class="btn btn-success btn-sm" 
+                    <button class="btn btn-success btn-sm text-nowrap"
                             [disabled]="aprobando"
                             (click)="aprobarParametrizacion()">
                       @if (aprobando) {
@@ -120,46 +120,48 @@ import { environment } from '../../../environments/environment';
               <span class="fw-semibold small">Top {{ top3.length }} parametrizaciones más usadas para esta métrica</span>
             </div>
             <div class="card-body p-0">
-              <table class="table table-sm table-hover mb-0">
-                <thead class="table-light">
-                  <tr>
-                    <th class="ps-3" style="width:40px">#</th>
-                    <th>Objetivo</th>
-                    <th>Autor</th>
-                    <th class="text-center" style="width:80px">Usos</th>
-                    <th style="width:120px"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  @for (t of top3; track t.id; let i = $index) {
+              <div class="table-responsive">
+                <table class="table table-sm table-hover mb-0">
+                  <thead class="table-light">
                     <tr>
-                      <td class="ps-3 align-middle">
-                        <span class="badge rounded-pill prox-badge-sm"
-                              [class]="i === 0 ? 'bg-warning text-dark' : i === 1 ? 'bg-secondary' : 'bg-secondary'"
-                              style="min-width:22px">
-                          {{ i + 1 }}
-                        </span>
-                      </td>
-                      <td class="align-middle">
-                        <div class="small fw-semibold">{{ t.objetivo | slice:0:70 }}...</div>
-                        <div class="text-muted" style="font-size:0.7rem">
-                          Escala: {{ t.escala }}
-                        </div>
-                      </td>
-                      <td class="align-middle small text-muted">{{ t.userEmail }}</td>
-                      <td class="text-center align-middle">
-                        <span class="badge bg-primary rounded-pill">{{ t.usos }}</span>
-                      </td>
-                      <td class="align-middle text-end pe-3">
-                        <button class="btn btn-sm btn-outline-primary py-0"
-                                (click)="usarDelTop(t)">
-                          <i class="bi bi-clipboard-check me-1"></i>Usar
-                        </button>
-                      </td>
+                      <th class="ps-3" style="width:40px">#</th>
+                      <th style="min-width:220px">Objetivo</th>
+                      <th style="min-width:150px">Autor</th>
+                      <th class="text-center" style="width:80px">Usos</th>
+                      <th style="width:120px"></th>
                     </tr>
-                  }
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    @for (t of top3; track t.id; let i = $index) {
+                      <tr>
+                        <td class="ps-3 align-middle">
+                          <span class="badge rounded-pill prox-badge-sm"
+                                [class]="i === 0 ? 'bg-warning text-dark' : i === 1 ? 'bg-secondary' : 'bg-secondary'"
+                                style="min-width:22px">
+                            {{ i + 1 }}
+                          </span>
+                        </td>
+                        <td class="align-middle">
+                          <div class="small fw-semibold">{{ t.objetivo | slice:0:70 }}...</div>
+                          <div class="text-muted" style="font-size:0.7rem">
+                            Escala: {{ t.escala }}
+                          </div>
+                        </td>
+                        <td class="align-middle small text-muted text-nowrap">{{ t.userEmail }}</td>
+                        <td class="text-center align-middle">
+                          <span class="badge bg-primary rounded-pill">{{ t.usos }}</span>
+                        </td>
+                        <td class="align-middle text-end pe-3">
+                          <button class="btn btn-sm btn-outline-primary py-0 text-nowrap"
+                                  (click)="usarDelTop(t)">
+                            <i class="bi bi-clipboard-check me-1"></i>Usar
+                          </button>
+                        </td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         }
@@ -232,7 +234,7 @@ import { environment } from '../../../environments/environment';
         <!-- Propuesta generada por IA -->
         @if (propuestas.length > 0 && propuestas[0]) {
           <div class="card mb-4 border-primary">
-            <div class="card-header bg-primary bg-opacity-10 d-flex align-items-center justify-content-between py-2">
+            <div class="card-header bg-primary bg-opacity-10 d-flex flex-wrap align-items-center justify-content-between gap-2 py-2">
               <div class="d-flex align-items-center gap-2">
                 <i class="bi bi-stars text-primary fs-5"></i>
                 <div>
@@ -243,7 +245,7 @@ import { environment } from '../../../environments/environment';
                   </div>
                 </div>
               </div>
-              <button class="btn btn-sm btn-outline-primary"
+              <button class="btn btn-sm btn-outline-primary text-nowrap"
                       [disabled]="generando"
                       (click)="generarPropuestas()"
                       title="Generar nueva propuesta">
@@ -311,17 +313,17 @@ import { environment } from '../../../environments/environment';
                 </dt>
               </dl>
             </div>
-            <div class="card-footer py-2 d-flex justify-content-between align-items-center">
+            <div class="card-footer py-2 d-flex flex-wrap justify-content-between align-items-center gap-2">
               <span class="small text-muted">
                 <i class="bi bi-robot me-1"></i>Esta es una propuesta de IA, no una configuración oficial
               </span>
-              <div class="d-flex gap-2">
-                <button class="btn btn-outline-primary btn-sm"
+              <div class="d-flex flex-wrap gap-2">
+                <button class="btn btn-outline-primary btn-sm text-nowrap"
                         (click)="usarPropuesta(propuestas[0])">
                   <i class="bi bi-clipboard-check me-1"></i>Copiar al formulario
                 </button>
                 @if (estadoActual !== 'propuesta') {
-                  <button class="btn btn-success btn-sm"
+                  <button class="btn btn-success btn-sm text-nowrap"
                           [disabled]="guardando"
                           (click)="guardarPropuesta()">
                     @if (guardando) {
@@ -452,15 +454,15 @@ import { environment } from '../../../environments/environment';
               </div>
             </div>
           </div>
-          <div class="card-footer d-flex justify-content-between align-items-center">
-            <button class="btn btn-outline-secondary btn-sm" (click)="volver()">
+          <div class="card-footer d-flex flex-wrap justify-content-between align-items-center gap-2">
+            <button class="btn btn-outline-secondary btn-sm text-nowrap" (click)="volver()">
               <i class="bi bi-arrow-left me-1"></i>Volver
             </button>
-            <div class="d-flex align-items-center gap-3">
+            <div class="d-flex flex-wrap align-items-center gap-2 gap-sm-3">
               <span class="small">
                 Estado: <span class="badge prox-badge-sm" [class]="estadoBadge()">{{ estadoLabel() }}</span>
               </span>
-              <button class="btn btn-success btn-sm"
+              <button class="btn btn-success btn-sm text-nowrap"
                       [disabled]="guardando"
                       (click)="guardar()">
                 @if (guardando) {

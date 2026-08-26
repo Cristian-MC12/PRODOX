@@ -10,11 +10,12 @@ import { SprintService } from '../../services/sprint.service';
 import { ProyectoDto } from '../../models/proyecto.model';
 import { SprintDto } from '../../models/sprint.model';
 import { AISprintReport } from '../../models/ai-reports.model';
+import { LimpiarMarkdownIAPipe } from '../../core/limpiar-markdown-ia.pipe';
 
 @Component({
   selector: 'app-ai-report',
   standalone: true,
-  imports: [CommonModule, FormsModule, ShellComponent],
+  imports: [CommonModule, FormsModule, ShellComponent, LimpiarMarkdownIAPipe],
   templateUrl: './ai-report.component.html',
   styleUrl: './ai-report.component.css'
 })

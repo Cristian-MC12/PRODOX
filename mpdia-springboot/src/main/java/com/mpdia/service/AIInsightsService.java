@@ -394,7 +394,7 @@ public class AIInsightsService {
 
                 // Generar recomendación con Gemini
                 String prompt = buildRiskPrompt(risk);
-                insight.setRecomendacion(geminiService.generate(prompt));
+                insight.setRecomendacion(limpiarMarkdown(geminiService.generate(prompt)));
 
                 insight.setConfianza("MEDIUM"); // Riesgos son hipótesis, confianza media
 

@@ -1,37 +1,45 @@
 /* Autor: Cristian Santiago Martinez Cordoba — MPDIA */
+/* FASE 9A — tarjetas de riesgo: mismo mecanismo de severidad (border-left +
+   badge, sin cambios en getSeverityClass/getSeverityBadgeClass/getSeverityIcon),
+   presentado como tarjeta blanca con acento de color en vez del relleno
+   plano de Bootstrap .alert. */
 
-.alert {
-  border-left: 4px solid;
-  transition: transform 0.2s ease;
+.risk-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
 }
 
-.alert:hover {
+.risk-card {
+  /* Reset explícito de lo que Bootstrap define para .alert-danger/.alert-warning/
+     .alert-info (background-color/color/border-color) — acá solo se reutilizan
+     esos nombres de clase como selector, no el look de .alert de Bootstrap. */
+  background-color: var(--surface) !important;
+  color: var(--text-primary) !important;
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.risk-card:hover {
+  box-shadow: var(--shadow-sm);
   transform: translateX(2px);
 }
 
-.alert-danger {
-  border-left-color: #dc3545;
-}
+.risk-card.alert-danger  { border-left-color: var(--danger); }
+.risk-card.alert-warning { border-left-color: var(--warning); }
+.risk-card.alert-info    { border-left-color: var(--info); }
 
-.alert-warning {
-  border-left-color: #ffc107;
-}
-
-.alert-info {
-  border-left-color: #0dcaf0;
-}
-
-.alert-success {
-  border-left-color: #198754;
-}
-
-.alert-heading {
+.risk-card-title {
   font-size: 1rem;
-  margin-bottom: 0.5rem;
+  margin-bottom: .5rem;
+  color: var(--text-primary);
 }
 
 .risk-actions {
-  border-top: 1px solid rgba(0,0,0,0.1);
+  border-top: 1px solid var(--border);
   padding-top: 0.5rem;
 }
 
