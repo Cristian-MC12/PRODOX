@@ -210,7 +210,7 @@ class MetricaAcademicaServiceTest {
             "problemas",
             "Justificación",
             "problemas_reportados"
-        );
+        , null, null, null, null, null, null);
 
         when(projectMemberRepository.existsByProyectoIdAndUserId(proyectoId, userEmail))
             .thenReturn(true);
@@ -252,7 +252,7 @@ class MetricaAcademicaServiceTest {
             "Título", "Objetivo", "Procedimiento", "Variable", "Escala", "por_sprint",
             "Fuente académica", "Σ problemas_reportados", "SUMA", "problemas", "Justificación",
             "problemas_reportados"
-        );
+        , null, null, null, null, null, null);
         
         MetricParametrizacion existente = new MetricParametrizacion();
         existente.setVersion(1);
@@ -966,19 +966,31 @@ class MetricaAcademicaServiceTest {
         // Arrange
         ResultadoMetrica r1 = crearResultado(new BigDecimal("5"), Instant.now().minusSeconds(100));
         ResultadoMetrica r2 = crearResultado(new BigDecimal("7"), Instant.now());
-        
+
+        when(projectMemberRepository.existsByProyectoIdAndUserId(proyectoId, userEmail)).thenReturn(true);
         when(resultadoRepo.findByMetrica_IdAndProyectoIdOrderByCalculadoAtDesc(metricaId, proyectoId))
             .thenReturn(List.of(r2, r1));
-        
+
         // Act
         List<ResultadoMetricaDto> historico = service.obtenerHistorico(metricaId, proyectoId);
-        
+
         // Assert
         assertEquals(2, historico.size());
         assertEquals(0, historico.get(0).resultado().compareTo(new BigDecimal("7")));
         assertEquals(0, historico.get(1).resultado().compareTo(new BigDecimal("5")));
     }
-    
+
+    // Auditoría transversal: antes no validaba membresía — cualquier usuario
+    // autenticado podía consultar el histórico de cualquier proyecto conociendo su UUID.
+    @Test
+    void obtenerHistorico_usuarioExterno_lanzaIllegalStateException() {
+        when(projectMemberRepository.existsByProyectoIdAndUserId(proyectoId, userEmail)).thenReturn(false);
+
+        assertThrows(IllegalStateException.class, () -> service.obtenerHistorico(metricaId, proyectoId));
+
+        verifyNoInteractions(resultadoRepo);
+    }
+
     // ========================================
     // Tests: Interpretación IA
     // ========================================
@@ -988,7 +1000,8 @@ class MetricaAcademicaServiceTest {
         // Arrange
         UUID resultadoId = UUID.randomUUID();
         ResultadoMetrica resultado = crearResultado(new BigDecimal("7"), Instant.now());
-        
+
+        when(projectMemberRepository.existsByProyectoIdAndUserId(proyectoId, userEmail)).thenReturn(true);
         when(resultadoRepo.findById(resultadoId)).thenReturn(Optional.of(resultado));
         when(resultadoRepo.findByMetrica_IdAndProyectoIdOrderByCalculadoAtDesc(any(), any()))
             .thenReturn(List.of(resultado));
@@ -1011,21 +1024,39 @@ class MetricaAcademicaServiceTest {
         // Arrange
         UUID resultadoId = UUID.randomUUID();
         ResultadoMetrica resultado = crearResultado(new BigDecimal("7"), Instant.now());
-        
+
+        when(projectMemberRepository.existsByProyectoIdAndUserId(proyectoId, userEmail)).thenReturn(true);
         when(resultadoRepo.findById(resultadoId)).thenReturn(Optional.of(resultado));
         when(resultadoRepo.findByMetrica_IdAndProyectoIdOrderByCalculadoAtDesc(any(), any()))
             .thenReturn(List.of(resultado));
         when(parametrizacionRepo.findById(any())).thenReturn(Optional.empty());
         when(geminiService.generate(anyString())).thenThrow(new RuntimeException("Error"));
-        
+
         // Act
         InterpretacionIADto interpretacion = service.solicitarInterpretacionIA(resultadoId);
-        
+
         // Assert
         assertNotNull(interpretacion);
         assertTrue(interpretacion.interpretacion().contains("No se pudo generar"));
     }
-    
+
+    // Auditoría transversal: antes resolvía resultado.getProyectoId() internamente
+    // (para dar contexto histórico) pero nunca comprobaba la membresía del llamante
+    // contra ese proyecto — cualquier usuario autenticado podía pedir la
+    // interpretación IA de un resultado de cualquier proyecto conociendo su UUID.
+    @Test
+    void solicitarInterpretacionIA_usuarioExterno_lanzaIllegalStateException() {
+        UUID resultadoId = UUID.randomUUID();
+        ResultadoMetrica resultado = crearResultado(new BigDecimal("7"), Instant.now());
+
+        when(resultadoRepo.findById(resultadoId)).thenReturn(Optional.of(resultado));
+        when(projectMemberRepository.existsByProyectoIdAndUserId(proyectoId, userEmail)).thenReturn(false);
+
+        assertThrows(IllegalStateException.class, () -> service.solicitarInterpretacionIA(resultadoId));
+
+        verifyNoInteractions(geminiService);
+    }
+
     // ========================================
     // Métodos Auxiliares
     // ========================================

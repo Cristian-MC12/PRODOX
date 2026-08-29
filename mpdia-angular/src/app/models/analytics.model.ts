@@ -50,7 +50,7 @@ export interface TrendAnalysis {
 }
 
 export interface SprintDataPoint {
-  numero: number;
+  sprintNumero: number;
   valor: number;
   fecha: string | null;
 }

@@ -6,6 +6,7 @@ import com.mpdia.dto.ai.AIInsightDto;
 import com.mpdia.dto.ai.GenerateInsightsResultDto;
 import com.mpdia.dto.analytics.*;
 import com.mpdia.entity.AIInsight;
+import com.mpdia.entity.ProjectMember;
 import com.mpdia.entity.Proyecto;
 import com.mpdia.entity.Sprint;
 import com.mpdia.repository.AIInsightRepository;
@@ -87,13 +88,26 @@ class AIInsightsServiceTest {
     @Test
     @DisplayName("generateInsights: usuario no autorizado lanza SecurityException")
     void generateInsights_usuarioNoAutorizado_lanzaSecurityException() {
-        when(projectMemberRepo.existsByProyectoIdAndUserId(proyectoId, userId)).thenReturn(false);
+        when(projectMemberRepo.findByProyectoIdAndUserId(proyectoId, userId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.generateInsights(proyectoId, userId))
                 .isInstanceOf(SecurityException.class)
                 .hasMessageContaining("No tienes acceso a este proyecto");
 
-        verify(projectMemberRepo).existsByProyectoIdAndUserId(proyectoId, userId);
+        verify(projectMemberRepo).findByProyectoIdAndUserId(proyectoId, userId);
+        verifyNoInteractions(analyticsService);
+        verifyNoInteractions(geminiService);
+    }
+
+    @Test
+    @DisplayName("generateInsights: miembro normal (no Scrum Master) lanza SecurityException")
+    void generateInsights_miembroNormalNoScrumMaster_lanzaSecurityException() {
+        when(projectMemberRepo.findByProyectoIdAndUserId(proyectoId, userId)).thenReturn(Optional.of(miembro()));
+
+        assertThatThrownBy(() -> service.generateInsights(proyectoId, userId))
+                .isInstanceOf(SecurityException.class)
+                .hasMessageContaining("Solo el Scrum Master");
+
         verifyNoInteractions(analyticsService);
         verifyNoInteractions(geminiService);
     }
@@ -103,7 +117,7 @@ class AIInsightsServiceTest {
     @Test
     @DisplayName("generateInsights: proyecto sin sprints finalizados retorna lista vacía")
     void generateInsights_sinSprintsFinalizados_retornaVacio() {
-        when(projectMemberRepo.existsByProyectoIdAndUserId(proyectoId, userId)).thenReturn(true);
+        when(projectMemberRepo.findByProyectoIdAndUserId(proyectoId, userId)).thenReturn(Optional.of(scrumMaster()));
         when(proyectoRepo.findById(proyectoId)).thenReturn(Optional.of(proyecto));
         when(sprintRepo.findByProyectoIdOrderByNumeroDesc(proyectoId)).thenReturn(List.of());
 
@@ -119,9 +133,9 @@ class AIInsightsServiceTest {
     @Test
     @DisplayName("generateInsights: proyecto con 1 sprint retorna lista vacía")
     void generateInsights_unSprint_retornaVacio() {
-        when(projectMemberRepo.existsByProyectoIdAndUserId(proyectoId, userId)).thenReturn(true);
+        when(projectMemberRepo.findByProyectoIdAndUserId(proyectoId, userId)).thenReturn(Optional.of(scrumMaster()));
         when(proyectoRepo.findById(proyectoId)).thenReturn(Optional.of(proyecto));
-        
+
         Sprint sprint1 = new Sprint();
         sprint1.setId(UUID.randomUUID());
         sprint1.setProyectoId(proyectoId);
@@ -236,7 +250,7 @@ class AIInsightsServiceTest {
     @Test
     @DisplayName("generateInsights: proyecto con 2 sprints genera insights de comparación")
     void generateInsights_dosSprintsFinalizados_generaComparacion() throws Exception {
-        when(projectMemberRepo.existsByProyectoIdAndUserId(proyectoId, userId)).thenReturn(true);
+        when(projectMemberRepo.findByProyectoIdAndUserId(proyectoId, userId)).thenReturn(Optional.of(scrumMaster()));
         when(proyectoRepo.findById(proyectoId)).thenReturn(Optional.of(proyecto));
 
         Sprint sprint1 = crearSprint(1, "finalizado");
@@ -324,7 +338,7 @@ class AIInsightsServiceTest {
     }
 
     private void mockDosSprintsConComparacion(SprintComparisonDto comparison, Sprint sprint1, Sprint sprint2) {
-        when(projectMemberRepo.existsByProyectoIdAndUserId(proyectoId, userId)).thenReturn(true);
+        when(projectMemberRepo.findByProyectoIdAndUserId(proyectoId, userId)).thenReturn(Optional.of(scrumMaster()));
         when(proyectoRepo.findById(proyectoId)).thenReturn(Optional.of(proyecto));
         when(sprintRepo.findByProyectoIdOrderByNumeroDesc(proyectoId)).thenReturn(List.of(sprint2, sprint1));
         when(analyticsService.getSprintTrends(eq(proyectoId), isNull(), eq(3))).thenReturn(List.of());
@@ -564,7 +578,7 @@ class AIInsightsServiceTest {
     // y una tendencia no-STABLE mockeada directamente desde AgileAnalyticsService).
 
     private void mockUnSprintConTendencia(TrendAnalysisDto trend) {
-        when(projectMemberRepo.existsByProyectoIdAndUserId(proyectoId, userId)).thenReturn(true);
+        when(projectMemberRepo.findByProyectoIdAndUserId(proyectoId, userId)).thenReturn(Optional.of(scrumMaster()));
         when(proyectoRepo.findById(proyectoId)).thenReturn(Optional.of(proyecto));
         when(sprintRepo.findByProyectoIdOrderByNumeroDesc(proyectoId)).thenReturn(List.of(sprint));
         when(analyticsService.getSprintTrends(eq(proyectoId), isNull(), eq(3))).thenReturn(List.of(trend));
@@ -669,7 +683,7 @@ class AIInsightsServiceTest {
         Sprint sprint2 = crearSprint(2, "finalizado");
         Sprint sprint3 = crearSprint(3, "finalizado");
 
-        when(projectMemberRepo.existsByProyectoIdAndUserId(proyectoId, userId)).thenReturn(true);
+        when(projectMemberRepo.findByProyectoIdAndUserId(proyectoId, userId)).thenReturn(Optional.of(scrumMaster()));
         when(proyectoRepo.findById(proyectoId)).thenReturn(Optional.of(proyecto));
         when(sprintRepo.findByProyectoIdOrderByNumeroDesc(proyectoId))
                 .thenReturn(List.of(sprint3, sprint2, sprint1));
@@ -727,6 +741,22 @@ class AIInsightsServiceTest {
     }
 
     // ── Helpers ────────────────────────────────────────────────────────────
+
+    private ProjectMember scrumMaster() {
+        ProjectMember m = new ProjectMember();
+        m.setProyectoId(proyectoId);
+        m.setUserId(userId);
+        m.setRol("scrum_master");
+        return m;
+    }
+
+    private ProjectMember miembro() {
+        ProjectMember m = new ProjectMember();
+        m.setProyectoId(proyectoId);
+        m.setUserId(userId);
+        m.setRol("scrum_member");
+        return m;
+    }
 
     private Sprint crearSprint(int numero, String estado) {
         Sprint s = new Sprint();

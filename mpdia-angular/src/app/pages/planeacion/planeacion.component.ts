@@ -285,11 +285,17 @@ type Paso = 'metricas' | 'variables' | 'sprints';
                                 </button>
                               </td>
                               <td class="text-end pe-2">
-                                @if (m.aprobada) {
-                                  <i class="bi bi-check-circle-fill text-success"></i>
-                                } @else {
-                                  <i class="bi bi-clock text-warning"></i>
-                                }
+                                <div class="d-flex align-items-center justify-content-end gap-2">
+                                  @if (m.aprobada) {
+                                    <i class="bi bi-check-circle-fill text-success"></i>
+                                  } @else {
+                                    <i class="bi bi-clock text-warning"></i>
+                                    <button class="btn btn-sm btn-outline-danger btn-icon"
+                                            (click)="deseleccionar(m)" title="Quitar de seleccionadas">
+                                      <i class="bi bi-x-lg"></i>
+                                    </button>
+                                  }
+                                </div>
                               </td>
                             </tr>
                         }

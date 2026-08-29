@@ -204,15 +204,56 @@ import { ProyectoDto } from '../../models/proyecto.model';
                 </div>
                 <div class="card-footer py-2 d-flex justify-content-between align-items-center gap-2">
                   <small class="text-muted text-truncate">{{ p.scrumMasterEmail }}</small>
-                  @if (p.estado === 'activo') {
-                    <button class="btn btn-primary btn-sm py-0 px-2 flex-shrink-0" (click)="seleccionarProyecto(p)">
-                      <i class="bi bi-arrow-right me-1"></i>Trabajar
-                    </button>
-                  }
+                  <div class="d-flex gap-1 flex-shrink-0">
+                    @if (esScrumMaster && p.scrumMasterEmail === auth.currentUser()?.email) {
+                      <button class="btn btn-outline-danger btn-sm py-0 px-2" title="Eliminar proyecto"
+                              (click)="pedirEliminar(p)">
+                        <i class="bi bi-trash"></i>
+                      </button>
+                    }
+                    @if (p.estado === 'activo') {
+                      <button class="btn btn-primary btn-sm py-0 px-2" (click)="seleccionarProyecto(p)">
+                        <i class="bi bi-arrow-right me-1"></i>Trabajar
+                      </button>
+                    }
+                  </div>
                 </div>
               </div>
             </div>
           }
+        </div>
+      }
+
+      <!-- Modal confirmación eliminar proyecto (FASE 21) -->
+      @if (proyectoAEliminar) {
+        <div class="modal d-block" style="background-color: rgba(0,0,0,0.5)" (click)="cancelarEliminar()">
+          <div class="modal-dialog" (click)="$event.stopPropagation()">
+            <div class="modal-content">
+              <div class="modal-header">
+                <h5 class="modal-title text-danger">
+                  <i class="bi bi-exclamation-triangle-fill me-2"></i>Eliminar proyecto
+                </h5>
+                <button type="button" class="btn-close" [disabled]="eliminando" (click)="cancelarEliminar()"></button>
+              </div>
+              <div class="modal-body">
+                <p>¿Seguro que querés eliminar el proyecto <strong>{{ proyectoAEliminar.nombre }}</strong>?</p>
+                <p class="text-danger small mb-0">
+                  <i class="bi bi-exclamation-circle me-1"></i>
+                  Esta acción es irreversible: se eliminarán también sus sprints, miembros e información asociada.
+                </p>
+              </div>
+              <div class="modal-footer">
+                <button class="btn btn-outline-secondary btn-sm" [disabled]="eliminando" (click)="cancelarEliminar()">
+                  Cancelar
+                </button>
+                <button class="btn btn-danger btn-sm" [disabled]="eliminando" (click)="confirmarEliminar()">
+                  @if (eliminando) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                  @else { <i class="bi bi-trash me-1"></i> }
+                  Sí, eliminar proyecto
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       }
 
@@ -230,6 +271,10 @@ export class ProyectosComponent implements OnInit {
   codigoUnirse     = '';
   alertMsg   = '';
   alertClass = 'alert-success';
+
+  /** Proyecto pendiente de confirmación de borrado (FASE 21) */
+  proyectoAEliminar: ProyectoDto | null = null;
+  eliminando = false;
 
   constructor(
     public  auth: AuthService,
@@ -327,6 +372,59 @@ export class ProyectosComponent implements OnInit {
       if (sprint) localStorage.setItem('mpdia_sprint_activo', JSON.stringify(sprint));
       this.router.navigate(['/planeacion']);
     });
+  }
+
+  /** Abre el modal de confirmación; no elimina nada todavía. */
+  pedirEliminar(p: ProyectoDto): void {
+    this.proyectoAEliminar = p;
+  }
+
+  cancelarEliminar(): void {
+    if (this.eliminando) return;
+    this.proyectoAEliminar = null;
+  }
+
+  confirmarEliminar(): void {
+    if (!this.proyectoAEliminar || this.eliminando) return;
+    const p = this.proyectoAEliminar;
+    this.eliminando = true;
+    this.proyectoService.eliminar(p.id).subscribe({
+      next: () => {
+        this.proyectos = this.proyectos.filter(x => x.id !== p.id);
+        this.limpiarSeleccionSiCorresponde(p.id);
+        this.eliminando = false;
+        this.proyectoAEliminar = null;
+        this.showAlert('Proyecto eliminado exitosamente.', 'alert-success');
+      },
+      error: (err) => {
+        this.eliminando = false;
+        this.proyectoAEliminar = null;
+        this.showAlert(err?.error?.error ?? 'Error al eliminar el proyecto.', 'alert-danger');
+        // Si el DELETE falló (ej. el proyecto ya no existe porque se eliminó
+        // desde otra sesión/pestaña mientras este modal estaba abierto), tanto
+        // la lista local como el proyecto activo en localStorage podrían haber
+        // quedado apuntando a un proyecto que ya no existe en el backend.
+        // Recargar la lista y limpiar la selección activa evita dejar en
+        // pantalla una tarjeta o una sesión apuntando a ese proyecto inexistente.
+        this.cargar();
+        this.limpiarSeleccionSiCorresponde(p.id);
+      }
+    });
+  }
+
+  /** Si el proyecto eliminado era el proyecto/sprint activo, limpia la selección. */
+  private limpiarSeleccionSiCorresponde(proyectoId: string): void {
+    const raw = localStorage.getItem('mpdia_proyecto_activo');
+    if (!raw) return;
+    try {
+      const activo = JSON.parse(raw);
+      if (activo?.id === proyectoId) {
+        localStorage.removeItem('mpdia_proyecto_activo');
+        localStorage.removeItem('mpdia_sprint_activo');
+      }
+    } catch {
+      localStorage.removeItem('mpdia_proyecto_activo');
+    }
   }
 
   private showAlert(msg: string, cls: string): void {

@@ -3,9 +3,11 @@ package com.mpdia.dto;
 
 import jakarta.validation.constraints.NotBlank;
 
+import java.math.BigDecimal;
+
 /**
  * Request para aprobar formalmente una parametrización.
- * 
+ *
  * La configuración aprobada se conserva en un snapshot JSON
  * para garantizar reproducibilidad de cálculos históricos.
  * FASE 16.9.4: Incluye campos académicos completos.
@@ -16,7 +18,7 @@ public record AprobarParametrizacionRequest(
     @NotBlank String indicadorVariable,
     @NotBlank String escala,
     String frecuenciaCaptura,
-    
+
     /** Campos académicos */
     String fuenteAcademica,
     String formulaAcademica,
@@ -24,5 +26,13 @@ public record AprobarParametrizacionRequest(
     String unidadResultado,
 
     /** Identificador técnico snake_case de la variable principal (Fase 16.10-E) */
-    String nombreVariable
+    String nombreVariable,
+
+    /** Escala estructurada — ver GuardarParametrizacionRequest/ParametrizacionService.validarEscalaEstructurada(). */
+    String escalaTipo,
+    BigDecimal escalaMin,
+    BigDecimal escalaMax,
+    BigDecimal escalaPaso,
+    Boolean escalaSinLimite,
+    String escalaDescripcion
 ) {}

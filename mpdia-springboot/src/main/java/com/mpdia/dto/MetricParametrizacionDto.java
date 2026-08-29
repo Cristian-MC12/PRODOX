@@ -1,6 +1,7 @@
 // Autor: Cristian Santiago Martinez Cordoba — MPDIA
 package com.mpdia.dto;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -28,5 +29,12 @@ public record MetricParametrizacionDto(
     String  fuenteAcademica,
     String  formulaAcademica,
     String  tipoOperacion,
-    String  unidadResultado
+    String  unidadResultado,
+    /** Escala estructurada — ver ParametrizacionService.validarEscalaEstructurada(). */
+    String     escalaTipo,
+    BigDecimal escalaMin,
+    BigDecimal escalaMax,
+    BigDecimal escalaPaso,
+    Boolean    escalaSinLimite,
+    String     escalaDescripcion
 ) {}

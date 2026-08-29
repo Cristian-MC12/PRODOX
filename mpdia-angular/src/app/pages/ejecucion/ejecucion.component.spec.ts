@@ -325,7 +325,9 @@ describe('EjecucionComponent (FASE 16 — métricas dinámicas)', () => {
     component.registrarValor(m, v);
 
     expect(variableService.guardarValores).not.toHaveBeenCalled();
-    expect(v.error).toContain('entre 1 y 5');
+    // Corrección del manejo de escalas: mensajes de min/max separados (espejan
+    // EjecucionService.validarRangoValor en el backend) en vez del combinado "entre X y Y".
+    expect(v.error).toContain('menor o igual a 5');
   });
 
   it('11. un valor dentro del rango de la escala sí se registra normalmente', () => {
@@ -364,6 +366,112 @@ describe('EjecucionComponent (FASE 16 — métricas dinámicas)', () => {
     const v = component.metricas[0].variables[0];
 
     expect(component.esEscalaDiscretaPequena(v)).toBe(false);
+  });
+
+  // ══════════════════════════════════════════════════════════════════════
+  // Corrección del manejo de escalas — caso especial 0-10 (sección 10 del
+  // pedido): antes "rango <= 9" (escalaMax - escalaMin) EXCLUÍA por error una
+  // escala 0-10 (rango 10, 11 valores). Se corrige contando opciones reales.
+  // ══════════════════════════════════════════════════════════════════════
+
+  function variablesConEscalaEstructurada(metricaId: string, min: number, max: number | null,
+      tipo: 'NUMERICA_ENTERA' | 'NUMERICA_DECIMAL', paso: number, sinLimite = false): VariablesMetricaResponse {
+    return {
+      parametrizacionId: 'param-' + metricaId, version: 1, status: 'aprobada',
+      variables: [{
+        id: 'v-' + metricaId + '-0', nombre: 'valor', descripcion: '',
+        tipoDato: 'numerico', obligatorio: true, unidad: undefined,
+        escalaMin: min, escalaMax: max ?? undefined, escalaTipo: tipo, escalaPaso: paso, escalaSinLimite: sinLimite,
+        frecuenciaCaptura: 'por_sprint'
+      }]
+    };
+  }
+
+  it('14. escala 0-10 (11 valores) SÍ usa el selector de botones, no un input numérico libre', () => {
+    planeacionService.listarMetricas.and.returnValue(of([metrica(METRICA_DEFECTOS, 'Valoración', true)]));
+    variableService.obtenerVariables.and.returnValue(
+      of(variablesConEscalaEstructurada(METRICA_DEFECTOS, 0, 10, 'NUMERICA_ENTERA', 1)));
+
+    component.ngOnInit();
+    const v = component.metricas[0].variables[0];
+
+    expect(component.esEscalaDiscretaPequena(v)).toBe(true);
+    expect(component.opcionesEscala(v)).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+  });
+
+  it('15. escala entera sin límite superior: no usa selector de botones (rango indefinido)', () => {
+    planeacionService.listarMetricas.and.returnValue(of([metrica(METRICA_DEFECTOS, 'Conteo', true)]));
+    variableService.obtenerVariables.and.returnValue(
+      of(variablesConEscalaEstructurada(METRICA_DEFECTOS, 0, null, 'NUMERICA_ENTERA', 1, true)));
+
+    component.ngOnInit();
+    const v = component.metricas[0].variables[0];
+
+    expect(component.esEscalaDiscretaPequena(v)).toBe(false);
+    expect(v.escalaSinLimite).toBe(true);
+  });
+
+  it('16. escala decimal 0-10: NO usa selector de botones aunque min/max sean enteros', () => {
+    planeacionService.listarMetricas.and.returnValue(of([metrica(METRICA_DEFECTOS, 'Decimal', true)]));
+    variableService.obtenerVariables.and.returnValue(
+      of(variablesConEscalaEstructurada(METRICA_DEFECTOS, 0, 10, 'NUMERICA_DECIMAL', 0.5)));
+
+    component.ngOnInit();
+    const v = component.metricas[0].variables[0];
+
+    expect(component.esEscalaDiscretaPequena(v)).toBe(false);
+  });
+
+  it('17. escala entera: un valor decimal se rechaza en el frontend sin llamar al backend', () => {
+    planeacionService.listarMetricas.and.returnValue(of([metrica(METRICA_DEFECTOS, 'Entera', true)]));
+    variableService.obtenerVariables.and.returnValue(
+      of(variablesConEscalaEstructurada(METRICA_DEFECTOS, 0, 10, 'NUMERICA_ENTERA', 1)));
+
+    component.ngOnInit();
+    const m = component.metricas[0];
+    const v = m.variables[0];
+    v.fecha = '2026-08-22';
+    v.valorNum = 7.5;
+
+    component.registrarValor(m, v);
+
+    expect(variableService.guardarValores).not.toHaveBeenCalled();
+    expect(v.error).toContain('entero');
+  });
+
+  it('18. escala con paso > 1: un valor que no respeta el paso se rechaza en el frontend', () => {
+    planeacionService.listarMetricas.and.returnValue(of([metrica(METRICA_DEFECTOS, 'Paso', true)]));
+    variableService.obtenerVariables.and.returnValue(
+      of(variablesConEscalaEstructurada(METRICA_DEFECTOS, 0, 20, 'NUMERICA_ENTERA', 5)));
+
+    component.ngOnInit();
+    const m = component.metricas[0];
+    const v = m.variables[0];
+    v.fecha = '2026-08-22';
+    v.valorNum = 12;
+
+    component.registrarValor(m, v);
+
+    expect(variableService.guardarValores).not.toHaveBeenCalled();
+    expect(v.error).toContain('paso');
+  });
+
+  it('19. escala sin límite superior: acepta un valor grande sin rechazarlo por máximo', () => {
+    planeacionService.listarMetricas.and.returnValue(of([metrica(METRICA_DEFECTOS, 'Conteo', true)]));
+    variableService.obtenerVariables.and.returnValue(
+      of(variablesConEscalaEstructurada(METRICA_DEFECTOS, 0, null, 'NUMERICA_ENTERA', 1, true)));
+    variableService.guardarValores.and.returnValue(of(undefined));
+
+    component.ngOnInit();
+    const m = component.metricas[0];
+    const v = m.variables[0];
+    v.fecha = '2026-08-22';
+    v.valorNum = 100000;
+
+    component.registrarValor(m, v);
+
+    expect(variableService.guardarValores).toHaveBeenCalled();
+    expect(v.error).toBe('');
   });
 
   // ══════════════════════════════════════════════════════════════════════

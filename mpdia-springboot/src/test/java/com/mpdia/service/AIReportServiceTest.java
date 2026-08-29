@@ -4,6 +4,7 @@ package com.mpdia.service;
 import com.mpdia.dto.ai.AIInsightDto;
 import com.mpdia.dto.ai.AISprintReportDto;
 import com.mpdia.dto.analytics.SprintMetricsSummaryDto;
+import com.mpdia.entity.ProjectMember;
 import com.mpdia.entity.Sprint;
 import com.mpdia.repository.ProjectMemberRepository;
 import com.mpdia.repository.SprintRepository;
@@ -77,13 +78,27 @@ class AIReportServiceTest {
     @DisplayName("generateReport: usuario no autorizado lanza SecurityException")
     void generateReport_usuarioNoAutorizado_lanzaSecurityException() {
         when(sprintRepository.findById(sprintId)).thenReturn(Optional.of(sprint));
-        when(projectMemberRepository.existsByProyectoIdAndUserId(proyectoId, userId)).thenReturn(false);
+        when(projectMemberRepository.findByProyectoIdAndUserId(proyectoId, userId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.generateReport(sprintId, userId))
                 .isInstanceOf(SecurityException.class)
                 .hasMessageContaining("No tienes acceso a este proyecto");
 
-        verify(projectMemberRepository).existsByProyectoIdAndUserId(proyectoId, userId);
+        verify(projectMemberRepository).findByProyectoIdAndUserId(proyectoId, userId);
+        verifyNoInteractions(analyticsService);
+        verifyNoInteractions(geminiService);
+    }
+
+    @Test
+    @DisplayName("generateReport: miembro normal (no Scrum Master) lanza SecurityException")
+    void generateReport_miembroNormalNoScrumMaster_lanzaSecurityException() {
+        when(sprintRepository.findById(sprintId)).thenReturn(Optional.of(sprint));
+        when(projectMemberRepository.findByProyectoIdAndUserId(proyectoId, userId)).thenReturn(Optional.of(miembro()));
+
+        assertThatThrownBy(() -> service.generateReport(sprintId, userId))
+                .isInstanceOf(SecurityException.class)
+                .hasMessageContaining("Solo el Scrum Master");
+
         verifyNoInteractions(analyticsService);
         verifyNoInteractions(geminiService);
     }
@@ -97,7 +112,7 @@ class AIReportServiceTest {
     void generateReport_sprintValidoConDatos_generaReporteCorrectamente() {
         // Arrange
         when(sprintRepository.findById(sprintId)).thenReturn(Optional.of(sprint));
-        when(projectMemberRepository.existsByProyectoIdAndUserId(proyectoId, userId)).thenReturn(true);
+        when(projectMemberRepository.findByProyectoIdAndUserId(proyectoId, userId)).thenReturn(Optional.of(scrumMaster()));
 
         Map<String, BigDecimal> metricas = Map.of(
                 "Calidad", new BigDecimal("8.5"),
@@ -151,7 +166,7 @@ class AIReportServiceTest {
     @DisplayName("generateReport: sprint sin métricas genera reporte con datos insuficientes")
     void generateReport_sprintSinMetricas_generaReporteConDatosInsuficientes() {
         when(sprintRepository.findById(sprintId)).thenReturn(Optional.of(sprint));
-        when(projectMemberRepository.existsByProyectoIdAndUserId(proyectoId, userId)).thenReturn(true);
+        when(projectMemberRepository.findByProyectoIdAndUserId(proyectoId, userId)).thenReturn(Optional.of(scrumMaster()));
 
         SprintMetricsSummaryDto summaryVacio = new SprintMetricsSummaryDto(
                 sprintId, 5, "Goal", "finalizado",
@@ -186,7 +201,7 @@ class AIReportServiceTest {
     @DisplayName("generateReport: incluye insights existentes en el reporte")
     void generateReport_incluyeInsightsExistentes() {
         when(sprintRepository.findById(sprintId)).thenReturn(Optional.of(sprint));
-        when(projectMemberRepository.existsByProyectoIdAndUserId(proyectoId, userId)).thenReturn(true);
+        when(projectMemberRepository.findByProyectoIdAndUserId(proyectoId, userId)).thenReturn(Optional.of(scrumMaster()));
 
         SprintMetricsSummaryDto summary = new SprintMetricsSummaryDto(
                 sprintId, 5, "Goal", "finalizado",
@@ -236,7 +251,7 @@ class AIReportServiceTest {
     @DisplayName("generateReport: Gemini lanza excepción (ej. cuota agotada) -> ReporteIANoDisponibleException, NO HTTP 500 opaco")
     void generateReport_geminiLanzaExcepcion_lanzaReporteIANoDisponible() {
         when(sprintRepository.findById(sprintId)).thenReturn(Optional.of(sprint));
-        when(projectMemberRepository.existsByProyectoIdAndUserId(proyectoId, userId)).thenReturn(true);
+        when(projectMemberRepository.findByProyectoIdAndUserId(proyectoId, userId)).thenReturn(Optional.of(scrumMaster()));
         when(analyticsService.getSprintMetricsSummary(sprintId)).thenReturn(summaryConDatos());
         when(insightsService.getProjectInsights(proyectoId, userId)).thenReturn(List.of());
         when(geminiService.generate(anyString()))
@@ -252,7 +267,7 @@ class AIReportServiceTest {
     @DisplayName("generateReport: respuesta vacía/inválida de Gemini (sin ninguna sección reconocible) -> ReporteIANoDisponibleException, no fabrica un reporte falso")
     void generateReport_respuestaGeminiSinSeccionesReconocibles_lanzaReporteIANoDisponible() {
         when(sprintRepository.findById(sprintId)).thenReturn(Optional.of(sprint));
-        when(projectMemberRepository.existsByProyectoIdAndUserId(proyectoId, userId)).thenReturn(true);
+        when(projectMemberRepository.findByProyectoIdAndUserId(proyectoId, userId)).thenReturn(Optional.of(scrumMaster()));
         when(analyticsService.getSprintMetricsSummary(sprintId)).thenReturn(summaryConDatos());
         when(insightsService.getProjectInsights(proyectoId, userId)).thenReturn(List.of());
         when(geminiService.generate(anyString())).thenReturn("RESPUESTA INVALIDA SIN FORMATO");
@@ -266,7 +281,7 @@ class AIReportServiceTest {
     @DisplayName("generateReport: sección RESUMEN presente diciendo 'datos insuficientes' sigue siendo un 200 legítimo (no se confunde con fallo de IA)")
     void generateReport_resumenPresenteConDatosInsuficientes_siguSiendoExitoso() {
         when(sprintRepository.findById(sprintId)).thenReturn(Optional.of(sprint));
-        when(projectMemberRepository.existsByProyectoIdAndUserId(proyectoId, userId)).thenReturn(true);
+        when(projectMemberRepository.findByProyectoIdAndUserId(proyectoId, userId)).thenReturn(Optional.of(scrumMaster()));
         when(analyticsService.getSprintMetricsSummary(sprintId)).thenReturn(summaryConDatos());
         when(insightsService.getProjectInsights(proyectoId, userId)).thenReturn(List.of());
         when(geminiService.generate(anyString())).thenReturn("""
@@ -283,7 +298,7 @@ class AIReportServiceTest {
     @DisplayName("generateReport: reintento tras fallo de Gemini funciona correctamente (sin datos corruptos persistidos)")
     void generateReport_reintentoTrasFallo_funcionaCorrectamente() {
         when(sprintRepository.findById(sprintId)).thenReturn(Optional.of(sprint));
-        when(projectMemberRepository.existsByProyectoIdAndUserId(proyectoId, userId)).thenReturn(true);
+        when(projectMemberRepository.findByProyectoIdAndUserId(proyectoId, userId)).thenReturn(Optional.of(scrumMaster()));
         when(analyticsService.getSprintMetricsSummary(sprintId)).thenReturn(summaryConDatos());
         when(insightsService.getProjectInsights(proyectoId, userId)).thenReturn(List.of());
 
@@ -316,7 +331,7 @@ class AIReportServiceTest {
     @DisplayName("generateReport: error obteniendo métricas no bloquea generación")
     void generateReport_errorMetricas_noBloquea() {
         when(sprintRepository.findById(sprintId)).thenReturn(Optional.of(sprint));
-        when(projectMemberRepository.existsByProyectoIdAndUserId(proyectoId, userId)).thenReturn(true);
+        when(projectMemberRepository.findByProyectoIdAndUserId(proyectoId, userId)).thenReturn(Optional.of(scrumMaster()));
         when(analyticsService.getSprintMetricsSummary(sprintId)).thenThrow(new RuntimeException("DB error"));
         when(insightsService.getProjectInsights(proyectoId, userId)).thenReturn(List.of());
 
@@ -332,5 +347,21 @@ class AIReportServiceTest {
 
         assertThat(result).isNotNull();
         assertThat(result.metricas()).isEmpty();
+    }
+
+    private ProjectMember scrumMaster() {
+        ProjectMember m = new ProjectMember();
+        m.setProyectoId(proyectoId);
+        m.setUserId(userId);
+        m.setRol("scrum_master");
+        return m;
+    }
+
+    private ProjectMember miembro() {
+        ProjectMember m = new ProjectMember();
+        m.setProyectoId(proyectoId);
+        m.setUserId(userId);
+        m.setRol("scrum_member");
+        return m;
     }
 }

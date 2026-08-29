@@ -10,7 +10,7 @@ import { ProyectoDto } from '../../models/proyecto.model';
 import {
   MetricaEvaluacionDetalleDto, RegistroPuntoDto, SprintStatsDto, Tendencia, Variabilidad
 } from '../../models/evaluacion-detalle.model';
-import { MiniChartComponent, PuntoMiniChart } from '../../shared/mini-chart/mini-chart.component';
+import { EvaluacionMetricChartComponent } from './metric-chart/metric-chart.component';
 
 interface CajaBigotes {
   min: number; q1: number; median: number; q3: number; max: number;
@@ -26,7 +26,7 @@ const FRECUENCIA_LABEL: Record<string, string> = {
 @Component({
   selector: 'app-evaluacion',
   standalone: true,
-  imports: [CommonModule, FormsModule, ShellComponent, MiniChartComponent],
+  imports: [CommonModule, FormsModule, ShellComponent, EvaluacionMetricChartComponent],
   template: `
     <app-shell title="Evaluación">
 
@@ -133,13 +133,13 @@ const FRECUENCIA_LABEL: Record<string, string> = {
                       </span>
                     </div>
                     <div class="card-body py-2">
-                      @if (registrosParaVista(m); as registrosVista) {
-                        @if (registrosVista.length === 0) {
-                          <div class="text-center text-muted small py-3">Sin registros en este sprint.</div>
-                        } @else {
-                          <app-mini-chart [puntos]="paraMiniChart(registrosVista)" [height]="110"></app-mini-chart>
-                        }
-                      }
+                      <app-evaluacion-metric-chart
+                        [registros]="registrosParaVista(m)"
+                        [frecuenciaLabel]="frecuenciaLabel(m.frecuenciaCaptura)"
+                        [frecuenciaCaptura]="m.frecuenciaCaptura"
+                        [sprintEspecifico]="sprintFiltro !== null"
+                        [height]="110">
+                      </app-evaluacion-metric-chart>
                     </div>
                     <div class="card-footer py-2">
                       @if (statsParaVista(m); as stats) {
@@ -359,7 +359,13 @@ const FRECUENCIA_LABEL: Record<string, string> = {
                   </span>
                 </div>
 
-                <app-mini-chart [puntos]="paraMiniChart(registrosParaVista(detalleAbierto))" [width]="640" [height]="220"></app-mini-chart>
+                <app-evaluacion-metric-chart
+                  [registros]="registrosParaVista(detalleAbierto)"
+                  [frecuenciaLabel]="frecuenciaLabel(detalleAbierto.frecuenciaCaptura)"
+                  [frecuenciaCaptura]="detalleAbierto.frecuenciaCaptura"
+                  [sprintEspecifico]="sprintFiltro !== null"
+                  [height]="220">
+                </app-evaluacion-metric-chart>
 
                 <!-- Diagrama de caja (distribución) -->
                 @if (registrosParaVista(detalleAbierto).length >= 4 && calcularCaja(registrosParaVista(detalleAbierto)); as caja) {
@@ -608,13 +614,6 @@ export class EvaluacionComponent implements OnInit {
     return [...registros].sort((a, b) => new Date(b.registradoAt).getTime() - new Date(a.registradoAt).getTime());
   }
 
-  // ── gráfica temporal (MiniChartComponent, FASE 16) ──────────────────
-
-  /** Convierte los registros reales de una variable al formato que consume MiniChartComponent. */
-  paraMiniChart(registros: RegistroPuntoDto[]): PuntoMiniChart[] {
-    return registros.map(r => ({ fecha: r.registradoAt, valor: r.valor }));
-  }
-
   // ── diagrama de caja (distribución) ─────────────────────────────────
 
   calcularCaja(registros: RegistroPuntoDto[]): CajaBigotes {
@@ -641,7 +640,10 @@ export class EvaluacionComponent implements OnInit {
     const parrafos: string[] = [];
 
     if (e.totalRegistros < 2) {
-      parrafos.push(`Solo se registró ${e.totalRegistros} valor para esta métrica. Se necesitan al menos 2 registros para analizar una tendencia.`);
+      parrafos.push(
+        `Solo se cuenta con ${e.totalRegistros} valor para esta métrica. Se requiere al menos ` +
+        `un segundo período de medición para identificar una tendencia.`
+      );
       return parrafos;
     }
 

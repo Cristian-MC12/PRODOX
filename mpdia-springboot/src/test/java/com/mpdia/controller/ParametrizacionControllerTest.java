@@ -10,6 +10,7 @@ import com.mpdia.dto.ParametrizacionRequest;
 import com.mpdia.dto.PropuestaParametrizacionDto;
 import com.mpdia.entity.MetricParametrizacion;
 import com.mpdia.repository.MetricParametrizacionRepository;
+import com.mpdia.repository.ProjectMemberRepository;
 import com.mpdia.service.ParametrizacionService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -26,6 +27,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -43,9 +45,12 @@ class ParametrizacionControllerTest {
 
     @MockBean
     private MetricParametrizacionRepository parametrizacionRepository;
-    
+
     @MockBean
     private ParametrizacionService parametrizacionService;
+
+    @MockBean
+    private ProjectMemberRepository projectMemberRepository;
 
     @Test
     @WithMockUser(roles = "USER")
@@ -53,7 +58,8 @@ class ParametrizacionControllerTest {
         // Given
         UUID metricaId = UUID.randomUUID();
         UUID proyectoId = UUID.randomUUID();
-        
+        when(projectMemberRepository.existsByProyectoIdAndUserId(proyectoId, "user")).thenReturn(true);
+
         MetricParametrizacion parametrizacion = new MetricParametrizacion();
         parametrizacion.setId(UUID.randomUUID());
         parametrizacion.setMetricaId(metricaId);
@@ -93,15 +99,34 @@ class ParametrizacionControllerTest {
         // Given
         UUID metricaId = UUID.randomUUID();
         UUID proyectoId = UUID.randomUUID();
-        
+        when(projectMemberRepository.existsByProyectoIdAndUserId(proyectoId, "user")).thenReturn(true);
+
         when(parametrizacionRepository.findUltimaVersionAprobada(any(UUID.class), any(UUID.class)))
                 .thenReturn(Optional.empty());
-        
+
         // When & Then
         mockMvc.perform(get("/api/parametrizacion/ultima-aprobada")
                         .param("metricaId", metricaId.toString())
                         .param("proyectoId", proyectoId.toString()))
                 .andExpect(status().isNoContent());
+    }
+
+    @Test
+    @WithMockUser(roles = "USER", username = "externo")
+    @org.junit.jupiter.api.DisplayName("obtenerUltimaAprobada: usuario sin membresía en el proyecto retorna 403")
+    void obtenerUltimaAprobada_usuarioExterno_retorna403() throws Exception {
+        // Given
+        UUID metricaId = UUID.randomUUID();
+        UUID proyectoId = UUID.randomUUID();
+        when(projectMemberRepository.existsByProyectoIdAndUserId(proyectoId, "externo")).thenReturn(false);
+
+        // When & Then
+        mockMvc.perform(get("/api/parametrizacion/ultima-aprobada")
+                        .param("metricaId", metricaId.toString())
+                        .param("proyectoId", proyectoId.toString()))
+                .andExpect(status().isForbidden());
+
+        verifyNoInteractions(parametrizacionRepository);
     }
 
     @Test
@@ -145,7 +170,7 @@ class ParametrizacionControllerTest {
                 "unidad",
                 "Justificación de la propuesta",
                 "indicador_principal"
-        );
+        , null, null, null, null, null, null);
         
         when(parametrizacionService.generarPropuestas(any(ParametrizacionRequest.class)))
                 .thenReturn(List.of(propuesta));
@@ -197,7 +222,7 @@ class ParametrizacionControllerTest {
                 "unidad",
                 "{}",
                 "indicador_test"
-        );
+        , null, null, null, null, null, null);
 
         MetricParametrizacion parametrizacion = new MetricParametrizacion();
         parametrizacion.setId(UUID.randomUUID());
@@ -237,7 +262,7 @@ class ParametrizacionControllerTest {
                 "unidad",
                 "{}",
                 "indicador_test"
-        );
+        , null, null, null, null, null, null);
 
         // When & Then
         mockMvc.perform(post("/api/parametrizacion/guardar-propuesta")
@@ -263,7 +288,7 @@ class ParametrizacionControllerTest {
                 "SUMA",
                 "unidades",
                 "indicador_aprobado"
-        );
+        , null, null, null, null, null, null);
         
         MetricParametrizacion parametrizacion = new MetricParametrizacion();
         parametrizacion.setId(parametrizacionId);
@@ -301,7 +326,7 @@ class ParametrizacionControllerTest {
                 "SUMA",
                 "unidad",
                 "indicador_test"
-        );
+        , null, null, null, null, null, null);
 
         when(parametrizacionService.aprobarParametrizacion(any(UUID.class), any(AprobarParametrizacionRequest.class)))
                 .thenThrow(new IllegalArgumentException("Parametrización no encontrada"));
@@ -330,7 +355,7 @@ class ParametrizacionControllerTest {
                 "SUMA",
                 "unidad",
                 "indicador_test"
-        );
+        , null, null, null, null, null, null);
 
         when(parametrizacionService.aprobarParametrizacion(any(UUID.class), any(AprobarParametrizacionRequest.class)))
                 .thenThrow(new IllegalStateException("Solo se pueden aprobar parametrizaciones en estado 'propuesta'"));
@@ -358,7 +383,7 @@ class ParametrizacionControllerTest {
                 "SUMA",
                 "unidad",
                 "indicador_test"
-        );
+        , null, null, null, null, null, null);
 
         // When & Then
         mockMvc.perform(post("/api/parametrizacion/" + parametrizacionId + "/aprobar")

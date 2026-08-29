@@ -150,6 +150,36 @@ class ProyectoServiceTest {
         assertThat(resultado).isEmpty();
     }
 
+    // ── getById ───────────────────────────────────────────────────────────
+    // Auditoría transversal: antes no validaba membresía — cualquier usuario
+    // autenticado podía consultar el detalle de cualquier proyecto conociendo su UUID.
+
+    @Test
+    @DisplayName("getById: miembro del proyecto obtiene el detalle")
+    void getById_miembroDelProyecto_retornaProyecto() {
+        when(memberRepo.existsByProyectoIdAndUserId(proyectoId, smId.toString())).thenReturn(true);
+        when(proyectoRepo.findById(proyectoId)).thenReturn(Optional.of(proyecto));
+        when(userRepo.findById(smId)).thenReturn(Optional.of(scrumMaster));
+        when(memberRepo.findByProyectoId(proyectoId)).thenReturn(List.of());
+
+        ProyectoDto dto = proyectoService.getById(proyectoId, smId.toString());
+
+        assertThat(dto.nombre()).isEqualTo("Sistema MPDIA");
+    }
+
+    @Test
+    @DisplayName("getById: usuario externo al proyecto lanza SecurityException")
+    void getById_usuarioExterno_lanzaSecurityException() {
+        String externoId = UUID.randomUUID().toString();
+        when(memberRepo.existsByProyectoIdAndUserId(proyectoId, externoId)).thenReturn(false);
+
+        assertThatThrownBy(() -> proyectoService.getById(proyectoId, externoId))
+                .isInstanceOf(SecurityException.class)
+                .hasMessageContaining("No tienes acceso a este proyecto");
+
+        verify(proyectoRepo, never()).findById(any());
+    }
+
     // ── finalizar ─────────────────────────────────────────────────────────
 
     @Test
@@ -176,5 +206,59 @@ class ProyectoServiceTest {
         assertThatThrownBy(() -> proyectoService.finalizar(proyectoId, otroUserId))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Solo el Scrum Master del proyecto");
+    }
+
+    // ── eliminar ──────────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("eliminar: Scrum Master dueño puede eliminar su proyecto")
+    void eliminar_scrumMasterDueño_eliminaProyecto() {
+        when(proyectoRepo.findById(proyectoId)).thenReturn(Optional.of(proyecto));
+        when(userRepo.findById(smId)).thenReturn(Optional.of(scrumMaster));
+
+        proyectoService.eliminar(proyectoId, smId.toString());
+
+        verify(proyectoRepo).delete(proyecto);
+    }
+
+    @Test
+    @DisplayName("eliminar: lanza excepción si el usuario no tiene rol scrum_master")
+    void eliminar_usuarioNoEsScrumMaster_lanzaExcepcion() {
+        scrumMaster.setRole("scrum_member");
+        when(proyectoRepo.findById(proyectoId)).thenReturn(Optional.of(proyecto));
+        when(userRepo.findById(smId)).thenReturn(Optional.of(scrumMaster));
+
+        assertThatThrownBy(() -> proyectoService.eliminar(proyectoId, smId.toString()))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Solo el Scrum Master del proyecto");
+        verify(proyectoRepo, never()).delete(any());
+    }
+
+    @Test
+    @DisplayName("eliminar: lanza excepción si el usuario no es el dueño del proyecto")
+    void eliminar_otroScrumMaster_lanzaExcepcion() {
+        UUID otroSmId = UUID.randomUUID();
+        AppUser otroSm = new AppUser();
+        otroSm.setId(otroSmId);
+        otroSm.setEmail("otro-sm@mpdia.com");
+        otroSm.setRole("scrum_master");
+
+        when(proyectoRepo.findById(proyectoId)).thenReturn(Optional.of(proyecto));
+        when(userRepo.findById(otroSmId)).thenReturn(Optional.of(otroSm));
+
+        assertThatThrownBy(() -> proyectoService.eliminar(proyectoId, otroSmId.toString()))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Solo el Scrum Master del proyecto");
+        verify(proyectoRepo, never()).delete(any());
+    }
+
+    @Test
+    @DisplayName("eliminar: lanza excepción si el proyecto no existe")
+    void eliminar_proyectoNoExiste_lanzaExcepcion() {
+        when(proyectoRepo.findById(proyectoId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> proyectoService.eliminar(proyectoId, smId.toString()))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Proyecto no encontrado");
     }
 }

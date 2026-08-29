@@ -206,4 +206,49 @@ describe('ResumenSeleccionComponent.aceptar() (FASE 10)', () => {
       jasmine.objectContaining({ frecuenciaCaptura: 'por_sprint' })
     );
   });
+
+  // ── Corrección de duplicados en Verificación ────────────────────────────
+  // Causa raíz real del defecto reportado (dos filas "pendiente" idénticas para
+  // "Aprendizaje organizacional (FAT)" / "Problemas Recurrentes de Software"):
+  // este payload no propagaba la escala estructurada, así que un metric ya
+  // enviado desde Parametrización (CON escala) se reenviaba acá SIN escala,
+  // y el backend (esMismoContenido()) lo trataba como contenido distinto,
+  // creando una versión "pendiente" nueva en vez de reconocerlo como el mismo
+  // envío. Enviar los mismos campos que parametrizacion.component.ts cierra
+  // ese hueco en el origen, antes de que el backend tenga que deduplicar nada.
+  it('aceptar() propaga la escala estructurada de cada parametrización al backend', () => {
+    const conEscala = {
+      ...seleccionCompleta('a', 'm-1'),
+      parametrizacion: {
+        objetivo: 'obj', procedimiento: 'proc', indicadorVariable: 'ind', escala: 'esc',
+        escalaTipo: 'NUMERICA_ENTERA' as const, escalaMin: 0, escalaMax: null,
+        escalaPaso: 1, escalaSinLimite: true, escalaDescripcion: 'Cantidad de defectos.'
+      }
+    };
+    component.seleccionadas = [conEscala];
+    rankingService.guardar.and.returnValue(of({ id: 'p-1' } as any));
+
+    component.aceptar();
+
+    expect(rankingService.guardar).toHaveBeenCalledWith(
+      jasmine.objectContaining({
+        escalaTipo: 'NUMERICA_ENTERA', escalaMin: 0, escalaMax: null,
+        escalaPaso: 1, escalaSinLimite: true, escalaDescripcion: 'Cantidad de defectos.'
+      })
+    );
+  });
+
+  it('aceptar() sin escala estructurada informada la envía como null (compatibilidad histórica)', () => {
+    component.seleccionadas = [seleccionCompleta('a', 'm-1')]; // sin campos de escala
+    rankingService.guardar.and.returnValue(of({ id: 'p-1' } as any));
+
+    component.aceptar();
+
+    expect(rankingService.guardar).toHaveBeenCalledWith(
+      jasmine.objectContaining({
+        escalaTipo: null, escalaMin: null, escalaMax: null,
+        escalaPaso: null, escalaSinLimite: null, escalaDescripcion: null
+      })
+    );
+  });
 });

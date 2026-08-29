@@ -76,7 +76,7 @@ class Fase3CrearParametrizacionesPrueba1Test {
             propuesta.escala(), propuesta.frecuenciaCaptura(), propuesta.fuenteAcademica(),
             propuesta.formulaAcademica(), propuesta.tipoOperacion(), propuesta.unidadResultado(),
             propuesta.nombreVariable()
-        );
+        , null, null, null, null, null, null);
 
         return parametrizacionService.aprobarParametrizacion(guardada.getId(), aprobar);
     }
@@ -109,7 +109,7 @@ class Fase3CrearParametrizacionesPrueba1Test {
             "defectos",
             null,
             "defectos_totales"
-        );
+        , null, null, null, null, null, null);
 
         MetricParametrizacion aprobada = crearYAprobar(propuesta);
 
@@ -162,7 +162,7 @@ class Fase3CrearParametrizacionesPrueba1Test {
             "%",
             null,
             "acat,acr"
-        );
+        , null, null, null, null, null, null);
 
         MetricParametrizacion aprobada = crearYAprobar(propuesta);
 
@@ -216,7 +216,7 @@ class Fase3CrearParametrizacionesPrueba1Test {
             "%",
             null,
             "deuda_gestionada,deuda_identificada"
-        );
+        , null, null, null, null, null, null);
 
         MetricParametrizacion aprobada = crearYAprobar(propuesta);
 

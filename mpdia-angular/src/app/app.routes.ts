@@ -72,6 +72,13 @@ export const routes: Routes = [
     loadComponent: () => import('./pages/crear-metrica-ia/crear-metrica-ia.component').then(m => m.CrearMetricaIAComponent),
     title: 'Crear métrica con IA — PRODOX AI'
   },
+  // ── Sprints ───────────────────────────────────────────────────────────
+  {
+    path: 'sprints',
+    canActivate: [authGuard, proyectoGuard],
+    loadComponent: () => import('./pages/sprints/sprints.component').then(m => m.SprintsComponent),
+    title: 'Sprints — PRODOX AI'
+  },
   // ── Ejecución ─────────────────────────────────────────────────────────
   {
     path: 'ejecucion',

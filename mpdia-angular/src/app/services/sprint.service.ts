@@ -31,4 +31,9 @@ export class SprintService {
   reabrir(sprintId: string): Observable<SprintDto> {
     return this.http.patch<SprintDto>(`${this.base}/${sprintId}/reabrir`, {});
   }
+
+  /** Transición reabierto → finalizado: vuelve a cerrar un sprint que había sido reabierto. */
+  finalizarReabierto(sprintId: string): Observable<SprintDto> {
+    return this.http.patch<SprintDto>(`${this.base}/${sprintId}/finalizar`, {});
+  }
 }

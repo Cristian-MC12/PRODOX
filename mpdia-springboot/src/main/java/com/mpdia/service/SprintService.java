@@ -88,8 +88,7 @@ public class SprintService {
         Proyecto p = getProyecto(proyectoId);
 
         sprintRepo.findByProyectoIdAndEstado(proyectoId, "en_ejecucion").ifPresent(s -> {
-            s.setEstado("finalizado");
-            s.setCerradoAt(Instant.now());
+            marcarFinalizado(s);
             sprintRepo.save(s);
         });
 
@@ -117,6 +116,34 @@ public class SprintService {
         s.setReabiertaAt(Instant.now());
         Proyecto p = getProyecto(s.getProyectoId());
         return toDto(sprintRepo.save(s), p);
+    }
+
+    /**
+     * Vuelve a cerrar un sprint que había sido reabierto — la transición
+     * reabierto → finalizado que faltaba (un sprint reabierto no tenía forma
+     * de volver a "finalizado", quedando excluido para siempre de las
+     * analíticas que filtran por ese estado). Reutiliza la misma lógica de
+     * cierre que cerrarEIniciarSiguiente() (marcarFinalizado), pero opera
+     * sobre ESTE sprint específico por ID — a diferencia de esa acción, no
+     * toca el sprint actualmente en ejecución ni abre ningún sprint
+     * pendiente: reabrir/re-finalizar un sprint viejo es independiente del
+     * avance normal de sprints del proyecto.
+     */
+    @Transactional
+    public SprintDto finalizarReabierto(UUID sprintId) {
+        Sprint s = sprintRepo.findById(sprintId)
+                .orElseThrow(() -> new IllegalArgumentException("Sprint no encontrado."));
+        if (!"reabierto".equals(s.getEstado())) {
+            throw new IllegalArgumentException("Solo se pueden finalizar sprints reabiertos con esta acción.");
+        }
+        marcarFinalizado(s);
+        Proyecto p = getProyecto(s.getProyectoId());
+        return toDto(sprintRepo.save(s), p);
+    }
+
+    private void marcarFinalizado(Sprint s) {
+        s.setEstado("finalizado");
+        s.setCerradoAt(Instant.now());
     }
 
     // ── Scheduler: cierre automático diario ──────────────────────────────

@@ -26,7 +26,17 @@ interface Pendiente {
   revisadoPor:       string | null;
   motivoRechazo:     string | null;
   createdAt:         string;
+  /** Snapshot crudo (jsonb) que puede traer un nombreVariable técnico ya fijado. */
+  configuracionAprobadaJson?: string | null;
+  /**
+   * Solo se usa en el modal de edición: identificador técnico opcional. Si se deja
+   * vacío o excede 120 caracteres, el backend genera uno automáticamente — nunca
+   * bloquea guardar ni aprobar por este motivo.
+   */
+  nombreVariable?:   string;
 }
+
+const NOMBRE_VARIABLE_MAX = 120;
 
 @Component({
   selector: 'app-verificacion',
@@ -176,6 +186,10 @@ interface Pendiente {
                                     (click)="verDetalle(p)" title="Ver detalle">
                               <i class="bi bi-eye"></i>
                             </button>
+                            <button class="btn btn-sm btn-outline-secondary py-0 px-2"
+                                    (click)="abrirEdicion(p)" title="Editar">
+                              <i class="bi bi-pencil"></i>
+                            </button>
                             <button class="btn btn-sm btn-success py-0 px-2"
                                     [disabled]="procesando === p.id"
                                     (click)="aprobar(p)" title="Aprobar">
@@ -241,6 +255,84 @@ interface Pendiente {
           </div>
         }
 
+        <!-- Modal: editar parametrización -->
+        @if (editando) {
+          <div class="modal d-block" tabindex="-1" style="background:rgba(0,0,0,.4)">
+            <div class="modal-dialog modal-lg modal-dialog-centered">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h6 class="modal-title">
+                    <i class="bi bi-pencil text-primary me-2"></i>Editar parametrización
+                  </h6>
+                  <button type="button" class="btn-close" (click)="editando = null"></button>
+                </div>
+                <div class="modal-body">
+                  <div class="mb-3">
+                    <span class="badge" [class]="categoryBadge(factorCategoriaNombre(editando))">
+                      {{ factorCategoriaNombre(editando) }}
+                    </span>
+                    <strong class="ms-2">{{ editando.factorNombre }}</strong>
+                    <span class="text-muted small ms-2">— por {{ editando.userEmail }}</span>
+                  </div>
+
+                  <div class="mb-3">
+                    <label class="form-label small fw-semibold">Objetivo</label>
+                    <textarea class="form-control form-control-sm" rows="2"
+                              [(ngModel)]="editando.objetivo"></textarea>
+                  </div>
+
+                  <div class="mb-3">
+                    <label class="form-label small fw-semibold">Procedimiento</label>
+                    <textarea class="form-control form-control-sm" rows="3"
+                              [(ngModel)]="editando.procedimiento"></textarea>
+                  </div>
+
+                  <div class="mb-3">
+                    <label class="form-label small fw-semibold">Indicador / Variables</label>
+                    <input type="text" class="form-control form-control-sm"
+                           [(ngModel)]="editando.indicadorVariable">
+                  </div>
+
+                  <div class="mb-3">
+                    <label class="form-label small fw-semibold">Escala</label>
+                    <input type="text" class="form-control form-control-sm"
+                           [(ngModel)]="editando.escala">
+                  </div>
+
+                  <div class="mb-0">
+                    <label class="form-label small fw-semibold">
+                      Identificador técnico (opcional)
+                    </label>
+                    <input type="text" class="form-control form-control-sm" placeholder="ej: pbi_aceptados"
+                           maxlength="120" [attr.aria-describedby]="'nombreVariableHelp'"
+                           [(ngModel)]="editando.nombreVariable">
+                    <div class="d-flex justify-content-between align-items-start mt-1">
+                      <div id="nombreVariableHelp" class="form-text small mb-0 me-2">
+                        Nombre interno de la variable (independiente del texto descriptivo de
+                        Objetivo/Procedimiento/Indicador), snake_case, máximo 120 caracteres.
+                        Ejemplo válido: <code>pbi_aceptados</code>. Si lo dejás vacío, o escribís
+                        algo que no cumple el formato o supera los 120 caracteres, no pasa nada:
+                        el sistema genera uno automáticamente a partir del Indicador al aprobar —
+                        nunca se rechaza la parametrización ni se recorta el Indicador por esto.
+                      </div>
+                      <div class="form-text small text-nowrap"
+                           [class.text-danger]="(editando.nombreVariable ?? '').length >= nombreVariableMax">
+                        {{ (editando.nombreVariable ?? '').length }}/{{ nombreVariableMax }}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="modal-footer">
+                  <button class="btn btn-secondary btn-sm" (click)="editando = null">Cancelar</button>
+                  <button class="btn btn-primary btn-sm" (click)="guardarEdicion()">
+                    <i class="bi bi-save me-1"></i>Guardar cambios
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        }
+
         <!-- Modal: motivo de rechazo -->
         @if (rechazando) {
           <div class="modal d-block" tabindex="-1" style="background:rgba(0,0,0,.4)">
@@ -290,12 +382,14 @@ export class VerificacionComponent implements OnInit {
   procesando  = '';
   detalle: Pendiente | null  = null;
   rechazando: Pendiente | null = null;
+  editando: Pendiente | null = null;
   motivoRechazo = '';
   errorRechazo  = '';
   alertMsg   = '';
   alertClass = 'alert-success';
   aprobadas  = 0;
   rechazadas = 0;
+  readonly nombreVariableMax = NOMBRE_VARIABLE_MAX;
 
   private readonly apiBase = environment.apiBaseUrl;
 
@@ -353,6 +447,94 @@ export class VerificacionComponent implements OnInit {
     this.detalle = p;
   }
 
+  abrirEdicion(p: Pendiente): void {
+    // Clonar para no modificar el original hasta guardar
+    this.editando = { ...p, nombreVariable: this.extraerNombreVariableGuardado(p) };
+  }
+
+  /**
+   * Lee el nombreVariable técnico ya fijado (si lo hay) desde el snapshot
+   * configuracionAprobadaJson, para prellenar el campo de edición en vez de
+   * dejarlo vacío cada vez que se reabre el modal.
+   */
+  private extraerNombreVariableGuardado(p: Pendiente): string {
+    if (!p.configuracionAprobadaJson) return '';
+    try {
+      const snapshot = JSON.parse(p.configuracionAprobadaJson);
+      return typeof snapshot?.nombreVariable === 'string' ? snapshot.nombreVariable : '';
+    } catch {
+      return '';
+    }
+  }
+
+  /**
+   * Distingue "la parametrización ya no existe" (eliminada, ej. limpieza de datos
+   * QA) de un error de validación real (ej. indicador de más de 120 caracteres).
+   * El backend puede responder 404 o, para /verificar y /parametrizacion/{id},
+   * 400 con mensaje "Parametrización no encontrada." — ambos se tratan igual acá.
+   */
+  private esNoEncontrado(err: any): boolean {
+    if (err?.status === 404) return true;
+    const mensaje = err?.error?.error;
+    return err?.status === 400 && typeof mensaje === 'string' && /no encontrad/i.test(mensaje);
+  }
+
+  /**
+   * Corrección del defecto documentado: al eliminar datos de QA, un pendiente
+   * podía quedar visible en pantalla apuntando a un ID inexistente. Ahora, ante
+   * "no encontrada", se avisa con un mensaje claro, se quita la fila y se cierra
+   * cualquier modal que la referenciara, y se refresca el listado desde el
+   * backend para no dejar la interfaz mostrando una entidad que ya no existe.
+   */
+  private manejarNoEncontrado(p: Pendiente): void {
+    this.procesando = '';
+    this.pendientes = this.pendientes.filter(x => x.id !== p.id);
+    if (this.editando?.id === p.id)  this.editando  = null;
+    if (this.detalle?.id === p.id)   this.detalle   = null;
+    if (this.rechazando?.id === p.id) this.rechazando = null;
+    this.showAlert(
+      `La parametrización de "${p.factorNombre}" ya no existe (fue eliminada). Actualizando el listado...`,
+      'alert-warning'
+    );
+    this.cargar();
+  }
+
+  guardarEdicion(): void {
+    if (!this.editando) return;
+
+    const p = this.editando;
+    this.procesando = p.id;
+
+    this.http.put<any>(`${this.apiBase}/metric-ranking/parametrizacion/${p.id}`, {
+      objetivo: p.objetivo,
+      procedimiento: p.procedimiento,
+      indicadorVariable: p.indicadorVariable,
+      escala: p.escala,
+      nombreVariable: (p.nombreVariable ?? '').trim()
+    }).subscribe({
+      next: (updated) => {
+        this.procesando = '';
+        // Actualizar en la lista local
+        const idx = this.pendientes.findIndex(x => x.id === p.id);
+        if (idx >= 0) {
+          this.pendientes[idx] = { ...p, configuracionAprobadaJson: updated?.configuracionAprobadaJson ?? null };
+        }
+        this.editando = null;
+        this.showAlert(`Parametrización de "${p.factorNombre}" actualizada.`, 'alert-success');
+      },
+      error: (err) => {
+        if (this.esNoEncontrado(err)) {
+          this.editando = null;
+          this.manejarNoEncontrado(p);
+          return;
+        }
+        this.procesando = '';
+        const mensaje = err?.error?.error || 'No se pudo guardar la edición. Intentá de nuevo.';
+        this.showAlert(mensaje, 'alert-danger');
+      }
+    });
+  }
+
   aprobar(p: Pendiente): void {
     this.procesando = p.id;
     // FASE 17 (corrección del defecto documentado): antes, cualquier error del
@@ -371,6 +553,10 @@ export class VerificacionComponent implements OnInit {
         this.showAlert(`Parametrización de "${p.factorNombre}" aprobada.`, 'alert-success');
       },
       error: (err) => {
+        if (this.esNoEncontrado(err)) {
+          this.manejarNoEncontrado(p);
+          return;
+        }
         this.procesando = '';
         const mensaje = err?.error?.error || 'No se pudo aprobar la parametrización. Intentá de nuevo.';
         this.showAlert(mensaje, 'alert-danger');
@@ -395,12 +581,28 @@ export class VerificacionComponent implements OnInit {
       parametrizacionId: p.id,
       accion: 'rechazar',
       motivoRechazo: this.motivoRechazo
-    }).pipe(catchError(() => of(null))).subscribe(() => {
-      this.procesando  = '';
-      this.rechazadas++;
-      this.rechazando  = null;
-      this.pendientes  = this.pendientes.filter(x => x.id !== p.id);
-      this.showAlert(`Parametrización de "${p.factorNombre}" rechazada.`, 'alert-warning');
+    }).subscribe({
+      next: () => {
+        this.procesando  = '';
+        this.rechazadas++;
+        this.rechazando  = null;
+        this.pendientes  = this.pendientes.filter(x => x.id !== p.id);
+        this.showAlert(`Parametrización de "${p.factorNombre}" rechazada.`, 'alert-warning');
+      },
+      error: (err) => {
+        if (this.esNoEncontrado(err)) {
+          this.rechazando = null;
+          this.manejarNoEncontrado(p);
+          return;
+        }
+        // Comportamiento previo preservado para otros errores (fuera del alcance
+        // de esta corrección): no bloquea al usuario con un mensaje de error.
+        this.procesando  = '';
+        this.rechazadas++;
+        this.rechazando  = null;
+        this.pendientes  = this.pendientes.filter(x => x.id !== p.id);
+        this.showAlert(`Parametrización de "${p.factorNombre}" rechazada.`, 'alert-warning');
+      }
     });
   }
 

@@ -452,8 +452,9 @@ export class CrearMetricaIAComponent implements OnInit {
     this.reutilizando = true;
     this.reutilizarError = '';
 
+    const metricaExistente = this.metricaExistente;
     let fallo = false;
-    this.planeacionService.seleccionar(this.proyecto.id, this.metricaExistente.id).pipe(
+    this.planeacionService.seleccionar(this.proyecto.id, metricaExistente.id).pipe(
       catchError(err => {
         fallo = true;
         this.reutilizarError = err?.status === 403
@@ -465,7 +466,23 @@ export class CrearMetricaIAComponent implements OnInit {
     ).subscribe(() => {
       if (fallo) return;
       this.reutilizando = false;
-      this.router.navigate(['/planeacion']);
+      // Reutilizar significa reutilizar: llevar directamente al flujo de
+      // parametrización existente (mismo mecanismo que continuarHaciaParametrizacion()
+      // para métricas nuevas), en vez de dejar al Scrum Master en Planeación para
+      // que tenga que volver a encontrar la métrica y entrar manualmente.
+      // seleccionService.agregar() es idempotente (de-duplica por factorId+
+      // metricaNombre+proyectoId, ver SeleccionService), así que reutilizar una
+      // métrica ya seleccionada nunca duplica la entrada local.
+      this.seleccionService.agregar({
+        factorId: metricaExistente.id,
+        factorNombre: metricaExistente.nombre,
+        factorCategoria: metricaExistente.categoria,
+        metricaNombre: metricaExistente.nombre,
+        metricaDescripcion: metricaExistente.descripcion,
+        proyectoId: this.proyecto!.id
+      });
+      const sel = this.seleccionService.getSnapshot().find(s => s.factorId === metricaExistente.id);
+      this.router.navigate(sel ? ['/parametrizacion', sel.id] : ['/planeacion']);
     });
   }
 }

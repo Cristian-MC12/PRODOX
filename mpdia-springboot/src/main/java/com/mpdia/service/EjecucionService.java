@@ -3,9 +3,11 @@ package com.mpdia.service;
 
 import com.mpdia.dto.RegistrarValorRequest;
 import com.mpdia.dto.RegistroValorDto;
+import com.mpdia.entity.ProjectMember;
 import com.mpdia.entity.RegistroValor;
 import com.mpdia.entity.Sprint;
 import com.mpdia.entity.Variable;
+import com.mpdia.repository.ProjectMemberRepository;
 import com.mpdia.repository.RegistroValorRepository;
 import com.mpdia.repository.SprintRepository;
 import com.mpdia.repository.VariableRepository;
@@ -29,13 +31,35 @@ public class EjecucionService {
     private final RegistroValorRepository registroRepo;
     private final VariableRepository      variableRepo;
     private final SprintRepository        sprintRepo;
+    private final ProjectMemberRepository projectMemberRepo;
 
-    public List<RegistroValorDto> listarPorSprint(UUID sprintId) {
+    /**
+     * Revisión de seguridad: ninguno de estos endpoints validaba pertenencia al
+     * proyecto (IDOR confirmado en auditoría del módulo Ejecución) ni que
+     * sprintId/variableId fueran consistentes entre sí — un sprint del
+     * Proyecto A podía combinarse con una variable del Proyecto B, y
+     * cualquier usuario autenticado (miembro o no) podía leer/escribir
+     * registro_valores de cualquier proyecto con solo conocer los IDs.
+     * validarAcceso/validarScrumMaster y validarMismoProyecto son expuestos
+     * como públicos porque VariableDinamicaService (el camino real que usa
+     * la pantalla de Ejecución) ya depende de este servicio y los reutiliza
+     * en vez de duplicar el criterio de autorización.
+     */
+    public List<RegistroValorDto> listarPorSprint(String userId, UUID sprintId) {
+        Sprint sprint = sprintRepo.findById(sprintId)
+                .orElseThrow(() -> new IllegalArgumentException("Sprint no encontrado."));
+        validarAcceso(userId, sprint.getProyectoId());
         return registroRepo.findBySprintId(sprintId)
                 .stream().map(this::toDto).toList();
     }
 
-    public List<RegistroValorDto> listarPorVariable(UUID variableId, UUID sprintId) {
+    public List<RegistroValorDto> listarPorVariable(String userId, UUID variableId, UUID sprintId) {
+        Variable variable = variableRepo.findById(variableId)
+                .orElseThrow(() -> new IllegalArgumentException("Variable no encontrada."));
+        Sprint sprint = sprintRepo.findById(sprintId)
+                .orElseThrow(() -> new IllegalArgumentException("Sprint no encontrado."));
+        validarMismoProyecto(sprint, variable);
+        validarAcceso(userId, sprint.getProyectoId());
         return registroRepo.findByVariable_IdAndSprintId(variableId, sprintId)
                 .stream().map(this::toDto).toList();
     }
@@ -44,6 +68,13 @@ public class EjecucionService {
     public RegistroValorDto registrar(String userId, RegistrarValorRequest req) {
         Variable v = variableRepo.findById(req.variableId())
                 .orElseThrow(() -> new IllegalArgumentException("Variable no encontrada."));
+        Sprint sprint = sprintRepo.findById(req.sprintId())
+                .orElseThrow(() -> new IllegalArgumentException("Sprint no encontrado."));
+        validarMismoProyecto(sprint, v);
+        // Registrar un valor es una acción restringida al Scrum Master del proyecto
+        // (mismo diseño ya reflejado en EjecucionComponent: solo el SM ve el
+        // formulario de captura; un miembro normal solo consulta resultados).
+        validarScrumMaster(userId, v.getProyectoId());
 
         if (!v.getActiva()) {
             throw new IllegalArgumentException("La variable está inactiva.");
@@ -57,6 +88,29 @@ public class EjecucionService {
                 req.valorNum(), req.valorTexto(), req.valorBool(), req.observacion());
 
         return toDto(r);
+    }
+
+    /** Ambos deben pertenecer al mismo proyecto — no basta con que cada ID exista individualmente. */
+    public void validarMismoProyecto(Sprint sprint, Variable variable) {
+        if (!sprint.getProyectoId().equals(variable.getProyectoId())) {
+            throw new IllegalArgumentException("El sprint y la variable no pertenecen al mismo proyecto.");
+        }
+    }
+
+    /** Mismo patrón de autorización que AnalyticsController/SprintController: solo membresía. */
+    public void validarAcceso(String userId, UUID proyectoId) {
+        if (!projectMemberRepo.existsByProyectoIdAndUserId(proyectoId, userId)) {
+            throw new SecurityException("No tienes acceso a este proyecto");
+        }
+    }
+
+    /** Mismo patrón que AIInsightsService.validateScrumMasterAccess: membresía + rol de líder del proyecto. */
+    public void validarScrumMaster(String userId, UUID proyectoId) {
+        ProjectMember member = projectMemberRepo.findByProyectoIdAndUserId(proyectoId, userId)
+                .orElseThrow(() -> new SecurityException("No tienes acceso a este proyecto"));
+        if (!"scrum_master".equals(member.getRol())) {
+            throw new SecurityException("Solo el Scrum Master del proyecto puede registrar valores");
+        }
     }
 
     /**
@@ -225,19 +279,28 @@ public class EjecucionService {
         return registroRepo.save(r);
     }
 
+    /** Tolerancia para comparar restos de división decimal (error de representación en punto flotante/BigDecimal). */
+    private static final BigDecimal EPSILON_PASO = new BigDecimal("0.0000001");
+
     /**
-     * Rechaza un valor numérico fuera del rango [escalaMin, escalaMax] de la
-     * variable, cuando esos límites están definidos (derivados de la escala
-     * de la parametrización — ver VariableDinamicaService.parseEscala()).
-     * Aplica a ambos caminos de escritura por igual: nunca debe poder
-     * persistirse un valor fuera de rango, sea cual sea el camino usado.
-     * Variables sin escala definida (escalaMin/Max null) no se restringen.
+     * Rechaza un valor numérico que no respete la escala estructurada de la
+     * variable (escalaMin/escalaMax/escalaPaso/escalaTipo — corrección del manejo
+     * de escalas, copiados desde MetricParametrizacion al aprobar, ver
+     * ParametrizacionService/VariableDinamicaService.crearVariablesDesdeParametrizacion()).
+     * Aplica a ambos caminos de escritura por igual (las dos sobrecargas de
+     * guardarOActualizarValor() llaman a este método): nunca debe poder
+     * persistirse un valor que viole la escala, sea cual sea el camino usado.
+     * Variables sin escala estructurada (escalaMin/Max/Paso/Tipo todos null,
+     * parametrización histórica — ver migración V32) no se restringen: el
+     * backend nunca inventa un límite que la parametrización no definió.
      */
     private void validarRangoValor(Variable variable, BigDecimal valorNum) {
         if (valorNum == null) return;
 
-        java.math.BigDecimal min = variable.getEscalaMin();
-        java.math.BigDecimal max = variable.getEscalaMax();
+        BigDecimal min  = variable.getEscalaMin();
+        BigDecimal max  = variable.getEscalaMax();
+        BigDecimal paso = variable.getEscalaPaso();
+        String     tipo = variable.getEscalaTipo();
 
         if (min != null && valorNum.compareTo(min) < 0) {
             throw new IllegalArgumentException(
@@ -248,6 +311,24 @@ public class EjecucionService {
             throw new IllegalArgumentException(
                     "El valor (" + valorNum + ") es mayor al máximo permitido (" + max +
                     ") para '" + variable.getNombre() + "'.");
+        }
+        if ("NUMERICA_ENTERA".equals(tipo) && valorNum.stripTrailingZeros().scale() > 0) {
+            throw new IllegalArgumentException(
+                    "El valor (" + valorNum + ") debe ser un número entero para '" +
+                    variable.getNombre() + "'.");
+        }
+        if (paso != null && paso.compareTo(BigDecimal.ZERO) > 0) {
+            // Punto de referencia para el paso: escalaMin si está definido (caso
+            // habitual — y ya validado arriba que valorNum >= min, así que el resto
+            // siempre cae en [0, paso)), o 0 en el caso teórico de un paso definido
+            // sin mínimo.
+            BigDecimal referencia = min != null ? min : BigDecimal.ZERO;
+            BigDecimal resto = valorNum.subtract(referencia).remainder(paso).abs();
+            if (resto.compareTo(EPSILON_PASO) > 0) {
+                throw new IllegalArgumentException(
+                        "El valor (" + valorNum + ") no respeta el paso permitido (" + paso +
+                        ") para '" + variable.getNombre() + "'.");
+            }
         }
     }
 

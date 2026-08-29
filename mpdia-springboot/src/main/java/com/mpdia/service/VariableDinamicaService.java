@@ -47,11 +47,16 @@ public class VariableDinamicaService {
         // 2. Validar sprint
         Sprint sprint = sprintRepo.findById(sprintId)
             .orElseThrow(() -> new IllegalArgumentException("Sprint no encontrado"));
-        
+
         if (!sprint.getProyectoId().equals(proyectoId)) {
             throw new IllegalArgumentException("El sprint no pertenece al proyecto");
         }
-        
+
+        // Revisión de seguridad: esta consulta no validaba que el usuario autenticado
+        // fuera miembro del proyecto — cualquier usuario podía leer variables/valores
+        // de cualquier proyecto con solo conocer metricaId+proyectoId+sprintId.
+        ejecucionService.validarAcceso(userId, proyectoId);
+
         // 3. Buscar parametrización aprobada
         MetricParametrizacion parametrizacion = parametrizacionRepo
             .findUltimaVersionAprobada(metricaId, proyectoId)
@@ -120,8 +125,8 @@ public class VariableDinamicaService {
         try {
             String indicadorVariable;
             String procedimiento;
-            String escala;
             String frecuenciaCaptura;
+            String nombreVariableExplicito = null;
 
             String snapshotJson = parametrizacion.getConfiguracionAprobadaJson();
             if (snapshotJson != null && !snapshotJson.isBlank()) {
@@ -130,17 +135,22 @@ public class VariableDinamicaService {
                 JsonNode json = objectMapper.readTree(snapshotJson);
                 indicadorVariable = json.get("indicadorVariable").asText();
                 procedimiento = json.get("procedimiento").asText();
-                escala = json.get("escala").asText();
                 frecuenciaCaptura = json.has("frecuenciaCaptura")
                     ? json.get("frecuenciaCaptura").asText()
                     : "por_sprint";
+                // El snapshot también guarda el identificador técnico explícito
+                // (ConfiguracionAprobadaSnapshot.nombreVariable) cuando el flujo
+                // académico lo recibió — priorizarlo evita re-derivar un nombre
+                // distinto al que realmente se usó/validó al aprobar.
+                if (json.hasNonNull("nombreVariable") && !json.get("nombreVariable").asText().isBlank()) {
+                    nombreVariableExplicito = json.get("nombreVariable").asText();
+                }
             } else {
                 // FASE 10: parametrizaciones aprobadas por el flujo de Verificación
                 // (MetricRankingService) no generan snapshot JSON — usar las mismas
                 // columnas planas (idéntico significado y nombre que el snapshot).
                 indicadorVariable = parametrizacion.getIndicadorVariable();
                 procedimiento = parametrizacion.getProcedimiento();
-                escala = parametrizacion.getEscala();
                 frecuenciaCaptura = parametrizacion.getFrecuenciaCaptura() != null
                     ? parametrizacion.getFrecuenciaCaptura()
                     : "por_sprint";
@@ -150,10 +160,27 @@ public class VariableDinamicaService {
             Metrica metrica = metricaRepo.findById(parametrizacion.getMetricaId())
                 .orElseThrow(() -> new IllegalArgumentException("Métrica no encontrada"));
 
-            String[] nombresVariables = java.util.Arrays.stream(indicadorVariable.split(",", -1))
-                .map(String::trim)
-                .filter(n -> !n.isBlank())
-                .toArray(String[]::new);
+            // Causa raíz del error "nombreVariable '...' no tiene formato técnico
+            // válido" visto en /verificacion: este flujo (aprobación vía
+            // MetricRankingService.verificar(), sin nombreVariable explícito) usaba
+            // indicadorVariable — un texto humano libre, ej. "Número de defectos
+            // únicos registrados durante el sprint" — directamente como nombre
+            // técnico de la Variable, sin normalizarlo. Se reemplaza por
+            // ParametrizacionService.extraerNombresVariables(...), la misma
+            // extracción/normalización a snake_case ya usada y probada en el flujo
+            // académico (ParametrizacionService.crearVariablesDesdeParametrizacion),
+            // en vez de duplicar un segundo algoritmo. El nombre visible de la
+            // métrica (indicadorVariable, procedimiento) nunca se modifica: solo
+            // cambia cómo se deriva el identificador técnico interno.
+            String[] nombresVariables;
+            if (nombreVariableExplicito != null) {
+                nombresVariables = java.util.Arrays.stream(nombreVariableExplicito.split(",", -1))
+                    .map(String::trim)
+                    .filter(n -> !n.isBlank())
+                    .toArray(String[]::new);
+            } else {
+                nombresVariables = ParametrizacionService.extraerNombresVariables(indicadorVariable);
+            }
             if (nombresVariables.length == 0) {
                 throw new IllegalStateException("indicadorVariable no está definido en la parametrización");
             }
@@ -193,8 +220,20 @@ public class VariableDinamicaService {
                 variable.setParametrizacionId(parametrizacion.getId());
                 variable.setParametrizacionVersion(parametrizacion.getVersion());
 
-                // Intentar extraer escala si existe
-                parseEscala(escala, variable);
+                // Corrección del manejo de escalas: escalaMin/escalaMax/escalaPaso/
+                // escalaTipo/escalaSinLimite son columnas reales de MetricParametrizacion
+                // (ver migración V32) — se copian directamente, sin depender de un regex
+                // frágil (\d+-\d+) sobre el texto libre `escala` (que fallaba para casi
+                // cualquier redacción, ej. "Numérica, entera (0 o más)"). Válido tanto para
+                // el flujo académico (con snapshot JSON) como para el de Verificación (sin
+                // snapshot): ambos leen las mismas columnas de `parametrizacion`.
+                // escalaTipo=null (parametrización histórica sin estructura) se copia igual
+                // como null — Variable queda explícitamente sin restricción, sin inventar rango.
+                variable.setEscalaTipo(parametrizacion.getEscalaTipo());
+                variable.setEscalaMin(parametrizacion.getEscalaMin());
+                variable.setEscalaMax(parametrizacion.getEscalaMax());
+                variable.setEscalaPaso(parametrizacion.getEscalaPaso());
+                variable.setEscalaSinLimite(parametrizacion.getEscalaSinLimite());
 
                 resultado.add(variableRepo.save(variable));
             }
@@ -207,27 +246,6 @@ public class VariableDinamicaService {
             throw e;
         } catch (Exception e) {
             throw new RuntimeException("Error parseando configuración aprobada: " + e.getMessage(), e);
-        }
-    }
-
-    /**
-     * Intenta extraer escalaMin/Max del texto de escala.
-     * Ejemplo: "Numérica 0-100 puntos" → min=0, max=100
-     */
-    private void parseEscala(String escala, Variable variable) {
-        if (escala == null) return;
-        
-        // Patrón simple: buscar "N-M" en el texto
-        String[] tokens = escala.split("\\s+");
-        for (String token : tokens) {
-            if (token.matches("\\d+-\\d+")) {
-                String[] partes = token.split("-");
-                try {
-                    variable.setEscalaMin(new java.math.BigDecimal(partes[0]));
-                    variable.setEscalaMax(new java.math.BigDecimal(partes[1]));
-                    return;
-                } catch (NumberFormatException ignored) {}
-            }
         }
     }
 
@@ -252,7 +270,10 @@ public class VariableDinamicaService {
             ultimoRegistro != null ? ultimoRegistro.getValorNum() : null,
             ultimoRegistro != null ? ultimoRegistro.getValorTexto() : null,
             ultimoRegistro != null ? ultimoRegistro.getValorBool() : null,
-            variable.getFrecuenciaCaptura()
+            variable.getFrecuenciaCaptura(),
+            variable.getEscalaTipo(),
+            variable.getEscalaPaso(),
+            variable.getEscalaSinLimite()
         );
     }
 
@@ -268,11 +289,17 @@ public class VariableDinamicaService {
         // 2. Validar sprint
         Sprint sprint = sprintRepo.findById(request.sprintId())
             .orElseThrow(() -> new IllegalArgumentException("Sprint no encontrado"));
-        
+
         if (!sprint.getProyectoId().equals(request.proyectoId())) {
             throw new IllegalArgumentException("El sprint no pertenece al proyecto");
         }
-        
+
+        // Revisión de seguridad: registrar valores es una acción restringida al Scrum
+        // Master del proyecto (mismo diseño ya reflejado en EjecucionComponent: solo
+        // el SM ve el formulario de captura), pero esta escritura no validaba
+        // membresía ni rol en absoluto.
+        ejecucionService.validarScrumMaster(userId, request.proyectoId());
+
         // 3. Validar parametrización aprobada
         MetricParametrizacion parametrizacion = parametrizacionRepo
             .findUltimaVersionAprobada(metricaId, request.proyectoId())

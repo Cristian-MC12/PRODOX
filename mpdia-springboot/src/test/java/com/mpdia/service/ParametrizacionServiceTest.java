@@ -234,7 +234,7 @@ class ParametrizacionServiceTest {
             "unidades",
             "{\"titulo\": \"Test\"}",
             null
-        );
+        , null, null, null, null, null, null);
         
         when(projectMemberRepository.existsByProyectoIdAndUserId(eq(proyectoId), anyString()))
             .thenReturn(true);
@@ -261,7 +261,7 @@ class ParametrizacionServiceTest {
         return new GuardarPropuestaRequest(
             metricaId, proyectoId, "Obj", "Proc", "Ind", "Esc", "por_sprint",
             "Fuente", "Σ x", tipoOperacion, "unidad", null, null
-        );
+        , null, null, null, null, null, null);
     }
 
     private void mockGuardarPropuestaHappyPath(UUID metricaId, UUID proyectoId) {
@@ -418,7 +418,7 @@ class ParametrizacionServiceTest {
         AprobarParametrizacionRequest req = new AprobarParametrizacionRequest(
             "Obj", "Proc", "Ind", "Esc", "por_sprint",
             "Fuente", "Formula", "CONTEO", "unidad", null
-        );
+        , null, null, null, null, null, null);
 
         when(parametrizacionRepository.findById(id)).thenReturn(Optional.of(parametrizacion));
         when(projectMemberRepository.existsByProyectoIdAndUserId(eq(proyectoId), anyString()))
@@ -453,7 +453,7 @@ class ParametrizacionServiceTest {
         AprobarParametrizacionRequest req = new AprobarParametrizacionRequest(
             "Obj", "Proc", "Ind", "Esc", "por_sprint",
             "Fuente", "Formula", null, "unidad", null
-        );
+        , null, null, null, null, null, null);
 
         when(parametrizacionRepository.findById(id)).thenReturn(Optional.of(parametrizacion));
         when(projectMemberRepository.existsByProyectoIdAndUserId(eq(proyectoId), anyString()))
@@ -487,7 +487,7 @@ class ParametrizacionServiceTest {
         AprobarParametrizacionRequest req = new AprobarParametrizacionRequest(
             "Obj", "Proc", "Ind", "Esc", "por_sprint",
             "Fuente", "Formula", "", "unidad", null
-        );
+        , null, null, null, null, null, null);
 
         when(parametrizacionRepository.findById(id)).thenReturn(Optional.of(parametrizacion));
         when(projectMemberRepository.existsByProyectoIdAndUserId(eq(proyectoId), anyString()))
@@ -522,7 +522,7 @@ class ParametrizacionServiceTest {
             "El indicador principal es el número de impedimentos que bloquearon al equipo...",
             "Escala real", "por_sprint", "Guerrero-Calvache & Hernández (2024)", "Σ(I_sprint)",
             "SUMA", "impedimentos", "impedimentos_registrados"
-        );
+        , null, null, null, null, null, null);
 
         Metrica metrica = new Metrica();
         metrica.setId(metricaId);
@@ -578,7 +578,7 @@ class ParametrizacionServiceTest {
         GuardarPropuestaRequest req = new GuardarPropuestaRequest(
             metricaId, proyectoId, "Obj", "Proc", "Ind", "Esc", "por_sprint",
             "Fuente", "Formula", "SUMA", "unidad", null, null
-        );
+        , null, null, null, null, null, null);
         
         when(projectMemberRepository.existsByProyectoIdAndUserId(eq(proyectoId), anyString()))
             .thenReturn(false);
@@ -615,7 +615,7 @@ class ParametrizacionServiceTest {
             "SUMA",
             "unidades",
             null
-        );
+        , null, null, null, null, null, null);
         
         Metrica metrica = new Metrica();
         metrica.setId(metricaId);
@@ -666,7 +666,7 @@ class ParametrizacionServiceTest {
         AprobarParametrizacionRequest req = new AprobarParametrizacionRequest(
             "Obj v2", "Proc v2", "Ind v2", "Esc v2", "por_sprint",
             "Fuente v2", "Formula v2", "SUMA", "unidad v2", null
-        );
+        , null, null, null, null, null, null);
         
         Metrica metrica = new Metrica();
         metrica.setId(metricaId);
@@ -738,7 +738,7 @@ class ParametrizacionServiceTest {
         AprobarParametrizacionRequest req = new AprobarParametrizacionRequest(
             "Obj v4", "Proc v4", "Ind v4", "Esc v4", "por_sprint",
             "Fuente v4", "Formula v4", "SUMA", "unidad v4", "nombre_v4"
-        );
+        , null, null, null, null, null, null);
 
         Metrica metrica = new Metrica();
         metrica.setId(metricaId);
@@ -790,7 +790,7 @@ class ParametrizacionServiceTest {
         AprobarParametrizacionRequest req = new AprobarParametrizacionRequest(
             "Obj", "Proc", "Ind", "Esc", "por_sprint",
             "Fuente", "Formula", "SUMA", "unidad", null
-        );
+        , null, null, null, null, null, null);
         
         when(parametrizacionRepository.findById(id)).thenReturn(Optional.of(parametrizacion));
         when(projectMemberRepository.existsByProyectoIdAndUserId(any(), anyString()))
@@ -816,7 +816,7 @@ class ParametrizacionServiceTest {
         AprobarParametrizacionRequest req = new AprobarParametrizacionRequest(
             "Obj", "Proc", "Ind", "Esc", "por_sprint",
             "Fuente", "Formula", "SUMA", "unidad", null
-        );
+        , null, null, null, null, null, null);
         
         when(parametrizacionRepository.findById(id)).thenReturn(Optional.of(parametrizacion));
         when(projectMemberRepository.existsByProyectoIdAndUserId(eq(proyectoId), anyString()))
@@ -1022,7 +1022,7 @@ class ParametrizacionServiceTest {
             "Objetivo real", "Procedimiento real", "Indicador real", "Escala real",
             "por_sprint", "Fuente real", "Σ(x)", "SUMA", "unidad real",
             "{\"raw\":true}", "nombre_variable_real"
-        );
+        , null, null, null, null, null, null);
 
         MetricParametrizacion result = parametrizacionService.guardarPropuesta(req);
 
@@ -1075,7 +1075,7 @@ class ParametrizacionServiceTest {
         GuardarPropuestaRequest req = new GuardarPropuestaRequest(
             metricaId, proyectoId, "Obj", "Proc", "Ind", "Esc", "por_sprint",
             "Fuente", "Σ x", "SUMA", "unidad", null, "impedimentos_registrados"
-        );
+        , null, null, null, null, null, null);
 
         MetricParametrizacion result = parametrizacionService.guardarPropuesta(req);
 
@@ -1092,7 +1092,7 @@ class ParametrizacionServiceTest {
         GuardarPropuestaRequest req = new GuardarPropuestaRequest(
             metricaId, proyectoId, "Obj", "Proc", "Ind", "Esc", "por_sprint",
             "Fuente", "Σ x", "SUMA", "unidad", null, null
-        );
+        , null, null, null, null, null, null);
 
         MetricParametrizacion result = parametrizacionService.guardarPropuesta(req);
 
@@ -1119,7 +1119,7 @@ class ParametrizacionServiceTest {
         AprobarParametrizacionRequest req = new AprobarParametrizacionRequest(
             "Objetivo", "Procedimiento", INDICADOR_LARGO_REAL_SIG_VEL_02, "Escala", "por_sprint",
             "Fuente", "Σ(Impedimento_Bloqueante_i)", "SUMA", "impedimentos", "impedimentos_registrados"
-        );
+        , null, null, null, null, null, null);
 
         Metrica metrica = new Metrica();
         metrica.setId(metricaId);
@@ -1158,7 +1158,7 @@ class ParametrizacionServiceTest {
         AprobarParametrizacionRequest req = new AprobarParametrizacionRequest(
             "Obj", "Proc", "Ind", "Esc", "por_sprint",
             "Fuente", "Formula", "SUMA", "unidad", nombre121
-        );
+        , null, null, null, null, null, null);
 
         when(parametrizacionRepository.findById(id)).thenReturn(Optional.of(parametrizacion));
         when(projectMemberRepository.existsByProyectoIdAndUserId(eq(proyectoId), anyString())).thenReturn(true);
@@ -1185,7 +1185,7 @@ class ParametrizacionServiceTest {
         AprobarParametrizacionRequest req = new AprobarParametrizacionRequest(
             "Obj", "Proc", "Ind", "Esc", "por_sprint",
             "Fuente", "Formula", "SUMA", "unidad", "nombre con espacios"
-        );
+        , null, null, null, null, null, null);
 
         when(parametrizacionRepository.findById(id)).thenReturn(Optional.of(parametrizacion));
         when(projectMemberRepository.existsByProyectoIdAndUserId(eq(proyectoId), anyString())).thenReturn(true);
@@ -1210,7 +1210,7 @@ class ParametrizacionServiceTest {
         AprobarParametrizacionRequest req = new AprobarParametrizacionRequest(
             "Obj", "Proc", "Ind", "Esc", "por_sprint",
             "Fuente", "Formula", "SUMA", "unidad", INDICADOR_LARGO_REAL_SIG_VEL_02
-        );
+        , null, null, null, null, null, null);
 
         when(parametrizacionRepository.findById(id)).thenReturn(Optional.of(parametrizacion));
         when(projectMemberRepository.existsByProyectoIdAndUserId(eq(proyectoId), anyString())).thenReturn(true);
@@ -1239,7 +1239,7 @@ class ParametrizacionServiceTest {
         AprobarParametrizacionRequest req = new AprobarParametrizacionRequest(
             "Obj", "Proc", "problemas_reportados", "Esc", "por_sprint",
             "Fuente", "Σ x", "SUMA", "unidad", null
-        );
+        , null, null, null, null, null, null);
 
         Metrica metrica = new Metrica();
         metrica.setId(metricaId);
@@ -1275,7 +1275,7 @@ class ParametrizacionServiceTest {
         AprobarParametrizacionRequest req = new AprobarParametrizacionRequest(
             "Obj", "Proc", INDICADOR_LARGO_REAL_SIG_VEL_02, "Esc", "por_sprint",
             "Fuente", "Formula", "SUMA", "unidad", null
-        );
+        , null, null, null, null, null, null);
 
         when(parametrizacionRepository.findById(id)).thenReturn(Optional.of(parametrizacion));
         when(projectMemberRepository.existsByProyectoIdAndUserId(eq(proyectoId), anyString())).thenReturn(true);
@@ -1308,7 +1308,7 @@ class ParametrizacionServiceTest {
             "Problemas_Reportados_Cliente_Sprint (variable: 'problema_reportado_individual')",
             "Escala", "por_sprint", "Fuente", "Σ(problemas_reportados_cliente)", "SUMA", "problemas",
             null
-        );
+        , null, null, null, null, null, null);
 
         Metrica metrica = new Metrica();
         metrica.setId(metricaId);
@@ -1343,7 +1343,7 @@ class ParametrizacionServiceTest {
             metricaId, proyectoId, "Objetivo", "Procedimiento", INDICADOR_LARGO_REAL_SIG_VEL_02,
             "Escala", "por_sprint", "Fuente", "Σ(I_sprint)", "SUMA", "impedimentos",
             "{}", "impedimentos_registrados"
-        );
+        , null, null, null, null, null, null);
 
         // Paso 1: guardar propuesta (como "Guardar como nueva propuesta" en la UI)
         MetricParametrizacion guardada = parametrizacionService.guardarPropuesta(guardarReq);
@@ -1367,7 +1367,7 @@ class ParametrizacionServiceTest {
             guardada.getEscala(), guardada.getFrecuenciaCaptura(), guardada.getFuenteAcademica(),
             guardada.getFormulaAcademica(), guardada.getTipoOperacion(), guardada.getUnidadResultado(),
             guardada.getNombreVariable()
-        );
+        , null, null, null, null, null, null);
 
         org.mockito.ArgumentCaptor<Variable> variableCaptor = org.mockito.ArgumentCaptor.forClass(Variable.class);
         parametrizacionService.aprobarParametrizacion(guardada.getId(), aprobarReq);
@@ -1400,7 +1400,7 @@ class ParametrizacionServiceTest {
             "Objetivo FAT", "Procedimiento FAT", "ACAT y ACR", "Escala FAT", "por_sprint",
             "FASE16_8_7_ESPECIFICACION_METODOLOGICA", "(ACAT / ACR) × 100", "FORMULA", "%",
             "acat,acr"
-        );
+        , null, null, null, null, null, null);
 
         Metrica metrica = new Metrica();
         metrica.setId(metricaId);
@@ -1448,7 +1448,7 @@ class ParametrizacionServiceTest {
             "Objetivo", "Procedimiento", "Indicador", "Escala", "por_sprint",
             "Adaptación MPDIA", "(deuda_gestionada / deuda_identificada) × 100", "FORMULA", "%",
             "deuda_gestionada, deuda_identificada"
-        );
+        , null, null, null, null, null, null);
 
         Metrica metrica = new Metrica();
         metrica.setId(metricaId);
@@ -1487,7 +1487,7 @@ class ParametrizacionServiceTest {
         AprobarParametrizacionRequest req = new AprobarParametrizacionRequest(
             "Obj", "Proc", "Ind", "Esc", "por_sprint",
             "Fuente", "Formula", "FORMULA", "%", "acat,ACR INVALIDO"
-        );
+        , null, null, null, null, null, null);
 
         when(parametrizacionRepository.findById(id)).thenReturn(Optional.of(parametrizacion));
         when(projectMemberRepository.existsByProyectoIdAndUserId(eq(proyectoId), anyString())).thenReturn(true);
@@ -1518,7 +1518,7 @@ class ParametrizacionServiceTest {
         AprobarParametrizacionRequest req = new AprobarParametrizacionRequest(
             "Objetivo Defectos", "Procedimiento", "defectos_totales", "Escala", "por_sprint",
             "Decisión de proyecto", "SUMA(defectos_totales)", "SUMA", "defectos", "defectos_totales"
-        );
+        , null, null, null, null, null, null);
 
         Metrica metrica = new Metrica();
         metrica.setId(metricaId);
@@ -1582,7 +1582,7 @@ class ParametrizacionServiceTest {
         AprobarParametrizacionRequest reqFat = new AprobarParametrizacionRequest(
             "Obj FAT", "Proc FAT", "Ind FAT", "Esc FAT", "por_sprint",
             "Fuente FAT", "(ACAT / ACR) × 100", "FORMULA", "%", "acat,acr"
-        );
+        , null, null, null, null, null, null);
 
         when(parametrizacionRepository.findById(idDeuda)).thenReturn(Optional.of(deuda));
         when(metricaRepository.findById(metricaDeudaId)).thenReturn(Optional.of(metricaDeuda));
@@ -1590,7 +1590,7 @@ class ParametrizacionServiceTest {
             "Obj Deuda", "Proc Deuda", "Ind Deuda", "Esc Deuda", "por_sprint",
             "Fuente Deuda", "(deuda_gestionada / deuda_identificada) × 100", "FORMULA", "%",
             "deuda_gestionada,deuda_identificada"
-        );
+        , null, null, null, null, null, null);
 
         org.mockito.ArgumentCaptor<Variable> captor = org.mockito.ArgumentCaptor.forClass(Variable.class);
 

@@ -1,6 +1,8 @@
 // Autor: Cristian Santiago Martinez Cordoba — MPDIA
 package com.mpdia.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.mpdia.dto.GuardarParametrizacionRequest;
 import com.mpdia.dto.MetricParametrizacionDto;
 import com.mpdia.dto.RankingMetricaDto;
@@ -8,20 +10,21 @@ import com.mpdia.dto.TopParametrizacionDto;
 import com.mpdia.entity.Factor;
 import com.mpdia.entity.MetricParametrizacion;
 import com.mpdia.entity.MetricUsoRanking;
+import com.mpdia.entity.ProjectMember;
 import com.mpdia.repository.FactorRepository;
 import com.mpdia.repository.MetricParametrizacionRepository;
 import com.mpdia.repository.MetricUsoRankingRepository;
 import com.mpdia.repository.MetricaRepository;
+import com.mpdia.repository.ProjectMemberRepository;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.UUID;
-import java.util.stream.Collectors;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -37,16 +40,25 @@ public class MetricRankingService {
     private final MetricaRepository               metricaRepo;
     private final PlaneacionService               planeacionService;
     private final VariableDinamicaService         variableDinamicaService;
+    private final ProjectMemberRepository         projectMemberRepo;
+    private final ObjectMapper                    objectMapper;
+
+    @PersistenceContext
+    private EntityManager entityManager;
 
     /**
      * Scrum Master aprueba o rechaza una parametrización.
-     * Solo usuarios con rol scrum_master pueden llamar esto.
+     * Solo usuarios con rol scrum_master (del proyecto de la parametrización)
+     * pueden llamar esto. userId se usa solo para validar el rol; revisadoPor
+     * (email) se conserva sin cambios como valor histórico del campo de auditoría.
      */
     @Transactional
     public MetricParametrizacionDto verificar(com.mpdia.dto.VerificarParametrizacionRequest req,
-                                              String revisadoPor) {
+                                              String userId, String revisadoPor) {
         MetricParametrizacion p = parametrizacionRepo.findById(req.parametrizacionId())
                 .orElseThrow(() -> new IllegalArgumentException("Parametrización no encontrada."));
+
+        validarScrumMaster(userId, p.getProyectoId());
 
         if ("aprobar".equals(req.accion())) {
             // FASE 10: antes de aprobar esta versión, desactivar la versión previamente
@@ -54,6 +66,13 @@ public class MetricRankingService {
             // ParametrizacionService.aprobarParametrizacion()), para que nunca coexistan
             // dos filas 'aprobada' de la misma métrica en el mismo proyecto.
             if (p.getMetricaId() != null && p.getProyectoId() != null) {
+                // Corrección solicitada: el usuario NO debe preocuparse por el límite de 120
+                // caracteres del Identificador técnico. Si falta o es inválido (típicamente
+                // porque nunca se editó, o porque indicadorVariable es una descripción larga),
+                // NO se rechaza la aprobación — se genera y persiste uno seguro automáticamente
+                // (asegurarNombreVariable, más abajo) antes de continuar. indicadorVariable/
+                // objetivo/procedimiento nunca se tocan acá.
+                asegurarNombreVariable(p);
                 parametrizacionRepo.findUltimaVersionAprobada(p.getMetricaId(), p.getProyectoId())
                         .filter(anterior -> !anterior.getId().equals(p.getId()))
                         .ifPresent(anterior -> {
@@ -124,11 +143,26 @@ public class MetricRankingService {
     }
 
     /**
-     * Lista parametrizaciones pendientes filtradas por proyecto.
+     * Lista parametrizaciones pendientes de UN proyecto (Verificación).
+     *
+     * Corrección de aislamiento: antes, cuando no se informaba proyectoId (pantalla de
+     * Verificación sin proyecto activo en localStorage), este método devolvía TODAS las
+     * parametrizaciones con proyecto_id NULL sin importar de qué usuario fueran —
+     * permitiendo que propuestas huérfanas/históricas de otros usuarios aparecieran como
+     * si fueran del proyecto que el Scrum Master está revisando (ver auditoría de datos
+     * con proyecto_id NULL). Ahora proyectoId es obligatorio para obtener resultados: sin
+     * proyecto activo se devuelve una lista vacía en vez de inferir una asociación que no
+     * existe. Con proyectoId informado, el filtro por igualdad exacta (proyectoId.equals)
+     * ya excluía por sí solo tanto los de otros proyectos como los de proyecto_id NULL —
+     * ese caso no tenía el defecto y no cambia de comportamiento acá.
      */
-    public List<MetricParametrizacionDto> getPendientesPorProyecto(UUID proyectoId) {
+    public List<MetricParametrizacionDto> getPendientesPorProyecto(UUID proyectoId, String userId) {
+        if (proyectoId == null) {
+            return List.of();
+        }
+        validarScrumMaster(userId, proyectoId);
         return parametrizacionRepo.findByStatusOrderByCreatedAtDesc("pendiente").stream()
-                .filter(p -> proyectoId == null || proyectoId.equals(p.getProyectoId()))
+                .filter(p -> proyectoId.equals(p.getProyectoId()))
                 .map(p -> toDto(p, p.getFactor()))
                 .toList();
     }
@@ -137,14 +171,211 @@ public class MetricRankingService {
      * Resumen persistente (consultado en BD) de pendientes/aprobadas/rechazadas de un
      * proyecto. FASE 10: para que los contadores de Verificación reflejen el estado real
      * al entrar o recargar la pantalla, en vez de depender solo de la memoria de sesión
-     * del componente (ver diagnóstico FASE 9, bloque 4).
+     * del componente (ver diagnóstico FASE 9, bloque 4). Requiere ser miembro del proyecto.
      */
-    public com.mpdia.dto.ResumenVerificacionDto getResumenPorProyecto(UUID proyectoId) {
+    public com.mpdia.dto.ResumenVerificacionDto getResumenPorProyecto(UUID proyectoId, String userId) {
+        if (!projectMemberRepo.existsByProyectoIdAndUserId(proyectoId, userId)) {
+            throw new SecurityException("No tienes acceso a este proyecto");
+        }
         return new com.mpdia.dto.ResumenVerificacionDto(
                 parametrizacionRepo.countByProyectoIdAndStatus(proyectoId, "pendiente"),
                 parametrizacionRepo.countByProyectoIdAndStatus(proyectoId, "aprobada"),
                 parametrizacionRepo.countByProyectoIdAndStatus(proyectoId, "rechazada")
         );
+    }
+
+    /**
+     * Actualiza los campos editables de una parametrización pendiente.
+     * Solo el Scrum Master puede editar parametrizaciones antes de aprobarlas.
+     */
+    @Transactional
+    public MetricParametrizacionDto actualizar(UUID parametrizacionId,
+                                               com.mpdia.dto.ActualizarParametrizacionRequest req,
+                                               String userId) {
+        MetricParametrizacion p = parametrizacionRepo.findById(parametrizacionId)
+                .orElseThrow(() -> new IllegalArgumentException("Parametrización no encontrada."));
+
+        validarScrumMaster(userId, p.getProyectoId());
+
+        if (!"pendiente".equals(p.getStatus())) {
+            throw new IllegalStateException("Solo se pueden editar parametrizaciones en estado 'pendiente'");
+        }
+
+        ParametrizacionService.validarEscalaEstructurada(req.escalaTipo(), req.escalaMin(), 
+            req.escalaMax(), req.escalaPaso(), req.escalaSinLimite());
+
+        p.setObjetivo(req.objetivo());
+        p.setProcedimiento(req.procedimiento());
+        p.setIndicadorVariable(req.indicadorVariable());
+        p.setEscala(req.escala());
+        p.setEscalaTipo(req.escalaTipo());
+        p.setEscalaMin(req.escalaMin());
+        p.setEscalaMax(Boolean.TRUE.equals(req.escalaSinLimite()) ? null : req.escalaMax());
+        p.setEscalaPaso(req.escalaPaso());
+        p.setEscalaSinLimite(req.escalaSinLimite());
+        p.setEscalaDescripcion(req.escalaDescripcion());
+        resolverYGuardarNombreVariable(p, req.nombreVariable());
+
+        MetricParametrizacion updated = parametrizacionRepo.save(p);
+        return toDto(updated, updated.getFactor());
+    }
+
+    /** Longitud máxima del Identificador técnico — regla existente, sin cambios. */
+    private static final int NOMBRE_VARIABLE_MAX = 120;
+    /** Longitud del sufijo hash usado para desambiguar identificadores generados. */
+    private static final int HASH_SUFFIX_LEN = 10;
+
+    /**
+     * Resuelve el Identificador técnico (nombreVariable) para una edición y lo persiste
+     * en el snapshot.
+     *
+     * Corrección solicitada: el usuario NO debe preocuparse por el límite de 120
+     * caracteres. Si informa un valor explícito y ya es válido (formato snake_case,
+     * máx. 120), se usa tal cual. Si no informa nada, o lo que informó no es válido
+     * (típicamente porque pegó una descripción larga), NUNCA se rechaza la edición:
+     * se genera automáticamente un identificador corto, determinista y válido a
+     * partir de ese mismo texto (o de indicadorVariable si no escribió nada) —
+     * ver generarNombreVariableSeguro(). indicadorVariable/objetivo/procedimiento
+     * nunca se truncan ni se modifican acá; el snapshot se guarda en la misma
+     * columna jsonb ya usada por el flujo académico (sin migraciones nuevas).
+     */
+    private void resolverYGuardarNombreVariable(MetricParametrizacion p, String nombreVariableCrudo) {
+        String explicito = nombreVariableCrudo != null ? nombreVariableCrudo.trim() : null;
+        String base = (explicito != null && !explicito.isBlank()) ? explicito : p.getIndicadorVariable();
+        String resuelto = esNombreVariableValido(base) ? base : generarNombreVariableSeguro(base);
+        guardarSnapshotConNombreVariable(p, resuelto);
+    }
+
+    /**
+     * Garantiza que la parametrización tenga un Identificador técnico válido antes de
+     * aprobar, sin rechazar nunca la aprobación por este motivo (mismo criterio que
+     * resolverYGuardarNombreVariable). Cubre el caso de una parametrización que nunca
+     * pasó por "Editar": ahí se genera uno a partir de indicadorVariable en este mismo
+     * momento. Si ya tiene uno válido guardado, no hace nada (no lo regenera ni lo
+     * cambia — estabilidad para parametrizaciones ya editadas).
+     */
+    private void asegurarNombreVariable(MetricParametrizacion p) {
+        String actual = leerNombreVariableGuardado(p);
+        if (esNombreVariableValido(actual)) {
+            return;
+        }
+        String base = (actual != null && !actual.isBlank()) ? actual : p.getIndicadorVariable();
+        guardarSnapshotConNombreVariable(p, generarNombreVariableSeguro(base));
+    }
+
+    private void guardarSnapshotConNombreVariable(MetricParametrizacion p, String nombreVariable) {
+        try {
+            Map<String, Object> snapshot = new LinkedHashMap<>();
+            snapshot.put("indicadorVariable", p.getIndicadorVariable());
+            snapshot.put("procedimiento", p.getProcedimiento());
+            snapshot.put("frecuenciaCaptura",
+                    p.getFrecuenciaCaptura() != null ? p.getFrecuenciaCaptura() : "por_sprint");
+            snapshot.put("nombreVariable", nombreVariable);
+            p.setConfiguracionAprobadaJson(objectMapper.writeValueAsString(snapshot));
+        } catch (JsonProcessingException e) {
+            throw new IllegalStateException("Error construyendo snapshot de configuración", e);
+        }
+    }
+
+    /** true si candidato ya cumple, tal cual, la regla existente (ParametrizacionService). */
+    private boolean esNombreVariableValido(String candidato) {
+        if (candidato == null || candidato.isBlank()) {
+            return false;
+        }
+        try {
+            ParametrizacionService.validarNombreVariable(candidato);
+            return true;
+        } catch (NombreVariableInvalidoException e) {
+            return false;
+        }
+    }
+
+    /**
+     * Genera un Identificador técnico corto, determinista y válido (máx. 120
+     * caracteres) a partir de un texto libre (indicadorVariable, o lo que el usuario
+     * haya escrito en el campo). Reutiliza la extracción/normalización a snake_case
+     * ya existente (ParametrizacionService.extraerNombresVariables — soporta listas
+     * separadas por coma para métricas FORMULA de más de una variable, igual que el
+     * resto del sistema; no se duplica ese algoritmo). El único caso nuevo es cuando
+     * el resultado de esa extracción sigue siendo inválido (típicamente >120
+     * caracteres, por una descripción larga): en vez de rechazar, o de recortar
+     * simplemente los primeros 120 caracteres (lo que podría hacer colisionar dos
+     * descripciones distintas que comparten el mismo prefijo), se recorta a un
+     * prefijo legible cortado en un límite de palabra y se le agrega un sufijo hash
+     * determinista (SHA-256 del candidato completo) — dos textos distintos casi
+     * nunca terminan en el mismo identificador, y el mismo texto siempre genera el
+     * mismo identificador.
+     */
+    private String generarNombreVariableSeguro(String texto) {
+        String base = (texto != null && !texto.isBlank()) ? texto : "variable";
+        String[] derivados = ParametrizacionService.extraerNombresVariables(base);
+        if (derivados.length == 0) {
+            return acortarConHashDeterminista(base);
+        }
+        List<String> resultado = new java.util.ArrayList<>();
+        for (String candidato : derivados) {
+            resultado.add(esNombreVariableValido(candidato) ? candidato : acortarConHashDeterminista(candidato));
+        }
+        return String.join(",", resultado);
+    }
+
+    /**
+     * Recorta candidatoInvalido a un prefijo legible (cortado en el último "_" antes
+     * del límite, nunca a mitad de palabra) y le agrega un sufijo hash determinista
+     * de HASH_SUFFIX_LEN caracteres — nunca un substring(0,120) simple, precisamente
+     * para no colisionar cuando dos descripciones distintas comparten prefijo.
+     */
+    private String acortarConHashDeterminista(String candidatoInvalido) {
+        String hash = sha256Hex(candidatoInvalido).substring(0, HASH_SUFFIX_LEN);
+        int presupuestoPrefijo = NOMBRE_VARIABLE_MAX - HASH_SUFFIX_LEN - 1; // -1 por el "_"
+        String prefijo = candidatoInvalido.length() > presupuestoPrefijo
+                ? candidatoInvalido.substring(0, presupuestoPrefijo)
+                : candidatoInvalido;
+        int ultimoGuion = prefijo.lastIndexOf('_');
+        if (ultimoGuion > 0) {
+            prefijo = prefijo.substring(0, ultimoGuion);
+        }
+        // Defensa adicional por si candidatoInvalido era inválido por FORMATO (no solo
+        // longitud): quedarse solo con [a-z0-9_] y forzar que empiece con una letra,
+        // igual que exige la regla existente.
+        prefijo = prefijo.toLowerCase().replaceAll("[^a-z0-9_]", "");
+        if (prefijo.isEmpty() || !Character.isLetter(prefijo.charAt(0))) {
+            prefijo = "v" + prefijo;
+        }
+        String seguro = prefijo + "_" + hash;
+        return esNombreVariableValido(seguro) ? seguro : ("var_" + hash);
+    }
+
+    private static String sha256Hex(String texto) {
+        try {
+            java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-256");
+            byte[] bytes = digest.digest(texto.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            StringBuilder sb = new StringBuilder(bytes.length * 2);
+            for (byte b : bytes) {
+                sb.append(String.format("%02x", b));
+            }
+            return sb.toString();
+        } catch (java.security.NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 no disponible en esta JVM", e);
+        }
+    }
+
+    /**
+     * Lee el Identificador técnico ya guardado (si lo hay) desde el snapshot
+     * configuracionAprobadaJson de una parametrización. Ausencia o error de parseo
+     * se tratan igual (null): la parametrización se considera sin identificador.
+     */
+    private String leerNombreVariableGuardado(MetricParametrizacion p) {
+        String snapshotJson = p.getConfiguracionAprobadaJson();
+        if (snapshotJson == null || snapshotJson.isBlank()) {
+            return null;
+        }
+        try {
+            com.fasterxml.jackson.databind.JsonNode json = objectMapper.readTree(snapshotJson);
+            return json.hasNonNull("nombreVariable") ? json.get("nombreVariable").asText() : null;
+        } catch (JsonProcessingException e) {
+            return null;
+        }
     }
 
     /**
@@ -160,6 +391,12 @@ public class MetricRankingService {
     @Transactional
     public MetricParametrizacionDto guardar(GuardarParametrizacionRequest req,
                                             String userId, String userEmail) {
+        if (req.proyectoId() != null
+                && !projectMemberRepo.existsByProyectoIdAndUserId(req.proyectoId(), userId)) {
+            throw new SecurityException("No tienes acceso a este proyecto");
+        }
+        ParametrizacionService.validarEscalaEstructurada(req.escalaTipo(), req.escalaMin(), req.escalaMax(),
+            req.escalaPaso(), req.escalaSinLimite());
         if (req.metricaId() != null) {
             return guardarPorMetrica(req, userId, userEmail);
         } else if (req.factorId() != null) {
@@ -179,6 +416,18 @@ public class MetricRankingService {
         if (req.proyectoId() == null) {
             throw new IllegalArgumentException("proyectoId es obligatorio para parametrizar una métrica.");
         }
+
+        // Corrección de duplicados en Verificación: serializa, por (proyectoId, metricaId),
+        // toda la sección crítica "leer historial -> decidir version/duplicado -> insertar"
+        // que sigue debajo. Sin esto, dos peticiones que se solapan (doble clic, doble envío
+        // por dos pantallas distintas, reintento de red) pueden leer AMBAS el mismo historial
+        // antes de que ninguna haga commit, pasar igual la comprobación de esMismoContenido()
+        // (evaluada contra datos aún no confirmados) y terminar creando dos filas 'pendiente'
+        // para la misma métrica+proyecto — exactamente el defecto reportado. El lock de
+        // advisory de Postgres es de transacción (se libera solo al hacer commit/rollback de
+        // esta @Transactional), así que la segunda petición queda bloqueada hasta que la
+        // primera termine por completo, y entonces SÍ ve su fila ya confirmada.
+        adquirirLockParametrizacion(req.proyectoId(), req.metricaId());
 
         Integer siguienteVersion = 1;
         var historial = parametrizacionRepo.findHistorialVersiones(req.metricaId(), req.proyectoId());
@@ -208,6 +457,12 @@ public class MetricRankingService {
         p.setProcedimiento(req.procedimiento());
         p.setIndicadorVariable(req.indicadorVariable());
         p.setEscala(req.escala());
+        p.setEscalaTipo(req.escalaTipo());
+        p.setEscalaMin(req.escalaMin());
+        p.setEscalaMax(Boolean.TRUE.equals(req.escalaSinLimite()) ? null : req.escalaMax());
+        p.setEscalaPaso(req.escalaPaso());
+        p.setEscalaSinLimite(req.escalaSinLimite());
+        p.setEscalaDescripcion(req.escalaDescripcion());
         p.setMetricaBaseId(req.metricaBaseId());
         // FASE 11: propagar los campos académicos que el usuario completó en el formulario
         // (nunca copiados de otra parametrización) — sin esto, MetricaAcademicaService
@@ -224,6 +479,25 @@ public class MetricRankingService {
 
         MetricParametrizacion saved = parametrizacionRepo.save(p);
         return toDto(saved, null);
+    }
+
+    /**
+     * Corrección de duplicados en Verificación: adquiere un advisory lock de
+     * transacción de Postgres (pg_advisory_xact_lock), con clave = hash de
+     * (proyectoId, metricaId). No requiere ninguna migración ni tabla nueva —
+     * es un lock en memoria del servidor de BD, exclusivamente para la
+     * duración de la transacción actual, liberado automáticamente al hacer
+     * commit o rollback (nunca queda "colgado" ante una excepción). Dos
+     * transacciones concurrentes con la misma clave se serializan: la segunda
+     * espera a que la primera termine antes de continuar, así que cuando
+     * retoma, su propia lectura de historial ya ve (bajo READ COMMITTED) la
+     * fila que la primera haya confirmado.
+     */
+    private void adquirirLockParametrizacion(java.util.UUID proyectoId, java.util.UUID metricaId) {
+        entityManager.createNativeQuery("SELECT pg_advisory_xact_lock(hashtext(:proyectoId), hashtext(:metricaId))")
+                .setParameter("proyectoId", proyectoId.toString())
+                .setParameter("metricaId", metricaId.toString())
+                .getSingleResult();
     }
 
     /**
@@ -245,7 +519,16 @@ public class MetricRankingService {
             // frecuencia (todo lo demás igual), no es el mismo contenido — antes
             // esta comparación no incluía frecuenciaCaptura y el reenvío se
             // descartaba silenciosamente devolviendo la versión vieja sin el cambio.
-            && java.util.Objects.equals(existente.getFrecuenciaCaptura(), frecuenciaReq);
+            && java.util.Objects.equals(existente.getFrecuenciaCaptura(), frecuenciaReq)
+            // Corrección del manejo de escalas: si el usuario solo cambió la escala
+            // estructurada (todo lo demás igual), es una edición real, no un reenvío
+            // duplicado — debe crear una versión nueva.
+            && java.util.Objects.equals(existente.getEscalaTipo(), req.escalaTipo())
+            && java.util.Objects.equals(existente.getEscalaMin(), req.escalaMin())
+            && java.util.Objects.equals(existente.getEscalaMax(),
+                    Boolean.TRUE.equals(req.escalaSinLimite()) ? null : req.escalaMax())
+            && java.util.Objects.equals(existente.getEscalaPaso(), req.escalaPaso())
+            && java.util.Objects.equals(existente.getEscalaSinLimite(), req.escalaSinLimite());
     }
 
     /**
@@ -279,6 +562,12 @@ public class MetricRankingService {
         p.setProcedimiento(req.procedimiento());
         p.setIndicadorVariable(req.indicadorVariable());
         p.setEscala(req.escala());
+        p.setEscalaTipo(req.escalaTipo());
+        p.setEscalaMin(req.escalaMin());
+        p.setEscalaMax(Boolean.TRUE.equals(req.escalaSinLimite()) ? null : req.escalaMax());
+        p.setEscalaPaso(req.escalaPaso());
+        p.setEscalaSinLimite(req.escalaSinLimite());
+        p.setEscalaDescripcion(req.escalaDescripcion());
         p.setMetricaBaseId(req.metricaBaseId());
         p.setStatus("pendiente");
         p.setRevisadoPor(null);
@@ -415,6 +704,24 @@ public class MetricRankingService {
                 .toList();
     }
 
+    /** true si userId es Scrum Master de proyectoId (rol evaluado por PROYECTO, no global). */
+    private boolean esScrumMaster(String userId, UUID proyectoId) {
+        return projectMemberRepo.findByProyectoIdAndUserId(proyectoId, userId)
+                .map(ProjectMember::getRol)
+                .filter("scrum_master"::equals)
+                .isPresent();
+    }
+
+    /** Exige que userId sea Scrum Master de proyectoId, o lanza SecurityException (403). */
+    private void validarScrumMaster(String userId, UUID proyectoId) {
+        if (proyectoId == null) {
+            return;
+        }
+        if (!esScrumMaster(userId, proyectoId)) {
+            throw new SecurityException("Solo el Scrum Master del proyecto puede realizar esta acción.");
+        }
+    }
+
     private MetricParametrizacionDto toDto(MetricParametrizacion p, Factor f) {
         UUID   fId        = f != null ? f.getId()       : null;
         String fNombre;
@@ -457,7 +764,13 @@ public class MetricRankingService {
                 p.getFuenteAcademica(),
                 p.getFormulaAcademica(),
                 p.getTipoOperacion(),
-                p.getUnidadResultado()
+                p.getUnidadResultado(),
+                p.getEscalaTipo(),
+                p.getEscalaMin(),
+                p.getEscalaMax(),
+                p.getEscalaPaso(),
+                p.getEscalaSinLimite(),
+                p.getEscalaDescripcion()
         );
     }
 }

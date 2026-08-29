@@ -101,7 +101,7 @@ class MetricaAcademicaControllerTest {
             "problemas",
             "Basado en Guerrero-Calvache & Hernández (2024)",
             "problemas_reportados"
-        );
+        , null, null, null, null, null, null);
         
         when(service.generarPropuestaAcademica(any(MetricaAcademicaRequest.class)))
             .thenReturn(propuesta);
@@ -163,7 +163,7 @@ class MetricaAcademicaControllerTest {
             "problemas_reportados",
             "INTEGER >= 0",
             "por_sprint"
-        );
+        , null, null, null, null, null, null);
         
         MetricParametrizacion parametrizacion = new MetricParametrizacion();
         parametrizacion.setId(UUID.randomUUID());
@@ -482,16 +482,3 @@ class MetricaAcademicaControllerTest {
  * Record interno para request de guardar propuesta.
  * (Duplicado aquí para que el test compile independientemente)
  */
-record GuardarPropuestaAcademicaRequest(
-    UUID proyectoId,
-    UUID metricaId,
-    String fuenteAcademica,
-    String formulaAcademica,
-    String tipoOperacion,
-    String unidadResultado,
-    String objetivo,
-    String procedimiento,
-    String indicadorVariable,
-    String escala,
-    String frecuenciaCaptura
-) {}

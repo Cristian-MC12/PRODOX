@@ -4,6 +4,7 @@ package com.mpdia.service;
 import com.mpdia.dto.ai.AIInsightDto;
 import com.mpdia.dto.ai.AIRetrospectiveDto;
 import com.mpdia.dto.analytics.*;
+import com.mpdia.entity.ProjectMember;
 import com.mpdia.entity.Sprint;
 import com.mpdia.repository.ProjectMemberRepository;
 import com.mpdia.repository.SprintRepository;
@@ -89,13 +90,27 @@ class AIRetrospectiveServiceTest {
     @DisplayName("generateRetrospective: usuario no autorizado lanza SecurityException")
     void generateRetrospective_usuarioNoAutorizado_lanzaSecurityException() {
         when(sprintRepository.findById(sprintId)).thenReturn(Optional.of(sprint));
-        when(projectMemberRepository.existsByProyectoIdAndUserId(proyectoId, userId)).thenReturn(false);
+        when(projectMemberRepository.findByProyectoIdAndUserId(proyectoId, userId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.generateRetrospective(sprintId, userId))
                 .isInstanceOf(SecurityException.class)
                 .hasMessageContaining("No tienes acceso a este proyecto");
 
-        verify(projectMemberRepository).existsByProyectoIdAndUserId(proyectoId, userId);
+        verify(projectMemberRepository).findByProyectoIdAndUserId(proyectoId, userId);
+        verifyNoInteractions(analyticsService);
+        verifyNoInteractions(geminiService);
+    }
+
+    @Test
+    @DisplayName("generateRetrospective: miembro normal (no Scrum Master) lanza SecurityException")
+    void generateRetrospective_miembroNormalNoScrumMaster_lanzaSecurityException() {
+        when(sprintRepository.findById(sprintId)).thenReturn(Optional.of(sprint));
+        when(projectMemberRepository.findByProyectoIdAndUserId(proyectoId, userId)).thenReturn(Optional.of(miembro()));
+
+        assertThatThrownBy(() -> service.generateRetrospective(sprintId, userId))
+                .isInstanceOf(SecurityException.class)
+                .hasMessageContaining("Solo el Scrum Master");
+
         verifyNoInteractions(analyticsService);
         verifyNoInteractions(geminiService);
     }
@@ -110,7 +125,7 @@ class AIRetrospectiveServiceTest {
         // Arrange
         sprint.setNumero(1);
         when(sprintRepository.findById(sprintId)).thenReturn(Optional.of(sprint));
-        when(projectMemberRepository.existsByProyectoIdAndUserId(proyectoId, userId)).thenReturn(true);
+        when(projectMemberRepository.findByProyectoIdAndUserId(proyectoId, userId)).thenReturn(Optional.of(scrumMaster()));
         when(sprintRepository.findByProyectoIdOrderByNumeroDesc(proyectoId)).thenReturn(List.of(sprint));
 
         SprintMetricsSummaryDto summary = new SprintMetricsSummaryDto(
@@ -163,7 +178,7 @@ class AIRetrospectiveServiceTest {
     @DisplayName("generateRetrospective: sprint con anterior incluye comparación")
     void generateRetrospective_sprintConAnterior_incluyeComparacion() {
         when(sprintRepository.findById(sprintId)).thenReturn(Optional.of(sprint));
-        when(projectMemberRepository.existsByProyectoIdAndUserId(proyectoId, userId)).thenReturn(true);
+        when(projectMemberRepository.findByProyectoIdAndUserId(proyectoId, userId)).thenReturn(Optional.of(scrumMaster()));
         when(sprintRepository.findByProyectoIdOrderByNumeroDesc(proyectoId))
                 .thenReturn(List.of(sprint, previousSprint));
 
@@ -221,7 +236,7 @@ class AIRetrospectiveServiceTest {
     @DisplayName("generateRetrospective: incluye insights y riesgos identificados")
     void generateRetrospective_incluyeInsightsYRiesgos() {
         when(sprintRepository.findById(sprintId)).thenReturn(Optional.of(sprint));
-        when(projectMemberRepository.existsByProyectoIdAndUserId(proyectoId, userId)).thenReturn(true);
+        when(projectMemberRepository.findByProyectoIdAndUserId(proyectoId, userId)).thenReturn(Optional.of(scrumMaster()));
         when(sprintRepository.findByProyectoIdOrderByNumeroDesc(proyectoId)).thenReturn(List.of(sprint));
 
         SprintMetricsSummaryDto summary = new SprintMetricsSummaryDto(
@@ -282,7 +297,7 @@ class AIRetrospectiveServiceTest {
     @DisplayName("generateRetrospective: datos insuficientes genera retrospectiva con defaults")
     void generateRetrospective_datosInsuficientes_generaRetrospectiva() {
         when(sprintRepository.findById(sprintId)).thenReturn(Optional.of(sprint));
-        when(projectMemberRepository.existsByProyectoIdAndUserId(proyectoId, userId)).thenReturn(true);
+        when(projectMemberRepository.findByProyectoIdAndUserId(proyectoId, userId)).thenReturn(Optional.of(scrumMaster()));
         when(sprintRepository.findByProyectoIdOrderByNumeroDesc(proyectoId)).thenReturn(List.of(sprint));
 
         SprintMetricsSummaryDto summaryVacio = new SprintMetricsSummaryDto(
@@ -331,7 +346,7 @@ class AIRetrospectiveServiceTest {
 
     private void mockDatosBasicos() {
         when(sprintRepository.findById(sprintId)).thenReturn(Optional.of(sprint));
-        when(projectMemberRepository.existsByProyectoIdAndUserId(proyectoId, userId)).thenReturn(true);
+        when(projectMemberRepository.findByProyectoIdAndUserId(proyectoId, userId)).thenReturn(Optional.of(scrumMaster()));
         when(sprintRepository.findByProyectoIdOrderByNumeroDesc(proyectoId)).thenReturn(List.of(sprint));
         when(analyticsService.getSprintMetricsSummary(sprintId)).thenReturn(summaryConDatos());
         when(insightsService.getProjectInsights(proyectoId, userId)).thenReturn(List.of());
@@ -456,7 +471,7 @@ class AIRetrospectiveServiceTest {
     @DisplayName("generateRetrospective: error en comparación no bloquea generación")
     void generateRetrospective_errorComparacion_noBloquea() {
         when(sprintRepository.findById(sprintId)).thenReturn(Optional.of(sprint));
-        when(projectMemberRepository.existsByProyectoIdAndUserId(proyectoId, userId)).thenReturn(true);
+        when(projectMemberRepository.findByProyectoIdAndUserId(proyectoId, userId)).thenReturn(Optional.of(scrumMaster()));
         when(sprintRepository.findByProyectoIdOrderByNumeroDesc(proyectoId))
                 .thenReturn(List.of(sprint, previousSprint));
 
@@ -502,7 +517,7 @@ class AIRetrospectiveServiceTest {
     @DisplayName("FASE 12.8: anterior=4, actual=3 → variación -25.00% DOWN, orden anterior→actual")
     void generateRetrospective_anterior4Actual3_variacionMenos25PorcientoDown() {
         when(sprintRepository.findById(sprintId)).thenReturn(Optional.of(sprint));
-        when(projectMemberRepository.existsByProyectoIdAndUserId(proyectoId, userId)).thenReturn(true);
+        when(projectMemberRepository.findByProyectoIdAndUserId(proyectoId, userId)).thenReturn(Optional.of(scrumMaster()));
         when(sprintRepository.findByProyectoIdOrderByNumeroDesc(proyectoId))
                 .thenReturn(List.of(sprint, previousSprint));
 
@@ -558,7 +573,7 @@ class AIRetrospectiveServiceTest {
     @DisplayName("FASE 12.8: anterior=3, actual=4 → variación +33.33% UP, orden anterior→actual")
     void generateRetrospective_anterior3Actual4_variacionMas33_33PorcientoUp() {
         when(sprintRepository.findById(sprintId)).thenReturn(Optional.of(sprint));
-        when(projectMemberRepository.existsByProyectoIdAndUserId(proyectoId, userId)).thenReturn(true);
+        when(projectMemberRepository.findByProyectoIdAndUserId(proyectoId, userId)).thenReturn(Optional.of(scrumMaster()));
         when(sprintRepository.findByProyectoIdOrderByNumeroDesc(proyectoId))
                 .thenReturn(List.of(sprint, previousSprint));
 
@@ -605,5 +620,21 @@ class AIRetrospectiveServiceTest {
         String prompt = promptCaptor.getValue();
         assertThat(prompt).contains("33.33");
         assertThat(prompt).contains("UP");
+    }
+
+    private ProjectMember scrumMaster() {
+        ProjectMember m = new ProjectMember();
+        m.setProyectoId(proyectoId);
+        m.setUserId(userId);
+        m.setRol("scrum_master");
+        return m;
+    }
+
+    private ProjectMember miembro() {
+        ProjectMember m = new ProjectMember();
+        m.setProyectoId(proyectoId);
+        m.setUserId(userId);
+        m.setRol("scrum_member");
+        return m;
     }
 }

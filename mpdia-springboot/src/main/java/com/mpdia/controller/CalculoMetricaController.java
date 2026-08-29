@@ -5,6 +5,7 @@ import com.mpdia.dto.CalcularMetricaRequest;
 import com.mpdia.dto.ResultadoMetricaDto;
 import com.mpdia.service.CalculoMetricaService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
@@ -52,13 +53,20 @@ public class CalculoMetricaController {
             
             return ResponseEntity.ok(resultado);
             
+        } catch (SecurityException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(Map.of(
+                    "error", "SIN_PERMISOS",
+                    "mensaje", e.getMessage()
+                ));
+
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest()
                 .body(Map.of(
                     "error", "DATOS_INVALIDOS",
                     "mensaje", e.getMessage()
                 ));
-                
+
         } catch (ArithmeticException e) {
             return ResponseEntity.badRequest()
                 .body(Map.of(

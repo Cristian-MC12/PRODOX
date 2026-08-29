@@ -4,6 +4,7 @@ package com.mpdia.dto;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 
+import java.math.BigDecimal;
 import java.util.UUID;
 
 public record GuardarParametrizacionRequest(
@@ -28,5 +29,16 @@ public record GuardarParametrizacionRequest(
      * lo que el usuario eligiera en Planeación. Opcional por compatibilidad:
      * null se interpreta como "por_sprint", igual que el resto del sistema.
      */
-    String frecuenciaCaptura
+    String frecuenciaCaptura,
+    /**
+     * Escala estructurada (corrección del manejo de escalas): opcional para
+     * compatibilidad, pero si escalaTipo viene informado se valida
+     * completa — ver ParametrizacionService.validarEscalaEstructurada().
+     */
+    String escalaTipo,
+    BigDecimal escalaMin,
+    BigDecimal escalaMax,
+    BigDecimal escalaPaso,
+    Boolean escalaSinLimite,
+    String escalaDescripcion
 ) {}

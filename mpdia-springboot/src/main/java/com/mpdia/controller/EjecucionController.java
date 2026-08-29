@@ -19,18 +19,19 @@ public class EjecucionController {
 
     private final EjecucionService ejecucionService;
 
-    /** GET /api/ejecucion/sprint/{sprintId} — valores registrados en un sprint */
+    /** GET /api/ejecucion/sprint/{sprintId} — valores registrados en un sprint (solo miembros del proyecto) */
     @GetMapping("/sprint/{sprintId}")
-    public ResponseEntity<List<RegistroValorDto>> porSprint(@PathVariable UUID sprintId) {
-        return ResponseEntity.ok(ejecucionService.listarPorSprint(sprintId));
+    public ResponseEntity<List<RegistroValorDto>> porSprint(@PathVariable UUID sprintId, Authentication auth) {
+        return ResponseEntity.ok(ejecucionService.listarPorSprint(auth.getName(), sprintId));
     }
 
-    /** GET /api/ejecucion/variable/{variableId}/sprint/{sprintId} */
+    /** GET /api/ejecucion/variable/{variableId}/sprint/{sprintId} — solo miembros del proyecto */
     @GetMapping("/variable/{variableId}/sprint/{sprintId}")
     public ResponseEntity<List<RegistroValorDto>> porVariable(
             @PathVariable UUID variableId,
-            @PathVariable UUID sprintId) {
-        return ResponseEntity.ok(ejecucionService.listarPorVariable(variableId, sprintId));
+            @PathVariable UUID sprintId,
+            Authentication auth) {
+        return ResponseEntity.ok(ejecucionService.listarPorVariable(auth.getName(), variableId, sprintId));
     }
 
     /** POST /api/ejecucion — registrar un valor */

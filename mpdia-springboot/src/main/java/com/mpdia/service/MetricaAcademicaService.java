@@ -110,11 +110,24 @@ public class MetricaAcademicaService {
                 "objetivo": "Qué se logrará midiendo esta métrica (basado en la definición académica)",
                 "procedimiento": "Cómo capturar los valores según la fórmula académica (paso a paso claro y específico)",
                 "indicadorVariable": "Variables necesarias para la fórmula (listar cada una)",
-                "escala": "Tipo de dato y rango de cada variable",
+                "escala": "Tipo de dato y rango de cada variable (texto legible)",
+                "escalaTipo": "NUMERICA_ENTERA o NUMERICA_DECIMAL — nunca otro valor",
+                "escalaMin": "valor mínimo permitido (número, ej: 0)",
+                "escalaMax": "valor máximo permitido (número), o null si no hay límite superior",
+                "escalaPaso": "incremento permitido entre valores válidos (ej: 1, o 0.01 para dos decimales)",
+                "escalaSinLimite": "true si no hay máximo superior (ej. conteos), false en caso contrario",
+                "escalaDescripcion": "significado de los valores (ej: '0 = Muy malo; 10 = Excelente'), o null si no aplica",
                 "justificacion": "Por qué esta parametrización es fiel a la fuente académica y práctica para el equipo (menciona que es PROPUESTA)"
               }
             ]
-            
+
+            REGLAS PARA LA ESCALA: infierí una escala apropiada para lo que la variable
+            realmente mide — NO uses 0-10 por defecto para todo. Un conteo de eventos
+            (defectos, incidentes, bloqueos) normalmente es NUMERICA_ENTERA, mínimo 0,
+            paso 1, sinLimite=true. Un porcentaje normalmente es 0-100 (o 0-1 decimal).
+            Una valoración subjetiva puede ser 0-10 o 1-5 entero. Un valor que admite
+            decimales (horas, promedios) debe ser NUMERICA_DECIMAL con el paso adecuado.
+
             IMPORTANTE: El procedimiento debe respetar la fórmula académica exacta.
             """.formatted(
                 r.codigoMetrica(),
@@ -146,6 +159,9 @@ public class MetricaAcademicaService {
     }
     
     private PropuestaParametrizacionDto fallbackPropuesta(MetricaAcademicaRequest r) {
+        // Sin respuesta válida de Gemini no hay forma segura de inferir una escala
+        // específica para esta métrica académica — se deja explícitamente sin
+        // estructurar (escalaTipo=null) en vez de asumir un rango arbitrario.
         return new PropuestaParametrizacionDto(
             "Parametrización de " + r.nombreMetrica(),
             "Medir " + r.nombreMetrica() + " según la fuente académica.",
@@ -158,7 +174,8 @@ public class MetricaAcademicaService {
             r.tipoOperacion(),
             r.unidadResultado(),
             "Propuesta generada automáticamente basada en " + r.fuenteAcademica(),
-            "valor_capturado"
+            "valor_capturado",
+            null, null, null, null, null, null
         );
     }
     
@@ -198,9 +215,21 @@ public class MetricaAcademicaService {
         parametrizacion.setProcedimiento(propuesta.procedimiento());
         parametrizacion.setIndicadorVariable(propuesta.indicadorVariable());
         parametrizacion.setEscala(propuesta.escala());
-        parametrizacion.setFrecuenciaCaptura(request.frecuencia() != null 
-            ? request.frecuencia() 
+        parametrizacion.setFrecuenciaCaptura(request.frecuencia() != null
+            ? request.frecuencia()
             : "por_sprint");
+
+        // Escala estructurada (corrección del manejo de escalas): se valida y se
+        // persiste igual que en ParametrizacionService, reutilizando la misma regla.
+        ParametrizacionService.validarEscalaEstructurada(
+            propuesta.escalaTipo(), propuesta.escalaMin(), propuesta.escalaMax(),
+            propuesta.escalaPaso(), propuesta.escalaSinLimite());
+        parametrizacion.setEscalaTipo(propuesta.escalaTipo());
+        parametrizacion.setEscalaMin(propuesta.escalaMin());
+        parametrizacion.setEscalaMax(Boolean.TRUE.equals(propuesta.escalaSinLimite()) ? null : propuesta.escalaMax());
+        parametrizacion.setEscalaPaso(propuesta.escalaPaso());
+        parametrizacion.setEscalaSinLimite(propuesta.escalaSinLimite());
+        parametrizacion.setEscalaDescripcion(propuesta.escalaDescripcion());
         
         // Campos académicos (Fase 16.9.1)
         parametrizacion.setFuenteAcademica(request.fuenteAcademica());
@@ -362,6 +391,8 @@ public class MetricaAcademicaService {
      * Obtiene el histórico de resultados de una métrica en un proyecto.
      */
     public List<ResultadoMetricaDto> obtenerHistorico(UUID metricaId, UUID proyectoId) {
+        validarMiembroProyecto(getUserId(), proyectoId);
+
         List<ResultadoMetrica> resultados = resultadoRepo
             .findByMetrica_IdAndProyectoIdOrderByCalculadoAtDesc(metricaId, proyectoId);
         
@@ -393,7 +424,9 @@ public class MetricaAcademicaService {
     public InterpretacionIADto solicitarInterpretacionIA(UUID resultadoId) {
         ResultadoMetrica resultado = resultadoRepo.findById(resultadoId)
             .orElseThrow(() -> new IllegalArgumentException("Resultado no encontrado"));
-        
+
+        validarMiembroProyecto(getUserId(), resultado.getProyectoId());
+
         // Obtener histórico para contexto
         List<ResultadoMetrica> historico = resultadoRepo
             .findByMetrica_IdAndProyectoIdOrderByCalculadoAtDesc(

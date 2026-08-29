@@ -3,6 +3,7 @@ package com.mpdia.controller;
 
 import com.mpdia.dto.CrearSiguienteSprintRequest;
 import com.mpdia.dto.SprintDto;
+import com.mpdia.entity.ProjectMember;
 import com.mpdia.repository.ProjectMemberRepository;
 import com.mpdia.service.SprintService;
 import jakarta.validation.Valid;
@@ -48,23 +49,39 @@ public class SprintController {
         return ResponseEntity.ok(sprint);
     }
 
+    /** Finalizar el sprint activo e iniciar el siguiente es una acción restringida al Scrum Master del proyecto. */
     @PostMapping("/{proyectoId}/siguiente")
     public ResponseEntity<SprintDto> siguiente(
             @PathVariable UUID proyectoId,
             @Valid @RequestBody CrearSiguienteSprintRequest request,
             Authentication auth) {
-        validarAcceso(proyectoId, auth);
+        validarScrumMaster(proyectoId, auth);
         return ResponseEntity.ok(sprintService.cerrarEIniciarSiguiente(proyectoId, request));
     }
 
-    /** Solo miembros del proyecto — reabrir un sprint finalizado */
+    /** Reabrir un sprint finalizado es una acción restringida al Scrum Master del proyecto. */
     @PatchMapping("/{sprintId}/reabrir")
     public ResponseEntity<SprintDto> reabrir(
             @PathVariable UUID sprintId,
             Authentication auth) {
         SprintDto sprintActual = sprintService.getById(sprintId);
-        validarAcceso(sprintActual.proyectoId(), auth);
+        validarScrumMaster(sprintActual.proyectoId(), auth);
         return ResponseEntity.ok(sprintService.reabrir(sprintId, auth.getName()));
+    }
+
+    /**
+     * Vuelve a finalizar un sprint que había sido reabierto (transición
+     * reabierto → finalizado). Restringida al Scrum Master del proyecto,
+     * mismo patrón que reabrir(). No afecta al sprint actualmente en
+     * ejecución del proyecto.
+     */
+    @PatchMapping("/{sprintId}/finalizar")
+    public ResponseEntity<SprintDto> finalizarReabierto(
+            @PathVariable UUID sprintId,
+            Authentication auth) {
+        SprintDto sprintActual = sprintService.getById(sprintId);
+        validarScrumMaster(sprintActual.proyectoId(), auth);
+        return ResponseEntity.ok(sprintService.finalizarReabierto(sprintId));
     }
 
     /** Mismo patrón de autorización que AIInsightsService.validateProjectAccess. */
@@ -72,6 +89,20 @@ public class SprintController {
         String userId = auth.getName();
         if (!projectMemberRepository.existsByProyectoIdAndUserId(proyectoId, userId)) {
             throw new SecurityException("No tienes acceso a este proyecto");
+        }
+    }
+
+    /**
+     * Valida que el usuario sea miembro del proyecto Y su Scrum Master (rol de liderazgo
+     * a nivel de proyecto). Usado solo para las acciones restringidas de finalizar/reabrir
+     * un sprint — mismo patrón que AIInsightsService.validateScrumMasterAccess.
+     */
+    private void validarScrumMaster(UUID proyectoId, Authentication auth) {
+        String userId = auth.getName();
+        ProjectMember member = projectMemberRepository.findByProyectoIdAndUserId(proyectoId, userId)
+                .orElseThrow(() -> new SecurityException("No tienes acceso a este proyecto"));
+        if (!"scrum_master".equals(member.getRol())) {
+            throw new SecurityException("Solo el Scrum Master del proyecto puede realizar esta acción");
         }
     }
 }

@@ -4,6 +4,7 @@ package com.mpdia.dto;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 
+import java.math.BigDecimal;
 import java.util.UUID;
 
 /**
@@ -30,5 +31,13 @@ public record GuardarPropuestaRequest(
     String propuestaIAJson,
 
     /** Identificador técnico snake_case de la variable principal (Fase 16.10-E) */
-    String nombreVariable
+    String nombreVariable,
+
+    /** Escala estructurada — ver ParametrizacionService.validarEscalaEstructurada(). */
+    String escalaTipo,
+    BigDecimal escalaMin,
+    BigDecimal escalaMax,
+    BigDecimal escalaPaso,
+    Boolean escalaSinLimite,
+    String escalaDescripcion
 ) {}

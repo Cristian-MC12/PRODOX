@@ -234,15 +234,33 @@ describe('CrearMetricaIAComponent', () => {
     expect(routerSpy.navigate).not.toHaveBeenCalled();
   });
 
-  // CASO B: reutilizar la métrica existente asocia (seleccionar), NO crea duplicado.
-  it('usarMetricaExistente asocia la métrica existente al proyecto y navega a Planeación, sin crear una copia', () => {
+  // CASO B: reutilizar la métrica existente asocia (seleccionar), NO crea duplicado,
+  // y lleva directamente al flujo de parametrización (Reutilizar = reutilizar).
+  it('usarMetricaExistente asocia la métrica existente al proyecto y navega directo a Parametrización, sin crear una copia', () => {
     component.metricaExistente = metricaExistente();
     planeacionServiceSpy.seleccionar.and.returnValue(of(undefined));
+    seleccionServiceSpy.getSnapshot.and.returnValue([
+      { id: 'sel-1', factorId: 'metrica-existente-1' } as any
+    ]);
 
     component.usarMetricaExistente();
 
     expect(planeacionServiceSpy.seleccionar).toHaveBeenCalledWith('proyecto-1', 'metrica-existente-1');
     expect(metricaIAServiceSpy.crear).not.toHaveBeenCalled();
+    expect(seleccionServiceSpy.agregar).toHaveBeenCalledWith(jasmine.objectContaining({
+      factorId: 'metrica-existente-1',
+      proyectoId: 'proyecto-1'
+    }));
+    expect(routerSpy.navigate).toHaveBeenCalledWith(['/parametrizacion', 'sel-1']);
+  });
+
+  it('usarMetricaExistente: si SeleccionService no encuentra la entrada tras agregar, cae a Planeación', () => {
+    component.metricaExistente = metricaExistente();
+    planeacionServiceSpy.seleccionar.and.returnValue(of(undefined));
+    seleccionServiceSpy.getSnapshot.and.returnValue([]);
+
+    component.usarMetricaExistente();
+
     expect(routerSpy.navigate).toHaveBeenCalledWith(['/planeacion']);
   });
 
@@ -305,17 +323,20 @@ describe('CrearMetricaIAComponent', () => {
   });
 
   // 9. "Reutilizar existente" continúa el flujo con el ID de la métrica ya existente.
-  it('CASO C: reutilizarPosibleDuplicado asocia la métrica existente al proyecto, sin crear una copia', () => {
+  it('CASO C: reutilizarPosibleDuplicado asocia la métrica existente al proyecto y navega directo a Parametrización, sin crear una copia', () => {
     const candidato = posibleDuplicado();
     component.posiblesDuplicados = [candidato];
     planeacionServiceSpy.seleccionar.and.returnValue(of(undefined));
+    seleccionServiceSpy.getSnapshot.and.returnValue([
+      { id: 'sel-2', factorId: 'metrica-conceptual-1' } as any
+    ]);
 
     component.reutilizarPosibleDuplicado(candidato);
 
     expect(planeacionServiceSpy.seleccionar).toHaveBeenCalledWith('proyecto-1', 'metrica-conceptual-1');
     expect(metricaIAServiceSpy.crear).not.toHaveBeenCalled();
     expect(component.posiblesDuplicados).toBeNull();
-    expect(routerSpy.navigate).toHaveBeenCalledWith(['/planeacion']);
+    expect(routerSpy.navigate).toHaveBeenCalledWith(['/parametrizacion', 'sel-2']);
   });
 
   // 10. "Crear como métrica diferente" permite crear la nueva métrica igual.

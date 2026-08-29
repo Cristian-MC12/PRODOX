@@ -31,6 +31,10 @@ interface BloqueVariable {
   unidad?: string;
   escalaMin?: number;
   escalaMax?: number;
+  /** Corrección del manejo de escalas: fuente real para tipo/paso/sin-límite (ver EjecucionService.validarRangoValor). */
+  escalaTipo?: 'NUMERICA_ENTERA' | 'NUMERICA_DECIMAL';
+  escalaPaso?: number;
+  escalaSinLimite?: boolean;
   fecha: string;          // yyyy-MM-dd, ligado al input de fecha
   valorNum: number | null;
   valorTexto: string;
@@ -201,8 +205,8 @@ function hoyISO(): string {
                         }
                         <div class="text-muted mt-1" style="font-size:0.72rem">
                           <strong>Valor esperado:</strong>
-                          @if (v.tipoDato === 'numerico' && v.escalaMin != null && v.escalaMax != null) {
-                            Numérico, escala {{ v.escalaMin }}–{{ v.escalaMax }}
+                          @if (v.tipoDato === 'numerico' && v.escalaMin != null) {
+                            Numérico, escala {{ v.escalaMin }}–{{ v.escalaMax ?? 'sin límite' }}
                           } @else {
                             {{ v.tipoDato }}{{ v.unidad ? ' (' + v.unidad + ')' : '' }}
                           }
@@ -284,12 +288,19 @@ function hoyISO(): string {
                                   </button>
                                 }
                               </div>
-                            } @else if (v.escalaMin != null && v.escalaMax != null) {
-                              <input type="number" class="form-control form-control-sm" style="width:120px" step="0.01"
-                                     [min]="v.escalaMin" [max]="v.escalaMax"
+                            } @else if (v.escalaMin != null) {
+                              <input type="number" class="form-control form-control-sm" style="width:120px"
+                                     [step]="v.escalaPaso ?? 0.01"
+                                     [min]="v.escalaMin" [max]="v.escalaMax ?? null"
                                      [(ngModel)]="v.valorNum" [name]="'valor-' + v.variableId">
                               <div class="text-muted" style="font-size:0.62rem">
-                                Debe estar entre {{ v.escalaMin }} y {{ v.escalaMax }}.
+                                @if (v.escalaMax != null) {
+                                  Debe estar entre {{ v.escalaMin }} y {{ v.escalaMax }}
+                                } @else {
+                                  Debe ser {{ v.escalaMin }} o más
+                                }
+                                @if (v.escalaTipo === 'NUMERICA_ENTERA') { , entero }
+                                @if (v.escalaPaso != null && v.escalaPaso !== 1) { , paso {{ v.escalaPaso }} }.
                               </div>
                             } @else {
                               <input type="number" class="form-control form-control-sm" style="width:120px" step="0.01"
@@ -529,6 +540,9 @@ export class EjecucionComponent implements OnInit {
       unidad: v.unidad,
       escalaMin: v.escalaMin,
       escalaMax: v.escalaMax,
+      escalaTipo: v.escalaTipo,
+      escalaPaso: v.escalaPaso,
+      escalaSinLimite: v.escalaSinLimite,
       fecha: capturaVigente ? capturaVigente.registradoAt.substring(0, 10) : this.fechaCapturaPorDefecto(),
       valorNum: v.valorNum ?? null,
       valorTexto: v.valorTexto ?? '',
@@ -593,14 +607,31 @@ export class EjecucionComponent implements OnInit {
       return;
     }
 
-    // Validación de rango en frontend: nunca dejar que el usuario descubra el
+    // Validación de escala en frontend: nunca dejar que el usuario descubra el
     // límite recién después de pulsar "Registrar" — se rechaza acá mismo,
-    // con el mismo rango que valida el backend (EjecucionService.
-    // validarRangoValor), como defensa en profundidad de ambos lados.
-    if (v.tipoDato === 'numerico' && v.escalaMin != null && v.escalaMax != null && v.valorNum != null) {
-      if (v.valorNum < v.escalaMin || v.valorNum > v.escalaMax) {
-        v.error = `El valor debe estar entre ${v.escalaMin} y ${v.escalaMax}.`;
+    // con la misma escala estructurada que valida el backend (EjecucionService.
+    // validarRangoValor: min/max/tipo/paso), como defensa en profundidad de
+    // ambos lados. El backend sigue siendo la autoridad final.
+    if (v.tipoDato === 'numerico' && v.valorNum != null) {
+      if (v.escalaMin != null && v.valorNum < v.escalaMin) {
+        v.error = `El valor debe ser mayor o igual a ${v.escalaMin}.`;
         return;
+      }
+      if (v.escalaMax != null && v.valorNum > v.escalaMax) {
+        v.error = `El valor debe ser menor o igual a ${v.escalaMax}.`;
+        return;
+      }
+      if (v.escalaTipo === 'NUMERICA_ENTERA' && !Number.isInteger(v.valorNum)) {
+        v.error = 'El valor debe ser un número entero.';
+        return;
+      }
+      if (v.escalaPaso != null && v.escalaPaso > 0) {
+        const referencia = v.escalaMin ?? 0;
+        const pasos = (v.valorNum - referencia) / v.escalaPaso;
+        if (Math.abs(pasos - Math.round(pasos)) > 1e-9) {
+          v.error = `El valor no respeta el paso permitido (${v.escalaPaso}).`;
+          return;
+        }
       }
     }
 
@@ -672,17 +703,38 @@ export class EjecucionComponent implements OnInit {
     v.registroEditandoId = null;
   }
 
-  /** Rangos de escala pequeños y discretos (ej. 1-5) se capturan con un selector de botones. */
+  /**
+   * Máximo de opciones discretas mostradas como botones en vez de un campo
+   * numérico libre — cubre explícitamente una escala 0-10 (11 valores:
+   * 0,1,2,...,10). Antes el corte era "rango <= 9" (escalaMax - escalaMin),
+   * lo que EXCLUÍA 0-10 (rango 10) por error: se corrige contando el número
+   * real de opciones (respetando el paso) en vez del tamaño del rango, así
+   * que el límite queda expresado en la unidad correcta y no es un parche
+   * exclusivo para 0-10 — cualquier escala con este mismo conteo de
+   * opciones se beneficia igual.
+   */
+  private static readonly MAX_OPCIONES_DISCRETAS = 11;
+
+  /** Rangos de escala enteros y acotados (ej. 0-10) se capturan con un selector de botones. */
   esEscalaDiscretaPequena(v: BloqueVariable): boolean {
     if (v.tipoDato !== 'numerico' || v.escalaMin == null || v.escalaMax == null) return false;
-    const rango = v.escalaMax - v.escalaMin;
-    return Number.isInteger(v.escalaMin) && Number.isInteger(v.escalaMax) && rango >= 1 && rango <= 9;
+    // Compatibilidad: variables sin escalaTipo estructurado (históricas) se
+    // tratan como enteras solo si min/max ya lo eran, igual que antes.
+    const esEntera = v.escalaTipo ? v.escalaTipo === 'NUMERICA_ENTERA'
+      : Number.isInteger(v.escalaMin) && Number.isInteger(v.escalaMax);
+    if (!esEntera) return false;
+    const paso = v.escalaPaso && v.escalaPaso > 0 ? v.escalaPaso : 1;
+    const numOpciones = Math.round((v.escalaMax - v.escalaMin) / paso) + 1;
+    return numOpciones >= 2 && numOpciones <= EjecucionComponent.MAX_OPCIONES_DISCRETAS;
   }
 
   opcionesEscala(v: BloqueVariable): number[] {
     if (v.escalaMin == null || v.escalaMax == null) return [];
+    const paso = v.escalaPaso && v.escalaPaso > 0 ? v.escalaPaso : 1;
     const opciones: number[] = [];
-    for (let i = v.escalaMin; i <= v.escalaMax; i++) opciones.push(i);
+    for (let i = v.escalaMin; i <= v.escalaMax + 1e-9; i += paso) {
+      opciones.push(Math.round(i * 1000) / 1000);
+    }
     return opciones;
   }
 

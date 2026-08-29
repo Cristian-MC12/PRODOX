@@ -22,10 +22,10 @@ public class ProjectMemberController {
 
     private final ProjectMemberService service;
 
-    /** GET /api/project-members/{proyectoId} — miembros del proyecto */
+    /** GET /api/project-members/{proyectoId} — miembros del proyecto (solo miembros) */
     @GetMapping("/{proyectoId}")
-    public ResponseEntity<List<ProjectMemberDto>> listar(@PathVariable UUID proyectoId) {
-        return ResponseEntity.ok(service.listarMiembros(proyectoId));
+    public ResponseEntity<List<ProjectMemberDto>> listar(@PathVariable UUID proyectoId, Authentication auth) {
+        return ResponseEntity.ok(service.listarMiembros(proyectoId, auth.getName()));
     }
 
     /*

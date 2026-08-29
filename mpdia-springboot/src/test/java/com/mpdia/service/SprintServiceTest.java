@@ -171,4 +171,81 @@ class SprintServiceTest {
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("No hay sprints pendientes");
     }
+
+    // ── finalizarReabierto (transición reabierto → finalizado) ─────────────
+
+    @Test
+    @DisplayName("finalizarReabierto: cierra un sprint reabierto sin tocar el sprint en ejecución del proyecto")
+    void finalizarReabierto_sprintReabierto_loFinaliza() {
+        UUID sprintId = UUID.randomUUID();
+        Sprint reabierto = new Sprint();
+        reabierto.setId(sprintId);
+        reabierto.setProyectoId(proyectoId);
+        reabierto.setNumero(1);
+        reabierto.setEstado("reabierto");
+        reabierto.setReabiertoPor("sm-user");
+        reabierto.setFechaInicio(LocalDate.now().minusWeeks(2));
+        reabierto.setFechaFin(LocalDate.now().minusWeeks(1));
+
+        when(sprintRepo.findById(sprintId)).thenReturn(Optional.of(reabierto));
+        when(proyectoRepo.findById(proyectoId)).thenReturn(Optional.of(proyecto));
+        when(sprintRepo.save(any(Sprint.class))).thenReturn(reabierto);
+
+        SprintDto dto = sprintService.finalizarReabierto(sprintId);
+
+        assertThat(dto.estado()).isEqualTo("finalizado");
+        assertThat(reabierto.getEstado()).isEqualTo("finalizado");
+        // reabiertoPor se conserva como rastro histórico de que fue reabierto antes de re-cerrarse.
+        assertThat(reabierto.getReabiertoPor()).isEqualTo("sm-user");
+        verify(sprintRepo, times(1)).save(reabierto);
+        // No debe tocar ningún otro sprint del proyecto (no abre "siguiente").
+        verify(sprintRepo, never()).findFirstByProyectoIdAndEstadoOrderByNumeroAsc(any(), any());
+    }
+
+    @Test
+    @DisplayName("finalizarReabierto: lanza excepción si el sprint no está en estado reabierto")
+    void finalizarReabierto_sprintNoReabierto_lanzaExcepcion() {
+        UUID sprintId = UUID.randomUUID();
+        when(sprintRepo.findById(sprintId)).thenReturn(Optional.of(sprintEnEjecucion));
+
+        assertThatThrownBy(() -> sprintService.finalizarReabierto(sprintId))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Solo se pueden finalizar sprints reabiertos");
+
+        verify(sprintRepo, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("finalizarReabierto: lanza excepción si el sprint no existe")
+    void finalizarReabierto_sprintInexistente_lanzaExcepcion() {
+        UUID sprintId = UUID.randomUUID();
+        when(sprintRepo.findById(sprintId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> sprintService.finalizarReabierto(sprintId))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Sprint no encontrado");
+    }
+
+    @Test
+    @DisplayName("Ciclo completo: en_ejecucion -> finalizado -> reabierto -> finalizado")
+    void cicloCompleto_enEjecucionFinalizadoReabiertoFinalizado() {
+        UUID sprintId = sprintEnEjecucion.getId();
+        when(proyectoRepo.findById(proyectoId)).thenReturn(Optional.of(proyecto));
+        when(sprintRepo.findById(sprintId)).thenReturn(Optional.of(sprintEnEjecucion));
+        when(sprintRepo.save(any(Sprint.class))).thenReturn(sprintEnEjecucion);
+
+        // en_ejecucion -> finalizado (reabrir requiere estado finalizado)
+        sprintEnEjecucion.setEstado("finalizado");
+        assertThat(sprintEnEjecucion.getEstado()).isEqualTo("finalizado");
+
+        // finalizado -> reabierto
+        SprintDto reabierto = sprintService.reabrir(sprintId, "sm-user");
+        assertThat(reabierto.estado()).isEqualTo("reabierto");
+        assertThat(sprintEnEjecucion.getEstado()).isEqualTo("reabierto");
+
+        // reabierto -> finalizado
+        SprintDto finalizadoOtraVez = sprintService.finalizarReabierto(sprintId);
+        assertThat(finalizadoOtraVez.estado()).isEqualTo("finalizado");
+        assertThat(sprintEnEjecucion.getEstado()).isEqualTo("finalizado");
+    }
 }

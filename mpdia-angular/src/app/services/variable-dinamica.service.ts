@@ -18,6 +18,10 @@ export interface VariableConValor {
   valorBool?: boolean;
   /** FASE 16 — diaria | semanal | por_sprint | ilimitada. */
   frecuenciaCaptura?: string;
+  /** Corrección del manejo de escalas: NUMERICA_ENTERA | NUMERICA_DECIMAL, undefined = sin escala estructurada. */
+  escalaTipo?: 'NUMERICA_ENTERA' | 'NUMERICA_DECIMAL';
+  escalaPaso?: number;
+  escalaSinLimite?: boolean;
 }
 
 export interface VariablesMetricaResponse {

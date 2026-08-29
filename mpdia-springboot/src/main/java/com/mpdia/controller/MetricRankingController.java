@@ -27,8 +27,9 @@ public class MetricRankingController {
     /** GET /api/metric-ranking/pendientes — parametrizaciones pendientes (solo Scrum Master) */
     @GetMapping("/pendientes")
     public ResponseEntity<List<com.mpdia.dto.MetricParametrizacionDto>> pendientes(
-            @RequestParam(required = false) java.util.UUID proyectoId) {
-        return ResponseEntity.ok(service.getPendientesPorProyecto(proyectoId));
+            @RequestParam(required = false) java.util.UUID proyectoId,
+            Authentication auth) {
+        return ResponseEntity.ok(service.getPendientesPorProyecto(proyectoId, auth.getName()));
     }
 
     /**
@@ -37,8 +38,9 @@ public class MetricRankingController {
      */
     @GetMapping("/resumen")
     public ResponseEntity<com.mpdia.dto.ResumenVerificacionDto> resumen(
-            @RequestParam UUID proyectoId) {
-        return ResponseEntity.ok(service.getResumenPorProyecto(proyectoId));
+            @RequestParam UUID proyectoId,
+            Authentication auth) {
+        return ResponseEntity.ok(service.getResumenPorProyecto(proyectoId, auth.getName()));
     }
 
     /** POST /api/metric-ranking/verificar — aprobar o rechazar (solo Scrum Master) */
@@ -48,7 +50,7 @@ public class MetricRankingController {
             Authentication auth,
             HttpServletRequest httpRequest) {
         String revisadoPor = jwtUtil.getEmail(httpRequest.getHeader("Authorization").substring(7));
-        return ResponseEntity.ok(service.verificar(request, revisadoPor));
+        return ResponseEntity.ok(service.verificar(request, auth.getName(), revisadoPor));
     }
 
     /** GET /api/metric-ranking — top 5 métricas más usadas */
@@ -102,5 +104,14 @@ public class MetricRankingController {
         String token     = httpRequest.getHeader("Authorization").substring(7);
         String userEmail = jwtUtil.getEmail(token);
         return ResponseEntity.ok(service.guardar(request, userId, userEmail));
+    }
+
+    /** PUT /api/metric-ranking/parametrizacion/{id} — actualizar parametrización pendiente (solo Scrum Master) */
+    @PutMapping("/parametrizacion/{id}")
+    public ResponseEntity<MetricParametrizacionDto> actualizar(
+            @PathVariable UUID id,
+            @Valid @RequestBody com.mpdia.dto.ActualizarParametrizacionRequest request,
+            Authentication auth) {
+        return ResponseEntity.ok(service.actualizar(id, request, auth.getName()));
     }
 }

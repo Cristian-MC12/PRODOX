@@ -89,23 +89,40 @@ class ProjectMemberServiceTest {
     }
 
     // ── listarMiembros ────────────────────────────────────────────────────
+    // Auditoría transversal: este endpoint no validaba membresía — cualquier
+    // usuario autenticado podía consultar los miembros de cualquier proyecto
+    // conociendo su UUID.
 
     @Test
-    @DisplayName("listarMiembros: retorna lista de ProjectMemberDto")
-    void listarMiembros_conMiembros_retornaLista() {
+    @DisplayName("listarMiembros: miembro del proyecto obtiene la lista")
+    void listarMiembros_miembroDelProyecto_retornaLista() {
         ProjectMember m = new ProjectMember();
         m.setProyectoId(proyectoId);
         m.setUserId(smId.toString());
         m.setUserEmail("sm@mpdia.com");
         m.setRol("scrum_master");
 
+        when(memberRepo.existsByProyectoIdAndUserId(proyectoId, smId.toString())).thenReturn(true);
         when(memberRepo.findByProyectoId(proyectoId)).thenReturn(List.of(m));
 
-        List<ProjectMemberDto> resultado = service.listarMiembros(proyectoId);
+        List<ProjectMemberDto> resultado = service.listarMiembros(proyectoId, smId.toString());
 
         assertThat(resultado).hasSize(1);
         assertThat(resultado.get(0).userEmail()).isEqualTo("sm@mpdia.com");
         assertThat(resultado.get(0).rol()).isEqualTo("scrum_master");
+    }
+
+    @Test
+    @DisplayName("listarMiembros: usuario externo lanza SecurityException")
+    void listarMiembros_usuarioExterno_lanzaSecurityException() {
+        String externoId = UUID.randomUUID().toString();
+        when(memberRepo.existsByProyectoIdAndUserId(proyectoId, externoId)).thenReturn(false);
+
+        assertThatThrownBy(() -> service.listarMiembros(proyectoId, externoId))
+                .isInstanceOf(SecurityException.class)
+                .hasMessageContaining("No tienes acceso a este proyecto");
+
+        verify(memberRepo, never()).findByProyectoId(any());
     }
 
     /*

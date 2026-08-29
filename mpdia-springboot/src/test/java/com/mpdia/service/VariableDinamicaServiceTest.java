@@ -472,8 +472,16 @@ class VariableDinamicaServiceTest {
         verify(variableRepo, times(2)).save(any(Variable.class));
     }
 
+    // Corrección: una frase humana en indicadorVariable ya NO se rechaza (eso dejaba
+    // al Scrum Master sin ninguna forma de aprobar la parametrización desde el flujo de
+    // Verificación, que nunca informa un nombreVariable técnico explícito — ver error real
+    // "nombreVariable '...' no tiene formato técnico válido" en /verificacion). Ahora se
+    // normaliza a snake_case reutilizando ParametrizacionService.extraerNombresVariables(),
+    // la misma extracción ya usada y probada en el flujo académico — nunca se persiste sin
+    // validar: el resultado normalizado igual pasa por validarNombreVariableIndividual().
+
     @Test
-    void debeRechazarFraseHumanaComoNombreDeVariable() {
+    void debeNormalizarFraseHumanaComoNombreDeVariable() {
         parametrizacion.setConfiguracionAprobadaJson("""
             {
                 "objetivo": "Medir algo",
@@ -491,17 +499,18 @@ class VariableDinamicaServiceTest {
         when(variableRepo.findByParametrizacionIdAndParametrizacionVersion(parametrizacionId, 1))
             .thenReturn(List.of());
         when(metricaRepo.findById(metricaId)).thenReturn(Optional.of(metrica));
+        when(variableRepo.save(any(Variable.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(registroRepo.findBySprintIdAndVariable_Id(any(), any())).thenReturn(List.of());
 
-        assertThatThrownBy(() ->
-            service.obtenerVariables(metricaId, proyectoId, sprintId, "test@example.com"))
-            .isInstanceOf(NombreVariableInvalidoException.class)
-            .hasMessageContaining("formato técnico válido");
+        service.obtenerVariables(metricaId, proyectoId, sprintId, "test@example.com");
 
-        verify(variableRepo, never()).save(any(Variable.class));
+        org.mockito.ArgumentCaptor<Variable> captor = org.mockito.ArgumentCaptor.forClass(Variable.class);
+        verify(variableRepo, times(1)).save(captor.capture());
+        assertThat(captor.getValue().getNombre()).isEqualTo("problemas_reportados_en_el_sprint");
     }
 
     @Test
-    void debeRechazarNombreConMayusculasYEspacios() {
+    void debeNormalizarNombreConMayusculasYEspacios() {
         parametrizacion.setConfiguracionAprobadaJson("""
             {
                 "objetivo": "Medir algo",
@@ -519,20 +528,22 @@ class VariableDinamicaServiceTest {
         when(variableRepo.findByParametrizacionIdAndParametrizacionVersion(parametrizacionId, 1))
             .thenReturn(List.of());
         when(metricaRepo.findById(metricaId)).thenReturn(Optional.of(metrica));
+        when(variableRepo.save(any(Variable.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(registroRepo.findBySprintIdAndVariable_Id(any(), any())).thenReturn(List.of());
 
-        assertThatThrownBy(() ->
-            service.obtenerVariables(metricaId, proyectoId, sprintId, "test@example.com"))
-            .isInstanceOf(NombreVariableInvalidoException.class)
-            .hasMessageContaining("formato técnico válido");
+        service.obtenerVariables(metricaId, proyectoId, sprintId, "test@example.com");
 
-        verify(variableRepo, never()).save(any(Variable.class));
+        org.mockito.ArgumentCaptor<Variable> captor = org.mockito.ArgumentCaptor.forClass(Variable.class);
+        verify(variableRepo, times(1)).save(captor.capture());
+        assertThat(captor.getValue().getNombre()).isEqualTo("calidad_del_trabajo");
     }
 
     @Test
-    void debeRechazarPrimeraMitadDeUnIndicadorHistoricoFragmentado() {
+    void debeNormalizarPrimeraMitadDeUnIndicadorHistoricoFragmentado() {
         // Caso representativo del incidente real de Fase 12 (métrica "Pulso de Ánimo del
         // Equipo", variables 62d1ef80-... / ce8c16be-...): esta mitad, usada sola como
-        // indicadorVariable completo (sin coma), no debe poder persistirse como nombre técnico.
+        // indicadorVariable completo (sin coma), ahora se normaliza a snake_case en vez
+        // de bloquear la aprobación sin ninguna alternativa para el Scrum Master.
         parametrizacion.setConfiguracionAprobadaJson("""
             {
                 "objetivo": "Medir algo",
@@ -550,16 +561,20 @@ class VariableDinamicaServiceTest {
         when(variableRepo.findByParametrizacionIdAndParametrizacionVersion(parametrizacionId, 1))
             .thenReturn(List.of());
         when(metricaRepo.findById(metricaId)).thenReturn(Optional.of(metrica));
+        when(variableRepo.save(any(Variable.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(registroRepo.findBySprintIdAndVariable_Id(any(), any())).thenReturn(List.of());
 
-        assertThatThrownBy(() ->
-            service.obtenerVariables(metricaId, proyectoId, sprintId, "test@example.com"))
-            .isInstanceOf(NombreVariableInvalidoException.class);
+        service.obtenerVariables(metricaId, proyectoId, sprintId, "test@example.com");
 
-        verify(variableRepo, never()).save(any(Variable.class));
+        org.mockito.ArgumentCaptor<Variable> captor = org.mockito.ArgumentCaptor.forClass(Variable.class);
+        verify(variableRepo, times(1)).save(captor.capture());
+        String nombre = captor.getValue().getNombre();
+        assertThat(nombre).matches("^[a-z][a-z0-9_]{0,119}$");
+        assertThat(nombre).isEqualTo("califica_nimo_de_cada_miembro_del_equipo_ej_escala_numrica_de_1_a_5");
     }
 
     @Test
-    void debeRechazarSegundaMitadDeUnIndicadorHistoricoFragmentado() {
+    void debeNormalizarSegundaMitadDeUnIndicadorHistoricoFragmentado() {
         parametrizacion.setConfiguracionAprobadaJson("""
             {
                 "objetivo": "Medir algo",
@@ -577,12 +592,79 @@ class VariableDinamicaServiceTest {
         when(variableRepo.findByParametrizacionIdAndParametrizacionVersion(parametrizacionId, 1))
             .thenReturn(List.of());
         when(metricaRepo.findById(metricaId)).thenReturn(Optional.of(metrica));
+        when(variableRepo.save(any(Variable.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(registroRepo.findBySprintIdAndVariable_Id(any(), any())).thenReturn(List.of());
 
-        assertThatThrownBy(() ->
-            service.obtenerVariables(metricaId, proyectoId, sprintId, "test@example.com"))
-            .isInstanceOf(NombreVariableInvalidoException.class);
+        service.obtenerVariables(metricaId, proyectoId, sprintId, "test@example.com");
 
-        verify(variableRepo, never()).save(any(Variable.class));
+        org.mockito.ArgumentCaptor<Variable> captor = org.mockito.ArgumentCaptor.forClass(Variable.class);
+        verify(variableRepo, times(1)).save(captor.capture());
+        assertThat(captor.getValue().getNombre()).isEqualTo("donde_1_es_muy_bajo_y_5_es_muy_alto");
+    }
+
+    @Test
+    void debeNormalizarElCasoRealReportadoEnVerificacion() {
+        // Texto exacto reportado por el usuario en /verificacion: "nombreVariable
+        // 'Número de defectos únicos registrados durante el sprint' no tiene formato
+        // técnico válido." Ya no debe lanzar excepción.
+        parametrizacion.setConfiguracionAprobadaJson("""
+            {
+                "objetivo": "Medir algo",
+                "procedimiento": "Procedimiento de prueba",
+                "indicadorVariable": "Número de defectos únicos registrados durante el sprint",
+                "escala": "Numérica 0-100 puntos",
+                "frecuenciaCaptura": "por_sprint"
+            }
+            """);
+
+        when(proyectoRepo.findById(proyectoId)).thenReturn(Optional.of(proyecto));
+        when(sprintRepo.findById(sprintId)).thenReturn(Optional.of(sprint));
+        when(parametrizacionRepo.findUltimaVersionAprobada(metricaId, proyectoId))
+            .thenReturn(Optional.of(parametrizacion));
+        when(variableRepo.findByParametrizacionIdAndParametrizacionVersion(parametrizacionId, 1))
+            .thenReturn(List.of());
+        when(metricaRepo.findById(metricaId)).thenReturn(Optional.of(metrica));
+        when(variableRepo.save(any(Variable.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(registroRepo.findBySprintIdAndVariable_Id(any(), any())).thenReturn(List.of());
+
+        service.obtenerVariables(metricaId, proyectoId, sprintId, "test@example.com");
+
+        org.mockito.ArgumentCaptor<Variable> captor = org.mockito.ArgumentCaptor.forClass(Variable.class);
+        verify(variableRepo, times(1)).save(captor.capture());
+        assertThat(captor.getValue().getNombre()).matches("^[a-z][a-z0-9_]{0,119}$");
+    }
+
+    @Test
+    void debePriorizarNombreVariableExplicitoDelSnapshotSobreElFallback() {
+        // Si el snapshot de aprobación académica sí guardó un nombreVariable técnico
+        // explícito, debe usarse tal cual (igual que ParametrizacionService al aprobar)
+        // en vez de re-derivar uno distinto desde indicadorVariable.
+        parametrizacion.setConfiguracionAprobadaJson("""
+            {
+                "objetivo": "Medir algo",
+                "procedimiento": "Procedimiento de prueba",
+                "indicadorVariable": "Defectos encontrados durante el sprint",
+                "escala": "Numérica 0-100 puntos",
+                "frecuenciaCaptura": "por_sprint",
+                "nombreVariable": "defectos_sprint"
+            }
+            """);
+
+        when(proyectoRepo.findById(proyectoId)).thenReturn(Optional.of(proyecto));
+        when(sprintRepo.findById(sprintId)).thenReturn(Optional.of(sprint));
+        when(parametrizacionRepo.findUltimaVersionAprobada(metricaId, proyectoId))
+            .thenReturn(Optional.of(parametrizacion));
+        when(variableRepo.findByParametrizacionIdAndParametrizacionVersion(parametrizacionId, 1))
+            .thenReturn(List.of());
+        when(metricaRepo.findById(metricaId)).thenReturn(Optional.of(metrica));
+        when(variableRepo.save(any(Variable.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(registroRepo.findBySprintIdAndVariable_Id(any(), any())).thenReturn(List.of());
+
+        service.obtenerVariables(metricaId, proyectoId, sprintId, "test@example.com");
+
+        org.mockito.ArgumentCaptor<Variable> captor = org.mockito.ArgumentCaptor.forClass(Variable.class);
+        verify(variableRepo, times(1)).save(captor.capture());
+        assertThat(captor.getValue().getNombre()).isEqualTo("defectos_sprint");
     }
 
     @Test
@@ -627,6 +709,139 @@ class VariableDinamicaServiceTest {
         assertThat(guardada.getMetrica()).isEqualTo(metrica);
         assertThat(guardada.getParametrizacionId()).isEqualTo(parametrizacionId);
         assertThat(guardada.getParametrizacionVersion()).isEqualTo(1);
+    }
+
+    // ════════════════════════════════════════════════════════════════════
+    // 16. Corrección del manejo de escalas — camino B (VariableDinamicaService,
+    // usado por MetricRankingService.verificar(), sin snapshot JSON): copia la
+    // escala estructurada directamente desde las columnas de MetricParametrizacion,
+    // nunca por regex sobre el texto libre `escala`.
+    // ════════════════════════════════════════════════════════════════════
+
+    @Test
+    void materializarVariables_sinSnapshot_copiaEscalaEstructuradaDesdeColumnas() {
+        parametrizacion.setConfiguracionAprobadaJson(null); // flujo de Verificación: sin snapshot
+        parametrizacion.setIndicadorVariable("defectos_encontrados");
+        parametrizacion.setProcedimiento("Contar defectos");
+        parametrizacion.setEscalaTipo("NUMERICA_ENTERA");
+        parametrizacion.setEscalaMin(BigDecimal.ZERO);
+        parametrizacion.setEscalaMax(null);
+        parametrizacion.setEscalaPaso(BigDecimal.ONE);
+        parametrizacion.setEscalaSinLimite(true);
+
+        when(proyectoRepo.findById(proyectoId)).thenReturn(Optional.of(proyecto));
+        when(variableRepo.findByParametrizacionIdAndParametrizacionVersion(parametrizacionId, 1))
+            .thenReturn(List.of());
+        when(metricaRepo.findById(metricaId)).thenReturn(Optional.of(metrica));
+        when(variableRepo.save(any(Variable.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        List<Variable> resultado = service.materializarVariables(parametrizacion);
+
+        assertThat(resultado).hasSize(1);
+        Variable v = resultado.get(0);
+        assertThat(v.getEscalaTipo()).isEqualTo("NUMERICA_ENTERA");
+        assertThat(v.getEscalaMin()).isEqualByComparingTo("0");
+        assertThat(v.getEscalaMax()).isNull();
+        assertThat(v.getEscalaPaso()).isEqualByComparingTo("1");
+        assertThat(v.getEscalaSinLimite()).isTrue();
+    }
+
+    // 17. Ambos caminos (A: ParametrizacionService, B: VariableDinamicaService) deben
+    // copiar la MISMA estructura para la misma parametrización — verificado
+    // comparando el resultado de este test con
+    // ParametrizacionServiceEscalaTest.aprobarParametrizacion_copiaEscalaAVariable():
+    // ambos parten de escalaTipo=NUMERICA_ENTERA/min=0/max=10/paso=1/sinLimite=false
+    // y ambos producen esos mismos cinco valores en la Variable creada.
+    @Test
+    void materializarVariables_conEscala0a10_produceLaMismaEstructuraQueElCaminoAcademico() {
+        parametrizacion.setConfiguracionAprobadaJson(null);
+        parametrizacion.setIndicadorVariable("calidad_trabajo");
+        parametrizacion.setProcedimiento("Evaluar calidad");
+        parametrizacion.setEscalaTipo("NUMERICA_ENTERA");
+        parametrizacion.setEscalaMin(BigDecimal.ZERO);
+        parametrizacion.setEscalaMax(BigDecimal.TEN);
+        parametrizacion.setEscalaPaso(BigDecimal.ONE);
+        parametrizacion.setEscalaSinLimite(false);
+
+        when(proyectoRepo.findById(proyectoId)).thenReturn(Optional.of(proyecto));
+        when(variableRepo.findByParametrizacionIdAndParametrizacionVersion(parametrizacionId, 1))
+            .thenReturn(List.of());
+        when(metricaRepo.findById(metricaId)).thenReturn(Optional.of(metrica));
+        when(variableRepo.save(any(Variable.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        Variable v = service.materializarVariables(parametrizacion).get(0);
+
+        assertThat(v.getEscalaTipo()).isEqualTo("NUMERICA_ENTERA");
+        assertThat(v.getEscalaMin()).isEqualByComparingTo("0");
+        assertThat(v.getEscalaMax()).isEqualByComparingTo("10");
+        assertThat(v.getEscalaPaso()).isEqualByComparingTo("1");
+        assertThat(v.getEscalaSinLimite()).isFalse();
+    }
+
+    // ════════════════════════════════════════════════════════════════════
+    // Revisión de seguridad — autorización delegada en EjecucionService
+    // (obtenerVariables: solo membresía; guardarValores: solo Scrum Master).
+    // ════════════════════════════════════════════════════════════════════
+
+    @Test
+    void obtenerVariables_delegaLaValidacionDeAccesoEnEjecucionService() {
+        when(proyectoRepo.findById(proyectoId)).thenReturn(Optional.of(proyecto));
+        when(sprintRepo.findById(sprintId)).thenReturn(Optional.of(sprint));
+        doThrow(new SecurityException("No tienes acceso a este proyecto"))
+            .when(ejecucionService).validarAcceso("user-externo", proyectoId);
+
+        assertThatThrownBy(() ->
+            service.obtenerVariables(metricaId, proyectoId, sprintId, "user-externo"))
+            .isInstanceOf(SecurityException.class)
+            .hasMessageContaining("No tienes acceso a este proyecto");
+
+        verify(ejecucionService).validarAcceso("user-externo", proyectoId);
+        verifyNoInteractions(parametrizacionRepo);
+    }
+
+    @Test
+    void obtenerVariables_usuarioAutorizado_siguePermitido() {
+        // Reconfirma que agregar la validación de acceso NO rompe el camino feliz
+        // ya cubierto por debeObtenerVariablesDeParametrizacionAprobada(): con
+        // EjecucionService mockeado (validarAcceso no lanza por defecto), el
+        // resto del flujo sigue funcionando exactamente igual.
+        when(proyectoRepo.findById(proyectoId)).thenReturn(Optional.of(proyecto));
+        when(sprintRepo.findById(sprintId)).thenReturn(Optional.of(sprint));
+        when(parametrizacionRepo.findUltimaVersionAprobada(metricaId, proyectoId))
+            .thenReturn(Optional.of(parametrizacion));
+        Variable variable = crearVariable();
+        when(variableRepo.findByParametrizacionIdAndParametrizacionVersion(parametrizacionId, 1))
+            .thenReturn(List.of(variable));
+        when(registroRepo.findBySprintIdAndVariable_Id(sprintId, variable.getId()))
+            .thenReturn(List.of());
+
+        VariablesMetricaResponse response =
+            service.obtenerVariables(metricaId, proyectoId, sprintId, "user-miembro");
+
+        assertThat(response.variables()).hasSize(1);
+        verify(ejecucionService).validarAcceso("user-miembro", proyectoId);
+    }
+
+    @Test
+    void guardarValores_delegaLaValidacionDeScrumMasterEnEjecucionService() {
+        Variable variable = crearVariable();
+        GuardarValoresRequest.ValorVariable valor = new GuardarValoresRequest.ValorVariable(
+            variable.getId(), new BigDecimal("42"), null, null, null, null, null);
+        GuardarValoresRequest request = new GuardarValoresRequest(proyectoId, sprintId, List.of(valor));
+
+        when(proyectoRepo.findById(proyectoId)).thenReturn(Optional.of(proyecto));
+        when(sprintRepo.findById(sprintId)).thenReturn(Optional.of(sprint));
+        doThrow(new SecurityException("Solo el Scrum Master del proyecto puede registrar valores"))
+            .when(ejecucionService).validarScrumMaster("user-miembro", proyectoId);
+
+        assertThatThrownBy(() -> service.guardarValores(metricaId, request, "user-miembro"))
+            .isInstanceOf(SecurityException.class)
+            .hasMessageContaining("Solo el Scrum Master");
+
+        verify(ejecucionService).validarScrumMaster("user-miembro", proyectoId);
+        verifyNoInteractions(parametrizacionRepo);
+        verify(ejecucionService, never()).guardarOActualizarValor(
+            any(), any(), any(), any(), any(), any(), any(), any(), any());
     }
 
     private Variable crearVariable() {

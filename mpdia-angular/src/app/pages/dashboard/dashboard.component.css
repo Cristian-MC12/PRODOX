@@ -1,69 +1,36 @@
-/* Autor: Cristian Santiago Martinez Cordoba — MPDIA */
-
-.card {
-  box-shadow: var(--shadow-sm);
-  transition: box-shadow 0.2s ease;
-}
-
-.card:hover {
-  box-shadow: var(--shadow-md);
-}
-
-.bg-light {
-  background-color: #f8f9fa !important;
-}
-
-.border-start {
-  border-left-width: 4px !important;
-}
-
-.gap-2 {
-  gap: 0.5rem;
-}
-
-.dashboard-content {
-  animation: fadeIn 0.3s ease-in;
-}
-
-/* FASE 9A — header de identidad del proyecto: título grande + contexto +
-   acción principal, encima del resto del contenido del Dashboard. */
-.dash-hero {
-  display: flex;
-  flex-wrap: wrap;
-  /* flex-start (no flex-end): si el header envuelve en viewports medios,
-     el título debe seguir leyéndose primero, no quedar empujado debajo
-     de las acciones por una alineación pensada solo para una sola fila. */
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--space-4);
-}
-
-.dash-hero-title {
-  font-size: 1.65rem;
-  font-weight: 700;
-  color: var(--text-primary);
-  margin: 0 0 .25rem;
-  line-height: 1.2;
-}
-
-.dash-hero-subtitle {
-  font-size: .875rem;
-  color: var(--text-secondary);
-  margin: 0;
-}
-
-.dash-hero-actions {
-  flex-shrink: 0;
-}
-
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
+.exec-dashboard{padding:var(--space-4);max-width:1920px;margin:0 auto;background:#fafbfc;min-height:100vh}
+.exec-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:var(--space-5);background:var(--surface);padding:var(--space-4);border-radius:var(--radius-lg);border:1px solid var(--border)}
+.exec-title{font-size:1.625rem;font-weight:700;margin:0}
+.exec-subtitle{font-size:.875rem;color:var(--text-secondary);margin:4px 0 0}
+.exec-actions{display:flex;gap:var(--space-2)}
+.kpi-cards{display:grid;grid-template-columns:repeat(4,1fr);gap:var(--space-4);margin-bottom:var(--space-5)}
+.kpi-card{background:var(--surface);border-radius:var(--radius-lg);padding:var(--space-4);border:1px solid var(--border);box-shadow:0 1px 3px #0003}
+.kpi-primary{background:linear-gradient(135deg,#2196f3,#1976d2);color:#fff;border:0}
+.kpi-primary .kpi-label,.kpi-primary .kpi-value,.kpi-primary .kpi-trend,.kpi-primary .kpi-icon{color:#fff}
+.kpi-primary .kpi-icon{background:#fff3}
+.kpi-header{display:flex;justify-content:space-between;margin-bottom:var(--space-3)}
+.kpi-info{flex:1}
+.kpi-label{font-size:.8rem;font-weight:500;color:var(--text-secondary);text-transform:uppercase}
+.kpi-menu,.chart-menu{background:0;border:0;color:var(--text-secondary);padding:4px;cursor:pointer;opacity:.6}
+.kpi-icon{width:48px;height:48px;border-radius:var(--radius-lg);display:flex;align-items:center;justify-content:center;font-size:1.5rem;color:#fff}
+.kpi-value{font-size:2.5rem;font-weight:800;line-height:1;margin:var(--space-2) 0}
+.kpi-trend{font-size:.75rem;display:flex;align-items:center;gap:4px;font-weight:600}
+.kpi-trend.positive{color:#4caf50}
+.kpi-trend.negative{color:#f44336}
+.kpi-trend.neutral{color:var(--text-secondary)}
+.charts-grid{display:flex;flex-direction:column;gap:var(--space-4)}
+.chart-row{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--space-4)}
+.chart-card{background:var(--surface);border-radius:var(--radius-lg);padding:var(--space-4);border:1px solid var(--border);box-shadow:0 1px 3px #0003;min-height:220px}
+.chart-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:var(--space-3);border-bottom:1px solid #f0f2f5}
+.chart-title{font-size:1rem;font-weight:600;margin:0}
+.chart-content{min-height:140px;display:flex;flex-direction:column}
+.chart-center{display:flex;align-items:center;justify-content:center}
+.risks-compact{display:flex;flex-direction:column;gap:var(--space-2)}
+.risk-row{display:flex;align-items:center;gap:var(--space-3);padding:var(--space-2);font-size:.8rem}
+.risk-severity{padding:4px 8px;border-radius:var(--radius-md);font-size:.7rem;font-weight:700}
+.risk-text{flex:1;font-size:.8rem}
+.risk-date{font-size:.7rem;color:var(--text-secondary)}
+.bar-chart-canvas-wrap{position:relative;width:100%;height:120px;padding:var(--space-2)}
+@media (max-width:1400px){.chart-row{grid-template-columns:1fr 1fr}.chart-wide{grid-column:span 2}}
+@media (max-width:1024px){.kpi-cards{grid-template-columns:repeat(2,1fr)}.chart-row{grid-template-columns:1fr}}
+@media (max-width:768px){.exec-dashboard{padding:var(--space-3)}.exec-header{flex-direction:column;gap:var(--space-3)}.kpi-cards{grid-template-columns:1fr;gap:var(--space-3)}.kpi-value{font-size:2rem}.chart-card{min-height:180px}}

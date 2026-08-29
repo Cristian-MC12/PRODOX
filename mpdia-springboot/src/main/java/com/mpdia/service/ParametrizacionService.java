@@ -54,6 +54,15 @@ public class ParametrizacionService {
     static final Set<String> TIPOS_OPERACION_SOPORTADOS = Set.of("SUMA", "PROMEDIO", "DIRECTO", "FORMULA");
 
     /**
+     * Catálogo de tipos de escala estructurada soportados (corrección del manejo
+     * de escalas — ver diagnóstico "escala '(0 o más)' no tiene formato exacto").
+     * NUMERICA_ENTERA exige que min/max/paso sean enteros; NUMERICA_DECIMAL admite
+     * cualquier BigDecimal. No hay más tipos (ordinal/categórico quedan fuera de
+     * alcance de esta corrección — la métrica sigue siendo numérica siempre).
+     */
+    static final Set<String> TIPOS_ESCALA_SOPORTADOS = Set.of("NUMERICA_ENTERA", "NUMERICA_DECIMAL");
+
+    /**
      * Formato exigido para el identificador técnico de una variable
      * (Fase 16.10-E): snake_case corto, sin espacios/tildes/puntuación,
      * máximo 120 caracteres para caber en variables.nombre VARCHAR(120).
@@ -97,7 +106,7 @@ public class ParametrizacionService {
      * Un nombreVariable sin comas (caso de siempre) se comporta exactamente
      * igual que antes: una lista de un solo elemento.
      */
-    private void validarNombreVariable(String nombreVariable) {
+    static void validarNombreVariable(String nombreVariable) {
         if (nombreVariable == null) {
             return; // ausente: se resuelve más adelante por fallback
         }
@@ -138,6 +147,70 @@ public class ParametrizacionService {
     }
 
     /**
+     * Valida la escala estructurada de una parametrización (corrección del manejo de
+     * escalas). Visibilidad de paquete: reutilizada por MetricaAcademicaService y
+     * MetricRankingService — una sola regla, sin duplicar el patrón.
+     *
+     * Reglas:
+     * - Si NINGÚN campo estructurado viene informado: se considera una parametrización
+     *   histórica/no estructurada — se acepta sin validar (compatibilidad, ver migración V32).
+     *   Antes de esta corrección, esta situación NUNCA se validaba y `escala` quedaba como
+     *   texto libre sin ningún control — solo se agrega la validación cuando el llamador
+     *   realmente intenta declarar una escala estructurada.
+     * - Si CUALQUIER campo viene informado, la escala se considera estructurada y debe ser
+     *   completa y coherente: escalaTipo soportado, escalaMin obligatorio, escalaPaso > 0,
+     *   escalaMax obligatorio y >= escalaMin salvo que escalaSinLimite=true (en cuyo caso
+     *   escalaMax se ignora), y si escalaTipo=NUMERICA_ENTERA, min/max/paso deben ser enteros.
+     */
+    static void validarEscalaEstructurada(String tipo, java.math.BigDecimal min, java.math.BigDecimal max,
+                                           java.math.BigDecimal paso, Boolean sinLimite) {
+        boolean algunCampoInformado = tipo != null || min != null || max != null || paso != null || sinLimite != null;
+        if (!algunCampoInformado) {
+            return; // no estructurada: compatibilidad con parametrizaciones/flujos históricos
+        }
+
+        if (tipo == null || !TIPOS_ESCALA_SOPORTADOS.contains(tipo)) {
+            throw new EscalaInvalidaException(
+                "escalaTipo debe ser uno de " + TIPOS_ESCALA_SOPORTADOS + " (recibido: " + tipo + ").");
+        }
+        if (min == null) {
+            throw new EscalaInvalidaException(
+                "escalaMin es obligatorio cuando se define una escala estructurada.");
+        }
+        if (paso == null || paso.compareTo(java.math.BigDecimal.ZERO) <= 0) {
+            throw new EscalaInvalidaException(
+                "escalaPaso debe ser mayor que 0 (recibido: " + paso + ").");
+        }
+
+        boolean ilimitada = Boolean.TRUE.equals(sinLimite);
+        if (!ilimitada) {
+            if (max == null) {
+                throw new EscalaInvalidaException(
+                    "escalaMax es obligatorio salvo que escalaSinLimite sea true.");
+            }
+            if (max.compareTo(min) < 0) {
+                throw new EscalaInvalidaException(
+                    "escalaMax (" + max + ") no puede ser menor que escalaMin (" + min + ").");
+            }
+        }
+
+        if ("NUMERICA_ENTERA".equals(tipo)) {
+            exigirEntero(min, "escalaMin");
+            exigirEntero(paso, "escalaPaso");
+            if (!ilimitada) {
+                exigirEntero(max, "escalaMax");
+            }
+        }
+    }
+
+    private static void exigirEntero(java.math.BigDecimal valor, String campo) {
+        if (valor.stripTrailingZeros().scale() > 0) {
+            throw new EscalaInvalidaException(
+                campo + " (" + valor + ") debe ser un número entero para escalaTipo=NUMERICA_ENTERA.");
+        }
+    }
+
+    /**
      * Genera UNA propuesta de parametrización usando Gemini.
      * 
      * FASE 16.5: Evolucionado de "3 propuestas" a "asistente que propone 1 parametrización".
@@ -166,14 +239,18 @@ public class ParametrizacionService {
                 "Medir " + r.metricaNombre() + " de forma directa y práctica durante el sprint.",
                 "Al cierre del sprint, el Scrum Master o equipo recopila el valor observado según criterios definidos por el equipo.",
                 r.metricaNombre() + " (valor registrado según ocurrencia durante el sprint)",
-                "Escala numérica (definir rango según contexto del equipo)",
+                "Numérica entera, 0 o más (conteo de ocurrencias)",
                 "por_sprint",
                 "Propuesta generada automáticamente - requiere validación",
                 "Σ(eventos_observados)",
                 "SUMA",
                 "unidades",
                 "PROPUESTA de IA generada automáticamente. Requiere validación y ajuste del equipo según su contexto específico. Esta es una parametrización genérica que debe adaptarse.",
-                "eventos_observados"
+                "eventos_observados",
+                // Fallback de conteo genérico: entero, mínimo 0, sin máximo — el caso
+                // más seguro cuando no se pudo generar una escala específica.
+                "NUMERICA_ENTERA", java.math.BigDecimal.ZERO, null, java.math.BigDecimal.ONE, true,
+                "Cantidad de ocurrencias observadas durante el sprint."
             )
         );
     }
@@ -223,6 +300,18 @@ public class ParametrizacionService {
                 NO es una frase descriptiva, NO repite indicadorVariable textualmente, NO incluye
                 explicaciones: es el nombre corto que usarías como identificador de variable de
                 programación (ej: problemas_reportados, impedimentos_registrados, defectos_encontrados).
+            13. La escala debe ser EXACTA y ESTRUCTURADA, coherente con lo que la métrica realmente
+                mide — NO uses 0-10 indiscriminadamente para todas las métricas. Ejemplos:
+                - Conteo de eventos (defectos, incidentes, bloqueos): NUMERICA_ENTERA, min=0,
+                  paso=1, sinLimite=true, max=null.
+                - Porcentaje: NUMERICA_ENTERA (o DECIMAL si aplica), min=0, max=100, paso=1, sinLimite=false.
+                - Valoración subjetiva (ej. satisfacción, calidad): NUMERICA_ENTERA, min=0, max=10
+                  (o 1-5 según contexto), paso=1, sinLimite=false.
+                - Valor que admite fracciones (horas, promedios): NUMERICA_DECIMAL con el paso
+                  adecuado (ej. 0.5 o 0.01).
+                escalaTipo debe ser EXACTAMENTE "NUMERICA_ENTERA" o "NUMERICA_DECIMAL". Si
+                escalaSinLimite es true, escalaMax debe ser null. Si es NUMERICA_ENTERA, min/max/paso
+                deben ser números enteros (sin decimales).
 
             Responde ÚNICAMENTE con un array JSON con UN objeto (para compatibilidad),
             sin texto adicional, sin markdown, sin explicaciones fuera del JSON:
@@ -233,7 +322,13 @@ public class ParametrizacionService {
                 "procedimiento": "Fórmula o procedimiento paso a paso claro y específico para medir",
                 "indicadorVariable": "Indicador principal y variables necesarias para el cálculo (texto descriptivo, para humanos)",
                 "nombreVariable": "identificador_tecnico_snake_case_corto (ej: problemas_reportados)",
-                "escala": "Escala de medición: numérica, porcentual, ordinal, etc. con rango específico",
+                "escala": "Descripción legible de la escala (texto libre, para mostrar al usuario)",
+                "escalaTipo": "NUMERICA_ENTERA o NUMERICA_DECIMAL",
+                "escalaMin": "valor mínimo (número)",
+                "escalaMax": "valor máximo (número), o null si escalaSinLimite es true",
+                "escalaPaso": "incremento permitido entre valores válidos (ej: 1, o 0.01)",
+                "escalaSinLimite": "true o false",
+                "escalaDescripcion": "significado de los valores (ej: '0 = Muy malo; 10 = Excelente'), o null si no aplica",
                 "frecuenciaCaptura": "por_sprint | semanal | diaria | ilimitada",
                 "fuenteAcademica": "Referencia académica verificable o 'Propuesta basada en prácticas ágiles'",
                 "formulaAcademica": "Fórmula matemática formal (ej: Σ(problemas_reportados))",
@@ -242,8 +337,9 @@ public class ParametrizacionService {
                 "justificacion": "Por qué esta propuesta es adecuada para equipos Scrum (menciona que es una PROPUESTA que requiere validación del equipo)"
               }
             ]
-            
-            IMPORTANTE: Genera EXACTAMENTE 1 objeto en el array. Todos los campos son obligatorios.
+
+            IMPORTANTE: Genera EXACTAMENTE 1 objeto en el array. Todos los campos son obligatorios
+            (escalaMax puede ser null solo si escalaSinLimite es true).
             La justificación debe dejar claro que es una propuesta de IA que requiere validación humana.
             """;
     }
@@ -269,14 +365,16 @@ public class ParametrizacionService {
                 "Medir " + r.metricaNombre() + " durante el sprint.",
                 "Recopilar el valor al cierre del sprint y comparar con el objetivo.",
                 r.metricaNombre() + " (variable principal)",
-                "Escala numérica de 0 a 100",
+                "Numérica entera, 0 a 100",
                 "por_sprint",
                 "Propuesta basada en prácticas ágiles - requiere validación",
                 "Σ(observaciones)",
                 "SUMA",
                 "unidades",
                 "Propuesta generada automáticamente. Requiere validación del equipo.",
-                "observaciones"
+                "observaciones",
+                "NUMERICA_ENTERA", java.math.BigDecimal.ZERO, java.math.BigDecimal.valueOf(100),
+                java.math.BigDecimal.ONE, false, null
             ));
         }
     }
@@ -295,6 +393,8 @@ public class ParametrizacionService {
         validarMiembroProyecto(userId, request.proyectoId());
         validarTipoOperacion(request.tipoOperacion());
         validarNombreVariable(request.nombreVariable());
+        validarEscalaEstructurada(request.escalaTipo(), request.escalaMin(), request.escalaMax(),
+            request.escalaPaso(), request.escalaSinLimite());
 
         // FASE 16.10-F: la siguiente versión se calcula sobre la versión MÁXIMA
         // existente para esta métrica/proyecto, sin importar su status (propuesta,
@@ -326,16 +426,24 @@ public class ParametrizacionService {
         parametrizacion.setProcedimiento(request.procedimiento());
         parametrizacion.setIndicadorVariable(request.indicadorVariable());
         parametrizacion.setEscala(request.escala());
-        parametrizacion.setFrecuenciaCaptura(request.frecuenciaCaptura() != null 
-            ? request.frecuenciaCaptura() 
+        parametrizacion.setFrecuenciaCaptura(request.frecuenciaCaptura() != null
+            ? request.frecuenciaCaptura()
             : "por_sprint");
-        
+
         // Campos académicos
         parametrizacion.setFuenteAcademica(request.fuenteAcademica());
         parametrizacion.setFormulaAcademica(request.formulaAcademica());
         parametrizacion.setTipoOperacion(request.tipoOperacion());
         parametrizacion.setUnidadResultado(request.unidadResultado());
-        
+
+        // Escala estructurada (corrección del manejo de escalas)
+        parametrizacion.setEscalaTipo(request.escalaTipo());
+        parametrizacion.setEscalaMin(request.escalaMin());
+        parametrizacion.setEscalaMax(Boolean.TRUE.equals(request.escalaSinLimite()) ? null : request.escalaMax());
+        parametrizacion.setEscalaPaso(request.escalaPaso());
+        parametrizacion.setEscalaSinLimite(request.escalaSinLimite());
+        parametrizacion.setEscalaDescripcion(request.escalaDescripcion());
+
         parametrizacion.setPropuestaIAJson(request.propuestaIAJson());
         parametrizacion.setStatus("propuesta"); // NO aprobada automáticamente
         parametrizacion.setCreatedAt(Instant.now());
@@ -383,6 +491,8 @@ public class ParametrizacionService {
                 "Valores permitidos: " + TIPOS_OPERACION_SOPORTADOS);
         }
         validarNombreVariable(request.nombreVariable());
+        validarEscalaEstructurada(request.escalaTipo(), request.escalaMin(), request.escalaMax(),
+            request.escalaPaso(), request.escalaSinLimite());
 
         // FASE 16.10-G: la versión a desactivar es la última con status='aprobada'
         // para este proyecto/métrica — no version-1. Buscar por version-1 (lógica
@@ -410,16 +520,24 @@ public class ParametrizacionService {
         parametrizacion.setProcedimiento(request.procedimiento());
         parametrizacion.setIndicadorVariable(request.indicadorVariable());
         parametrizacion.setEscala(request.escala());
-        parametrizacion.setFrecuenciaCaptura(request.frecuenciaCaptura() != null 
-            ? request.frecuenciaCaptura() 
+        parametrizacion.setFrecuenciaCaptura(request.frecuenciaCaptura() != null
+            ? request.frecuenciaCaptura()
             : parametrizacion.getFrecuenciaCaptura());
-        
+
         // Campos académicos
         parametrizacion.setFuenteAcademica(request.fuenteAcademica());
         parametrizacion.setFormulaAcademica(request.formulaAcademica());
         parametrizacion.setTipoOperacion(request.tipoOperacion());
         parametrizacion.setUnidadResultado(request.unidadResultado());
         parametrizacion.setNombreVariable(request.nombreVariable());
+
+        // Escala estructurada — fuente de verdad que se copiará a Variable más abajo.
+        parametrizacion.setEscalaTipo(request.escalaTipo());
+        parametrizacion.setEscalaMin(request.escalaMin());
+        parametrizacion.setEscalaMax(Boolean.TRUE.equals(request.escalaSinLimite()) ? null : request.escalaMax());
+        parametrizacion.setEscalaPaso(request.escalaPaso());
+        parametrizacion.setEscalaSinLimite(request.escalaSinLimite());
+        parametrizacion.setEscalaDescripcion(request.escalaDescripcion());
 
         // Crear snapshot JSON de configuración aprobada
         try {
@@ -436,7 +554,13 @@ public class ParametrizacionService {
                 request.unidadResultado(),
                 userEmail,
                 Instant.now(),
-                request.nombreVariable()
+                request.nombreVariable(),
+                parametrizacion.getEscalaTipo(),
+                parametrizacion.getEscalaMin(),
+                parametrizacion.getEscalaMax(),
+                parametrizacion.getEscalaPaso(),
+                parametrizacion.getEscalaSinLimite(),
+                parametrizacion.getEscalaDescripcion()
             ));
             parametrizacion.setConfiguracionAprobadaJson(snapshot);
         } catch (Exception e) {
@@ -515,7 +639,13 @@ public class ParametrizacionService {
         String unidadResultado,
         String aprobadoPor,
         Instant aprobadoEn,
-        String nombreVariable
+        String nombreVariable,
+        String escalaTipo,
+        java.math.BigDecimal escalaMin,
+        java.math.BigDecimal escalaMax,
+        java.math.BigDecimal escalaPaso,
+        Boolean escalaSinLimite,
+        String escalaDescripcion
     ) {}
 
     /**
@@ -601,45 +731,65 @@ public class ParametrizacionService {
             variable.setParametrizacionId(parametrizacion.getId());
             variable.setParametrizacionVersion(parametrizacion.getVersion());
             variable.setCreatedAt(Instant.now());
-            
+
+            // Escala estructurada (corrección del manejo de escalas): se copia
+            // directamente de la parametrización — nunca se infiere por regex sobre
+            // texto libre. escalaTipo=null (parametrización histórica sin estructura)
+            // se copia igual como null: Variable queda explícitamente sin restricción,
+            // en vez de inventar un rango.
+            variable.setEscalaTipo(parametrizacion.getEscalaTipo());
+            variable.setEscalaMin(parametrizacion.getEscalaMin());
+            variable.setEscalaMax(parametrizacion.getEscalaMax());
+            variable.setEscalaPaso(parametrizacion.getEscalaPaso());
+            variable.setEscalaSinLimite(parametrizacion.getEscalaSinLimite());
+
             variableRepository.save(variable);
         }
     }
     
     /**
      * Extrae nombres de variables desde el campo indicadorVariable.
-     * 
+     *
      * Estrategia de extracción:
      * 1. Buscar identificadores tipo snake_case (ej: problemas_reportados)
      * 2. Si no encuentra, usar el primer token antes de espacios/paréntesis
      * 3. Soportar múltiples variables separadas por coma
+     *
+     * Visibilidad de paquete (no ya `private`): reutilizada también por
+     * VariableDinamicaService.crearVariablesDesdeParametrizacion() para el
+     * flujo de "Enviar al Scrum Master" (MetricRankingService.verificar()),
+     * que nunca informa nombreVariable explícito y hasta ahora usaba
+     * indicadorVariable tal cual (texto humano) como nombre técnico de la
+     * Variable — provocando el mismo error de formato snake_case que este
+     * método ya resuelve aquí. Un solo algoritmo de normalización, sin
+     * duplicar el patrón (ver validarNombreVariableIndividual, FASE 13).
      */
-    private String[] extraerNombresVariables(String indicador) {
+    static String[] extraerNombresVariables(String indicador) {
         // Limpiar y normalizar
         String limpio = indicador.trim();
-        
+
         // Separar por coma si hay múltiples variables
         String[] partes = limpio.split(",");
-        
+
         List<String> nombres = new ArrayList<>();
-        
+
         for (String parte : partes) {
             String nombreExtraido = extraerNombreVariable(parte.trim());
             if (nombreExtraido != null && !nombreExtraido.isBlank()) {
                 nombres.add(nombreExtraido);
             }
         }
-        
+
         return nombres.toArray(new String[0]);
     }
-    
+
     /**
      * Extrae un nombre de variable individual.
-     * 
+     *
      * Busca patrón snake_case (palabras unidas por _).
      * Fallback: primera palabra en minúsculas.
      */
-    private String extraerNombreVariable(String texto) {
+    private static String extraerNombreVariable(String texto) {
         // Buscar patrón snake_case (ej: problemas_reportados)
         java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("[a-z]+(_[a-z]+)+");
         java.util.regex.Matcher matcher = pattern.matcher(texto);

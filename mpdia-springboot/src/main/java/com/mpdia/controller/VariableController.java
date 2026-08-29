@@ -8,6 +8,7 @@ import com.mpdia.service.VariableService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.UUID;
@@ -19,35 +20,38 @@ public class VariableController {
 
     private final VariableService variableService;
 
-    /** GET /api/proyectos/{proyectoId}/variables */
+    /** GET /api/proyectos/{proyectoId}/variables — solo miembros del proyecto */
     @GetMapping
-    public ResponseEntity<List<VariableDto>> listar(@PathVariable UUID proyectoId) {
-        return ResponseEntity.ok(variableService.listar(proyectoId));
+    public ResponseEntity<List<VariableDto>> listar(@PathVariable UUID proyectoId, Authentication auth) {
+        return ResponseEntity.ok(variableService.listar(auth.getName(), proyectoId));
     }
 
-    /** POST /api/proyectos/{proyectoId}/variables */
+    /** POST /api/proyectos/{proyectoId}/variables — solo miembros del proyecto */
     @PostMapping
     public ResponseEntity<VariableDto> crear(
             @PathVariable UUID proyectoId,
-            @Valid @RequestBody CrearVariableRequest request) {
-        return ResponseEntity.ok(variableService.crear(proyectoId, request));
+            @Valid @RequestBody CrearVariableRequest request,
+            Authentication auth) {
+        return ResponseEntity.ok(variableService.crear(auth.getName(), proyectoId, request));
     }
 
-    /** PATCH /api/proyectos/{proyectoId}/variables/{variableId}/formula */
+    /** PATCH /api/proyectos/{proyectoId}/variables/{variableId}/formula — solo miembros del proyecto */
     @PatchMapping("/{variableId}/formula")
     public ResponseEntity<VariableDto> actualizarFormula(
             @PathVariable UUID proyectoId,
             @PathVariable UUID variableId,
-            @RequestBody ActualizarFormulaRequest request) {
-        return ResponseEntity.ok(variableService.actualizarFormula(variableId, request));
+            @RequestBody ActualizarFormulaRequest request,
+            Authentication auth) {
+        return ResponseEntity.ok(variableService.actualizarFormula(auth.getName(), proyectoId, variableId, request));
     }
 
-    /** DELETE /api/proyectos/{proyectoId}/variables/{variableId} */
+    /** DELETE /api/proyectos/{proyectoId}/variables/{variableId} — solo miembros del proyecto */
     @DeleteMapping("/{variableId}")
     public ResponseEntity<Void> desactivar(
             @PathVariable UUID proyectoId,
-            @PathVariable UUID variableId) {
-        variableService.desactivar(variableId);
+            @PathVariable UUID variableId,
+            Authentication auth) {
+        variableService.desactivar(auth.getName(), proyectoId, variableId);
         return ResponseEntity.noContent().build();
     }
 }

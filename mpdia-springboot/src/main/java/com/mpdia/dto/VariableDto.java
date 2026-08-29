@@ -37,5 +37,9 @@ public record VariableDto(
     /** Procedimiento para medir (de la parametrización) */
     String     procedimiento,
     /** Definición de escala (de la parametrización) */
-    String     escalaDefinicion
+    String     escalaDefinicion,
+    /** NUMERICA_ENTERA | NUMERICA_DECIMAL. NULL = sin escala estructurada. */
+    String     escalaTipo,
+    BigDecimal escalaPaso,
+    Boolean    escalaSinLimite
 ) {}

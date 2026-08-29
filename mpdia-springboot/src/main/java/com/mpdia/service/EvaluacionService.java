@@ -18,6 +18,9 @@ import org.springframework.stereotype.Service;
 import java.math.BigDecimal;
 import java.math.MathContext;
 import java.math.RoundingMode;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
+import java.time.temporal.WeekFields;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -132,8 +135,6 @@ public class EvaluacionService {
                     }).toList();
             if (puntos.isEmpty()) continue;
 
-            List<BigDecimal> valores = puntos.stream().map(RegistroPuntoDto::valor).toList();
-
             resultado.add(new MetricaEvaluacionDetalleDto(
                     variable.getId(), variable.getNombre(), variable.getDescripcion(),
                     variable.getMetrica().getCategoria().getNombre(),
@@ -141,17 +142,60 @@ public class EvaluacionService {
                     variable.getFrecuenciaCaptura(),
                     variable.getFormulaTexto(),
                     puntos,
-                    calcularEstadisticas(valores),
+                    calcularEstadisticas(agruparPorPeriodo(puntos, variable.getFrecuenciaCaptura())),
                     calcularPorSprint(puntos)
             ));
         }
         return resultado;
     }
 
+    /** Frecuencias con un período bien definido, sobre las que tiene sentido agrupar. */
+    private static final Set<String> FRECUENCIAS_CON_PERIODO = Set.of("por_sprint", "semanal", "diaria");
+
+    /**
+     * Corrección solicitada (Ejecución/Tendencias): agrupa los puntos por período según la
+     * frecuencia de captura de la variable, para que dos registros del MISMO período (mismo
+     * sprint, misma semana ISO o mismo día, según corresponda) nunca se cuenten como si fueran
+     * dos períodos comparables distintos al calcular tendencia/variabilidad. En la práctica esto
+     * casi nunca cambia nada: EjecucionService.validarFrecuencia() ya impide, al capturar,
+     * registrar más de un valor por período según esta misma frecuencia — este agrupamiento es
+     * una defensa adicional para datos históricos anteriores a esa validación. Con frecuencia
+     * "ilimitada" (o null/desconocida) NO se agrupa: cada registro sigue siendo su propio punto,
+     * exactamente como antes de esta corrección.
+     *
+     * Se queda con el registro más reciente de cada período (mismo criterio "vigente" que ya usa
+     * el resto del sistema), conservando el orden cronológico de aparición de cada período.
+     */
+    private List<BigDecimal> agruparPorPeriodo(List<RegistroPuntoDto> puntos, String frecuenciaCaptura) {
+        if (frecuenciaCaptura == null || !FRECUENCIAS_CON_PERIODO.contains(frecuenciaCaptura)) {
+            return puntos.stream().map(RegistroPuntoDto::valor).toList();
+        }
+        Map<Object, RegistroPuntoDto> ultimoPorPeriodo = new LinkedHashMap<>();
+        for (RegistroPuntoDto p : puntos) {
+            ultimoPorPeriodo.put(clavePeriodo(p, frecuenciaCaptura), p);
+        }
+        return ultimoPorPeriodo.values().stream().map(RegistroPuntoDto::valor).toList();
+    }
+
+    /** Clave de agrupación: sprint completo, semana ISO o día calendario (UTC), según la frecuencia. */
+    private Object clavePeriodo(RegistroPuntoDto p, String frecuencia) {
+        return switch (frecuencia) {
+            case "por_sprint" -> p.sprintId();
+            case "semanal" -> {
+                LocalDate dia = p.registradoAt().atZone(ZoneOffset.UTC).toLocalDate();
+                yield dia.get(WeekFields.ISO.weekBasedYear()) + "-W" + dia.get(WeekFields.ISO.weekOfWeekBasedYear());
+            }
+            case "diaria" -> p.registradoAt().atZone(ZoneOffset.UTC).toLocalDate();
+            default -> p.id(); // no debería alcanzarse (filtrado en agruparPorPeriodo): nunca agrupa
+        };
+    }
+
     /**
      * Calcula promedio, min, max, cambio primero→último, tendencia (regresión lineal) y
      * variabilidad (coeficiente de variación) sobre una serie de valores ya ordenada
-     * cronológicamente (orden = orden real de registro, usado como eje X de la regresión).
+     * cronológicamente (orden = orden real de registro/período, usado como eje X de la
+     * regresión). El llamador decide si "valores" es la serie cruda o ya agrupada por período
+     * (ver agruparPorPeriodo) — esta función no cambia, solo su insumo.
      */
     private VariableEstadisticasDto calcularEstadisticas(List<BigDecimal> valores) {
         int n = valores.size();

@@ -130,6 +130,30 @@ class MetricaSimilitudServiceTest {
         assertThat(resultado).noneMatch(c -> c.metrica().codigo().equals("IA-002"));
     }
 
+    // ── Corrección: nombre muy similar debe bastar aunque la categoría no
+    // coincida — caso real encontrado en el catálogo de producción. "Defectos"
+    // (categoría real "Significado") y "Defectos encontrados" (categoría real
+    // "Impacto") terminaron como dos filas separadas porque el formulario de
+    // Crear métrica con IA no propone categoría (siempre parte de categoriaId=1
+    // hasta que el Scrum Master la cambia) y, sin PESO_CATEGORIA, el score total
+    // caía por debajo del umbral aunque el nombre ya fuera muy similar (Jaccard 0.5).
+
+    @Test
+    void nombreMuySimilarConCategoriaDistinta_igualSeMarcaComoPosibleDuplicado() {
+        when(metricaRepository.findAllByOrderByCategoriaIdAscNombreAsc()).thenReturn(catalogoRealista());
+
+        // "Defectos" propuesto con categoriaId=1 (Significado, el default del
+        // formulario), mientras que "Defectos encontrados" en el catálogo está
+        // en categoría 3 (Impacto) — categorías distintas, nombre muy similar.
+        List<PosibleDuplicadoDto> resultado = service.buscarPosiblesDuplicados(
+                "Defectos", null, (short) 1, null, null, null);
+
+        assertThat(resultado).anyMatch(c -> c.metrica().codigo().equals("IMP-CAL-01"));
+        PosibleDuplicadoDto match = resultado.stream()
+                .filter(c -> c.metrica().codigo().equals("IMP-CAL-01")).findFirst().orElseThrow();
+        assertThat(match.razones()).contains("nombre muy similar");
+    }
+
     @Test
     void catalogoVacio_nuncaLanzaNiMarcaNada() {
         when(metricaRepository.findAllByOrderByCategoriaIdAscNombreAsc()).thenReturn(List.of());

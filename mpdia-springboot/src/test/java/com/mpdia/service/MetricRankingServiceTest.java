@@ -1,21 +1,28 @@
 // Autor: Cristian Santiago Martinez Cordoba — MPDIA
 package com.mpdia.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.mpdia.dto.GuardarParametrizacionRequest;
 import com.mpdia.dto.MetricParametrizacionDto;
 import com.mpdia.dto.VerificarParametrizacionRequest;
 import com.mpdia.entity.MetricParametrizacion;
+import com.mpdia.entity.ProjectMember;
 import com.mpdia.repository.FactorRepository;
 import com.mpdia.repository.MetricParametrizacionRepository;
 import com.mpdia.repository.MetricUsoRankingRepository;
 import com.mpdia.repository.MetricaRepository;
+import com.mpdia.repository.ProjectMemberRepository;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.Query;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.List;
 import java.util.Optional;
@@ -44,6 +51,19 @@ class MetricRankingServiceTest {
     @Mock private MetricaRepository                metricaRepo;
     @Mock private PlaneacionService                planeacionService;
     @Mock private VariableDinamicaService          variableDinamicaService;
+    @Mock private ProjectMemberRepository          projectMemberRepo;
+
+    // Corrección de duplicados en Verificación: guardarPorMetrica() ahora adquiere un
+    // advisory lock de Postgres vía EntityManager.createNativeQuery(...) antes de leer
+    // el historial. entityManager es un campo @PersistenceContext (no final, fuera del
+    // constructor de Lombok) — en este test unitario, que construye el service a mano,
+    // se inyecta por reflexión y se mockea la cadena createNativeQuery/setParameter/
+    // getSingleResult para que guardarPorMetrica() no falle con NullPointerException.
+    // Los tests reales de concurrencia (con el lock real de Postgres) están en
+    // MetricRankingDuplicadoPendienteTest, contra la BD real — acá solo se evita que
+    // el mock rompa por una dependencia que este test no necesita ejercitar.
+    @Mock private EntityManager entityManager;
+    @Mock private Query nativeQuery;
 
     private MetricRankingService service;
 
@@ -51,12 +71,18 @@ class MetricRankingServiceTest {
     private UUID metricaId;
     private final String userId    = "user-1";
     private final String userEmail = "user1@example.com";
+    private final String smUserId  = "sm-user-1";
 
     @BeforeEach
     void setUp() {
         service = new MetricRankingService(
                 parametrizacionRepo, rankingRepo, factorRepo, metricaRepo,
-                planeacionService, variableDinamicaService);
+                planeacionService, variableDinamicaService, projectMemberRepo,
+                new ObjectMapper());
+        ReflectionTestUtils.setField(service, "entityManager", entityManager);
+        lenient().when(entityManager.createNativeQuery(anyString())).thenReturn(nativeQuery);
+        lenient().when(nativeQuery.setParameter(anyString(), any())).thenReturn(nativeQuery);
+        lenient().when(nativeQuery.getSingleResult()).thenReturn(null);
 
         proyectoId = UUID.randomUUID();
         metricaId  = UUID.randomUUID();
@@ -66,6 +92,29 @@ class MetricRankingServiceTest {
         // prueba que la parametrización no queda persistida como "aprobada".
         lenient().when(parametrizacionRepo.save(any(MetricParametrizacion.class)))
                 .thenAnswer(inv -> inv.getArgument(0));
+
+        // Auditoría transversal: userId es miembro del proyecto (para las pruebas de
+        // guardar()/versionado que no son sobre autorización) y smUserId es su Scrum
+        // Master (para las pruebas de verificar() que no son sobre autorización).
+        lenient().when(projectMemberRepo.existsByProyectoIdAndUserId(proyectoId, userId)).thenReturn(true);
+        lenient().when(projectMemberRepo.findByProyectoIdAndUserId(proyectoId, smUserId))
+                .thenReturn(Optional.of(scrumMaster(proyectoId, smUserId)));
+    }
+
+    private ProjectMember scrumMaster(UUID proyectoId, String userId) {
+        ProjectMember m = new ProjectMember();
+        m.setProyectoId(proyectoId);
+        m.setUserId(userId);
+        m.setRol("scrum_master");
+        return m;
+    }
+
+    private ProjectMember miembro(UUID proyectoId, String userId) {
+        ProjectMember m = new ProjectMember();
+        m.setProyectoId(proyectoId);
+        m.setUserId(userId);
+        m.setRol("scrum_member");
+        return m;
     }
 
     private GuardarParametrizacionRequest request() {
@@ -76,7 +125,7 @@ class MetricRankingServiceTest {
         return new GuardarParametrizacionRequest(
                 null, "objetivo", "procedimiento", "indicador", "escala",
                 null, proyectoId, metricaId,
-                "SUMA", "SUMA(indicador)", "unidades", "fuente", frecuenciaCaptura);
+                "SUMA", "SUMA(indicador)", "unidades", "fuente", frecuenciaCaptura, null, null, null, null, null, null);
     }
 
     private MetricParametrizacion aprobadaExistente(int version) {
@@ -372,13 +421,14 @@ class MetricRankingServiceTest {
         p.setProyectoId(proyectoId);
         p.setVersion(1);
         p.setStatus("pendiente");
+        p.setConfiguracionAprobadaJson("{\"nombreVariable\":\"pbi_aceptados\"}");
 
         when(parametrizacionRepo.findById(p.getId())).thenReturn(Optional.of(p));
         when(parametrizacionRepo.findUltimaVersionAprobada(metricaId, proyectoId))
                 .thenReturn(Optional.empty());
         when(planeacionService.listarSeleccionadas(proyectoId)).thenReturn(List.of());
 
-        service.verificar(new VerificarParametrizacionRequest(p.getId(), "aprobar", null), "sm@example.com");
+        service.verificar(new VerificarParametrizacionRequest(p.getId(), "aprobar", null), smUserId, "sm@example.com");
 
         // FASE 10: la variable versionada se materializa ANTES de llamar a
         // planeacionService.aprobar() — así su chequeo de "ya existe variable" ve la
@@ -399,13 +449,14 @@ class MetricRankingServiceTest {
         nueva.setProyectoId(proyectoId);
         nueva.setVersion(2);
         nueva.setStatus("pendiente");
+        nueva.setConfiguracionAprobadaJson("{\"nombreVariable\":\"pbi_aceptados\"}");
 
         when(parametrizacionRepo.findById(nueva.getId())).thenReturn(Optional.of(nueva));
         when(parametrizacionRepo.findUltimaVersionAprobada(metricaId, proyectoId))
                 .thenReturn(Optional.of(anterior));
         when(planeacionService.listarSeleccionadas(proyectoId)).thenReturn(List.of());
 
-        service.verificar(new VerificarParametrizacionRequest(nueva.getId(), "aprobar", null), "sm@example.com");
+        service.verificar(new VerificarParametrizacionRequest(nueva.getId(), "aprobar", null), smUserId, "sm@example.com");
 
         assertThat(anterior.getStatus()).isEqualTo("inactiva");
         assertThat(nueva.getStatus()).isEqualTo("aprobada");
@@ -429,6 +480,10 @@ class MetricRankingServiceTest {
         p.setProyectoId(proyectoId);
         p.setVersion(1);
         p.setStatus("pendiente");
+        // Con Identificador técnico ya guardado: este test cubre un fallo DISTINTO
+        // (el que lanza variableDinamicaService al materializar), no la nueva
+        // obligatoriedad de nombreVariable agregada en Opción 1.
+        p.setConfiguracionAprobadaJson("{\"nombreVariable\":\"pbi_aceptados\"}");
 
         when(parametrizacionRepo.findById(p.getId())).thenReturn(Optional.of(p));
         when(parametrizacionRepo.findUltimaVersionAprobada(metricaId, proyectoId))
@@ -440,7 +495,7 @@ class MetricRankingServiceTest {
 
         assertThatThrownBy(() ->
                 service.verificar(new VerificarParametrizacionRequest(p.getId(), "aprobar", null),
-                        "sm@example.com"))
+                        smUserId, "sm@example.com"))
                 .isInstanceOf(NombreVariableInvalidoException.class)
                 .hasMessageContaining("Indicador y Variables");
 
@@ -462,6 +517,7 @@ class MetricRankingServiceTest {
         p.setProyectoId(proyectoId);
         p.setVersion(1);
         p.setStatus("pendiente");
+        p.setConfiguracionAprobadaJson("{\"nombreVariable\":\"pbi_aceptados\"}");
 
         when(parametrizacionRepo.findById(p.getId())).thenReturn(Optional.of(p));
         when(parametrizacionRepo.findUltimaVersionAprobada(metricaId, proyectoId))
@@ -470,7 +526,7 @@ class MetricRankingServiceTest {
                 .when(variableDinamicaService).materializarVariables(p);
 
         MetricParametrizacionDto dto = service.verificar(
-                new VerificarParametrizacionRequest(p.getId(), "aprobar", null), "sm@example.com");
+                new VerificarParametrizacionRequest(p.getId(), "aprobar", null), smUserId, "sm@example.com");
 
         assertThat(dto.status()).isEqualTo("aprobada");
         verify(parametrizacionRepo).save(p);
@@ -491,7 +547,7 @@ class MetricRankingServiceTest {
         when(parametrizacionRepo.findById(aRechazar.getId())).thenReturn(Optional.of(aRechazar));
 
         service.verificar(new VerificarParametrizacionRequest(aRechazar.getId(), "rechazar", "no cumple"),
-                "sm@example.com");
+                smUserId, "sm@example.com");
 
         assertThat(aRechazar.getStatus()).isEqualTo("rechazada");
         assertThat(aRechazar.getMotivoRechazo()).isEqualTo("no cumple");
@@ -584,5 +640,411 @@ class MetricRankingServiceTest {
         assertThat(dto.formulaAcademica()).isNull();
         assertThat(dto.tipoOperacion()).isNull();
         assertThat(dto.unidadResultado()).isNull();
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // Auditoría transversal de autorización — verificar()/getPendientesPorProyecto()/
+    // getResumenPorProyecto()/guardar() no validaban membresía ni rol de Scrum Master
+    // por proyecto: cualquier usuario autenticado podía aprobar/rechazar
+    // parametrizaciones, ver pendientes o inyectar propuestas en cualquier proyecto
+    // conociendo su UUID (o, para pendientes sin proyectoId, ver las de TODOS los
+    // proyectos del sistema).
+    // ══════════════════════════════════════════════════════════════════════
+
+    @Test
+    @DisplayName("verificar: miembro (no Scrum Master) del proyecto lanza SecurityException")
+    void verificar_miembroNoScrumMaster_lanzaSecurityException() {
+        MetricParametrizacion p = new MetricParametrizacion();
+        p.setId(UUID.randomUUID());
+        p.setMetricaId(metricaId);
+        p.setProyectoId(proyectoId);
+        p.setStatus("pendiente");
+        when(parametrizacionRepo.findById(p.getId())).thenReturn(Optional.of(p));
+        when(projectMemberRepo.findByProyectoIdAndUserId(proyectoId, userId))
+                .thenReturn(Optional.of(miembro(proyectoId, userId)));
+
+        assertThatThrownBy(() -> service.verificar(
+                new VerificarParametrizacionRequest(p.getId(), "aprobar", null), userId, "user1@example.com"))
+                .isInstanceOf(SecurityException.class);
+
+        verifyNoInteractions(variableDinamicaService, planeacionService);
+        verify(parametrizacionRepo, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("verificar: usuario externo al proyecto lanza SecurityException")
+    void verificar_usuarioExterno_lanzaSecurityException() {
+        MetricParametrizacion p = new MetricParametrizacion();
+        p.setId(UUID.randomUUID());
+        p.setMetricaId(metricaId);
+        p.setProyectoId(proyectoId);
+        p.setStatus("pendiente");
+        String externoId = "externo-1";
+        when(parametrizacionRepo.findById(p.getId())).thenReturn(Optional.of(p));
+        when(projectMemberRepo.findByProyectoIdAndUserId(proyectoId, externoId))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.verificar(
+                new VerificarParametrizacionRequest(p.getId(), "aprobar", null), externoId, "externo@example.com"))
+                .isInstanceOf(SecurityException.class);
+
+        verify(parametrizacionRepo, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("getPendientesPorProyecto: Scrum Master del proyecto obtiene la lista")
+    void getPendientesPorProyecto_scrumMaster_retornaLista() {
+        MetricParametrizacion p = pendienteConContenidoDeRequest(1);
+        when(parametrizacionRepo.findByStatusOrderByCreatedAtDesc("pendiente")).thenReturn(List.of(p));
+
+        var resultado = service.getPendientesPorProyecto(proyectoId, smUserId);
+
+        assertThat(resultado).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("getPendientesPorProyecto: miembro (no Scrum Master) del proyecto lanza SecurityException")
+    void getPendientesPorProyecto_miembroNoScrumMaster_lanzaSecurityException() {
+        when(projectMemberRepo.findByProyectoIdAndUserId(proyectoId, userId))
+                .thenReturn(Optional.of(miembro(proyectoId, userId)));
+
+        assertThatThrownBy(() -> service.getPendientesPorProyecto(proyectoId, userId))
+                .isInstanceOf(SecurityException.class);
+
+        verifyNoInteractions(parametrizacionRepo);
+    }
+
+    @Test
+    @DisplayName("getPendientesPorProyecto: usuario externo lanza SecurityException")
+    void getPendientesPorProyecto_usuarioExterno_lanzaSecurityException() {
+        String externoId = "externo-1";
+        when(projectMemberRepo.findByProyectoIdAndUserId(proyectoId, externoId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.getPendientesPorProyecto(proyectoId, externoId))
+                .isInstanceOf(SecurityException.class);
+
+        verifyNoInteractions(parametrizacionRepo);
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // Corrección de aislamiento de Verificación: getPendientesPorProyecto()
+    // devolvía TODAS las parametrizaciones con proyecto_id NULL cuando no se
+    // informaba proyectoId (pantalla de Verificación sin proyecto activo en
+    // localStorage) — permitiendo que propuestas huérfanas/históricas de
+    // CUALQUIER usuario aparecieran como si fueran del proyecto que el Scrum
+    // Master está revisando. Regla nueva: sin proyectoId explícito, lista
+    // vacía siempre (nunca se infiere una asociación con datos huérfanos).
+    // ══════════════════════════════════════════════════════════════════════
+
+    @Test
+    @DisplayName("getPendientesPorProyecto: sin proyectoId, devuelve lista vacía y no consulta el repositorio (C)")
+    void getPendientesPorProyecto_sinProyectoId_devuelveListaVacia() {
+        var resultado = service.getPendientesPorProyecto(null, smUserId);
+
+        assertThat(resultado).isEmpty();
+        verifyNoInteractions(parametrizacionRepo);
+    }
+
+    @Test
+    @DisplayName("getPendientesPorProyecto: con proyectoId, excluye las de otro proyecto y las huérfanas proyecto_id=NULL (A, B, D)")
+    void getPendientesPorProyecto_conProyectoId_excluyeOtroProyectoYHuerfanas() {
+        UUID otroProyecto = UUID.randomUUID();
+        MetricParametrizacion pendienteDelProyectoActivo = pendienteConContenidoDeRequest(1); // proyectoId = "A"
+
+        MetricParametrizacion pendienteDeOtroProyecto = new MetricParametrizacion();
+        pendienteDeOtroProyecto.setId(UUID.randomUUID());
+        pendienteDeOtroProyecto.setMetricaId(metricaId);
+        pendienteDeOtroProyecto.setProyectoId(otroProyecto); // proyecto "B"
+        pendienteDeOtroProyecto.setStatus("pendiente");
+
+        MetricParametrizacion pendienteHuerfana = new MetricParametrizacion();
+        pendienteHuerfana.setId(UUID.randomUUID());
+        pendienteHuerfana.setMetricaId(metricaId);
+        pendienteHuerfana.setProyectoId(null); // huérfana histórica, sin proyecto
+        pendienteHuerfana.setStatus("pendiente");
+
+        when(parametrizacionRepo.findByStatusOrderByCreatedAtDesc("pendiente"))
+                .thenReturn(List.of(pendienteDelProyectoActivo, pendienteDeOtroProyecto, pendienteHuerfana));
+
+        var resultado = service.getPendientesPorProyecto(proyectoId, smUserId);
+
+        assertThat(resultado).hasSize(1);
+        assertThat(resultado.get(0).proyectoId()).isEqualTo(proyectoId);
+    }
+
+    @Test
+    @DisplayName("getResumenPorProyecto: miembro del proyecto obtiene el resumen")
+    void getResumenPorProyecto_miembroDelProyecto_permitido() {
+        when(projectMemberRepo.existsByProyectoIdAndUserId(proyectoId, userId)).thenReturn(true);
+        when(parametrizacionRepo.countByProyectoIdAndStatus(any(), any())).thenReturn(0L);
+
+        var resumen = service.getResumenPorProyecto(proyectoId, userId);
+
+        assertThat(resumen).isNotNull();
+    }
+
+    @Test
+    @DisplayName("getResumenPorProyecto: usuario externo lanza SecurityException")
+    void getResumenPorProyecto_usuarioExterno_lanzaSecurityException() {
+        String externoId = "externo-1";
+        when(projectMemberRepo.existsByProyectoIdAndUserId(proyectoId, externoId)).thenReturn(false);
+
+        assertThatThrownBy(() -> service.getResumenPorProyecto(proyectoId, externoId))
+                .isInstanceOf(SecurityException.class);
+
+        verifyNoInteractions(parametrizacionRepo);
+    }
+
+    @Test
+    @DisplayName("guardar: usuario externo al proyecto lanza SecurityException")
+    void guardar_usuarioExterno_lanzaSecurityException() {
+        String externoId = "externo-1";
+        when(projectMemberRepo.existsByProyectoIdAndUserId(proyectoId, externoId)).thenReturn(false);
+
+        assertThatThrownBy(() -> service.guardar(request(), externoId, "externo@example.com"))
+                .isInstanceOf(SecurityException.class);
+
+        verifyNoInteractions(parametrizacionRepo);
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // OPCIÓN 1 — Identificador técnico (nombreVariable) explícito y obligatorio.
+    // Reemplaza la derivación automática desde indicadorVariable: el usuario debe
+    // indicarlo al editar, y aprobar() lo exige antes de materializar la variable.
+    // Cubre longitud límite (120/121), obligatoriedad (vacío/ausente), independencia
+    // del texto descriptivo (indicadorVariable largo no se toca ni se trunca) y el
+    // flujo completo de aprobación con un identificador ya guardado.
+    // ══════════════════════════════════════════════════════════════════════
+
+    private MetricParametrizacion pendienteEditable() {
+        MetricParametrizacion p = new MetricParametrizacion();
+        p.setId(UUID.randomUUID());
+        p.setMetricaId(metricaId);
+        p.setProyectoId(proyectoId);
+        p.setVersion(1);
+        p.setStatus("pendiente");
+        p.setObjetivo("objetivo original");
+        p.setProcedimiento("procedimiento original");
+        p.setIndicadorVariable("indicador original");
+        p.setEscala("escala original");
+        return p;
+    }
+
+    private com.mpdia.dto.ActualizarParametrizacionRequest actualizarRequest(
+            String indicadorVariable, String nombreVariable) {
+        return new com.mpdia.dto.ActualizarParametrizacionRequest(
+                "objetivo", "procedimiento", indicadorVariable, "escala",
+                null, null, null, null, null, null,
+                nombreVariable);
+    }
+
+    @Test
+    @DisplayName("actualizar: nombreVariable válido (<=120) se guarda en el snapshot")
+    void actualizar_nombreVariableValido_seGuarda() {
+        MetricParametrizacion p = pendienteEditable();
+        when(parametrizacionRepo.findById(p.getId())).thenReturn(Optional.of(p));
+
+        MetricParametrizacionDto dto = service.actualizar(
+                p.getId(), actualizarRequest("indicador corto", "pbi_aceptados"), smUserId);
+
+        assertThat(dto).isNotNull();
+        assertThat(p.getConfiguracionAprobadaJson()).contains("\"nombreVariable\":\"pbi_aceptados\"");
+        verify(parametrizacionRepo).save(p);
+    }
+
+    @Test
+    @DisplayName("actualizar: nombreVariable de exactamente 120 caracteres se acepta")
+    void actualizar_nombreVariableDe120_seAcepta() {
+        MetricParametrizacion p = pendienteEditable();
+        when(parametrizacionRepo.findById(p.getId())).thenReturn(Optional.of(p));
+        String nombre120 = "a".repeat(120); // cumple ^[a-z][a-z0-9_]{0,119}$
+        assertThat(nombre120).hasSize(120);
+
+        service.actualizar(p.getId(), actualizarRequest("indicador", nombre120), smUserId);
+
+        assertThat(p.getConfiguracionAprobadaJson())
+                .contains("\"nombreVariable\":\"" + nombre120 + "\"");
+    }
+
+    @Test
+    @DisplayName("actualizar: nombreVariable de 121 caracteres NO se rechaza — se genera uno seguro de máx. 120")
+    void actualizar_nombreVariableDe121_generaUnoSeguroEnVezDeRechazar() {
+        MetricParametrizacion p = pendienteEditable();
+        when(parametrizacionRepo.findById(p.getId())).thenReturn(Optional.of(p));
+        String nombre121 = "a".repeat(121);
+
+        MetricParametrizacionDto dto = service.actualizar(
+                p.getId(), actualizarRequest("indicador", nombre121), smUserId);
+
+        assertThat(dto).isNotNull();
+        String guardado = leerNombreVariableDeSnapshot(p);
+        assertThat(guardado).isNotBlank();
+        assertThat(guardado.length()).isLessThanOrEqualTo(120);
+        assertThat(guardado).matches("^[a-z][a-z0-9_]{0,119}$");
+        verify(parametrizacionRepo).save(p);
+    }
+
+    @Test
+    @DisplayName("actualizar: nombreVariable vacío NO se rechaza — se genera desde indicadorVariable")
+    void actualizar_nombreVariableVacio_generaDesdeIndicador() {
+        MetricParametrizacion p = pendienteEditable();
+        when(parametrizacionRepo.findById(p.getId())).thenReturn(Optional.of(p));
+
+        service.actualizar(p.getId(), actualizarRequest("impedimentos del sprint", ""), smUserId);
+
+        String guardado = leerNombreVariableDeSnapshot(p);
+        assertThat(guardado).isNotBlank();
+        assertThat(guardado).matches("^[a-z][a-z0-9_]{0,119}$");
+    }
+
+    @Test
+    @DisplayName("actualizar: nombreVariable ausente (null) también genera desde indicadorVariable, no se rechaza")
+    void actualizar_nombreVariableNull_generaDesdeIndicador() {
+        MetricParametrizacion p = pendienteEditable();
+        when(parametrizacionRepo.findById(p.getId())).thenReturn(Optional.of(p));
+
+        service.actualizar(p.getId(), actualizarRequest("impedimentos del sprint", null), smUserId);
+
+        String guardado = leerNombreVariableDeSnapshot(p);
+        assertThat(guardado).isNotBlank();
+        assertThat(guardado).matches("^[a-z][a-z0-9_]{0,119}$");
+        verify(parametrizacionRepo).save(p);
+    }
+
+    @Test
+    @DisplayName("aprobar: indicadorVariable largo con nombreVariable válido se aprueba correctamente, sin truncar el indicador")
+    void aprobar_conIndicadorLargoYNombreVariableValido_apruebaCorrectamenteSinTruncar() {
+        String indicadorLargo = "Numero de historias de usuario aceptadas por el Product Owner "
+                + "sin necesidad de retrabajo durante el sprint, medido sobre el total de "
+                + "historias comprometidas en la planificacion inicial del sprint en curso";
+        assertThat(indicadorLargo.length()).isGreaterThan(120);
+
+        MetricParametrizacion p = pendienteEditable();
+        when(parametrizacionRepo.findById(p.getId())).thenReturn(Optional.of(p));
+
+        // 1) Editar: fija un identificador técnico corto, independiente del indicador largo.
+        service.actualizar(p.getId(), actualizarRequest(indicadorLargo, "pbi_aceptados"), smUserId);
+
+        // El indicador descriptivo se guarda TAL CUAL — nunca se trunca ni se recorta.
+        assertThat(p.getIndicadorVariable()).isEqualTo(indicadorLargo);
+        assertThat(p.getIndicadorVariable().length()).isGreaterThan(120);
+
+        // 2) Aprobar: ya no depende de derivar nada de indicadorVariable — usa el
+        // nombreVariable ya guardado en el paso anterior.
+        when(parametrizacionRepo.findUltimaVersionAprobada(metricaId, proyectoId))
+                .thenReturn(Optional.empty());
+        when(planeacionService.listarSeleccionadas(proyectoId)).thenReturn(List.of());
+
+        MetricParametrizacionDto dto = service.verificar(
+                new VerificarParametrizacionRequest(p.getId(), "aprobar", null),
+                smUserId, "sm@example.com");
+
+        assertThat(dto.status()).isEqualTo("aprobada");
+        // El indicador descriptivo sigue intacto también después de aprobar.
+        assertThat(p.getIndicadorVariable()).isEqualTo(indicadorLargo);
+        verify(variableDinamicaService).materializarVariables(p);
+        verify(planeacionService).aprobar(proyectoId, metricaId, "sm@example.com");
+    }
+
+    @Test
+    @DisplayName("aprobar: sin Identificador técnico guardado (nunca editado), NO se rechaza — se genera uno seguro y se aprueba")
+    void aprobar_sinNombreVariableGuardado_generaUnoSeguroYAprueba() {
+        MetricParametrizacion p = pendienteEditable(); // nunca editado: sin configuracionAprobadaJson
+        p.setIndicadorVariable("Numero de impedimentos reportados durante el sprint");
+
+        when(parametrizacionRepo.findById(p.getId())).thenReturn(Optional.of(p));
+        when(parametrizacionRepo.findUltimaVersionAprobada(metricaId, proyectoId))
+                .thenReturn(Optional.empty());
+        when(planeacionService.listarSeleccionadas(proyectoId)).thenReturn(List.of());
+
+        MetricParametrizacionDto dto = service.verificar(
+                new VerificarParametrizacionRequest(p.getId(), "aprobar", null), smUserId, "sm@example.com");
+
+        assertThat(dto.status()).isEqualTo("aprobada");
+        String guardado = leerNombreVariableDeSnapshot(p);
+        assertThat(guardado).isNotBlank();
+        assertThat(guardado).matches("^[a-z][a-z0-9_]{0,119}$");
+        verify(variableDinamicaService).materializarVariables(p);
+    }
+
+    @Test
+    @DisplayName("aprobar: indicadorVariable muy largo (caso PBI) se aprueba sin error 400, sin truncar el indicador")
+    void aprobar_conIndicadorMuyLargoSinNombreVariableExplicito_generaIdentificadorCortoYNoTrunca() {
+        // Una sola oración continua (sin comas): con coma, extraerNombresVariables()
+        // la interpretaría como una lista de variables separadas (soporte existente
+        // para métricas FORMULA de más de una variable, sin relación con este caso) y
+        // cada segmento tendría su propio límite de 120 en vez de uno solo total.
+        String indicadorLargo = "Sumar todos los Product Backlog Items aceptados por el Product Owner "
+                + "que cumplen la Definicion de Terminado al cierre del Sprint sin incluir "
+                + "aquellos que requirieron retrabajo posterior ni los que fueron reabiertos "
+                + "durante la revision de sprint";
+        assertThat(indicadorLargo.length()).isGreaterThan(120);
+
+        MetricParametrizacion p = pendienteEditable();
+        p.setIndicadorVariable(indicadorLargo);
+        when(parametrizacionRepo.findById(p.getId())).thenReturn(Optional.of(p));
+        when(parametrizacionRepo.findUltimaVersionAprobada(metricaId, proyectoId))
+                .thenReturn(Optional.empty());
+        when(planeacionService.listarSeleccionadas(proyectoId)).thenReturn(List.of());
+
+        // No debe lanzar ninguna excepción (ni 400 por longitud de nombreVariable).
+        MetricParametrizacionDto dto = service.verificar(
+                new VerificarParametrizacionRequest(p.getId(), "aprobar", null), smUserId, "sm@example.com");
+
+        assertThat(dto.status()).isEqualTo("aprobada");
+        // El indicador original se conserva completo, sin truncar.
+        assertThat(p.getIndicadorVariable()).isEqualTo(indicadorLargo);
+        String guardado = leerNombreVariableDeSnapshot(p);
+        assertThat(guardado).isNotBlank();
+        assertThat(guardado.length()).isLessThanOrEqualTo(120);
+        assertThat(guardado).matches("^[a-z][a-z0-9_]{0,119}$");
+        verify(variableDinamicaService).materializarVariables(p);
+    }
+
+    @Test
+    @DisplayName("El identificador generado automáticamente es determinista: la misma descripción larga siempre produce el mismo identificador")
+    void generarNombreVariableSeguro_esDeterminista_mismaEntradaMismoResultado() {
+        String textoLargo = "a".repeat(200);
+
+        MetricParametrizacion p1 = pendienteEditable();
+        p1.setId(UUID.randomUUID());
+        when(parametrizacionRepo.findById(p1.getId())).thenReturn(Optional.of(p1));
+        service.actualizar(p1.getId(), actualizarRequest("indicador", textoLargo), smUserId);
+
+        MetricParametrizacion p2 = pendienteEditable();
+        p2.setId(UUID.randomUUID());
+        when(parametrizacionRepo.findById(p2.getId())).thenReturn(Optional.of(p2));
+        service.actualizar(p2.getId(), actualizarRequest("indicador", textoLargo), smUserId);
+
+        assertThat(leerNombreVariableDeSnapshot(p1)).isEqualTo(leerNombreVariableDeSnapshot(p2));
+    }
+
+    @Test
+    @DisplayName("Dos indicadores distintos que comparten el mismo prefijo largo generan identificadores distintos (no es un simple substring(0,120))")
+    void generarNombreVariableSeguro_evitaColisionesEntreTextosConElMismoPrefijo() {
+        String prefijoComun = "palabra ".repeat(20); // > 120 caracteres de prefijo compartido
+        String textoA = prefijoComun + "final version alfa";
+        String textoB = prefijoComun + "final version beta";
+
+        MetricParametrizacion pA = pendienteEditable();
+        pA.setId(UUID.randomUUID());
+        when(parametrizacionRepo.findById(pA.getId())).thenReturn(Optional.of(pA));
+        service.actualizar(pA.getId(), actualizarRequest("indicador", textoA), smUserId);
+
+        MetricParametrizacion pB = pendienteEditable();
+        pB.setId(UUID.randomUUID());
+        when(parametrizacionRepo.findById(pB.getId())).thenReturn(Optional.of(pB));
+        service.actualizar(pB.getId(), actualizarRequest("indicador", textoB), smUserId);
+
+        assertThat(leerNombreVariableDeSnapshot(pA)).isNotEqualTo(leerNombreVariableDeSnapshot(pB));
+    }
+
+    private String leerNombreVariableDeSnapshot(MetricParametrizacion p) {
+        try {
+            return new ObjectMapper().readTree(p.getConfiguracionAprobadaJson())
+                    .get("nombreVariable").asText();
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 }

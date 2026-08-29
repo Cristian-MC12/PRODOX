@@ -8,6 +8,7 @@ import com.mpdia.dto.ai.GenerateInsightsResultDto;
 import com.mpdia.dto.ai.InsightEvidenceDto;
 import com.mpdia.dto.analytics.*;
 import com.mpdia.entity.AIInsight;
+import com.mpdia.entity.ProjectMember;
 import com.mpdia.entity.Proyecto;
 import com.mpdia.entity.Sprint;
 import com.mpdia.repository.AIInsightRepository;
@@ -85,8 +86,8 @@ public class AIInsightsService {
     public GenerateInsightsResultDto generateInsights(UUID proyectoId, String userId) {
         log.info("Generando insights para proyecto={} usuario={}", proyectoId, userId);
 
-        // 1. Validar acceso
-        validateProjectAccess(userId, proyectoId);
+        // 1. Validar acceso (generar insights es una acción restringida al Scrum Master del proyecto)
+        validateScrumMasterAccess(userId, proyectoId);
 
         // 2. Verificar datos disponibles
         Proyecto proyecto = proyectoRepo.findById(proyectoId)
@@ -756,6 +757,23 @@ public class AIInsightsService {
         if (!projectMemberRepo.existsByProyectoIdAndUserId(proyectoId, userId)) {
             log.warn("Usuario {} intentó acceder a insights del proyecto {} sin autorización", userId, proyectoId);
             throw new SecurityException("No tienes acceso a este proyecto");
+        }
+    }
+
+    /**
+     * Valida que el usuario sea miembro del proyecto Y su Scrum Master (rol de liderazgo
+     * a nivel de proyecto). Usado solo para acciones restringidas (generar insights);
+     * las consultas de solo lectura siguen usando validateProjectAccess.
+     */
+    private void validateScrumMasterAccess(String userId, UUID proyectoId) {
+        ProjectMember member = projectMemberRepo.findByProyectoIdAndUserId(proyectoId, userId)
+                .orElseThrow(() -> {
+                    log.warn("Usuario {} intentó acceder a insights del proyecto {} sin autorización", userId, proyectoId);
+                    return new SecurityException("No tienes acceso a este proyecto");
+                });
+        if (!"scrum_master".equals(member.getRol())) {
+            log.warn("Usuario {} intentó generar insights del proyecto {} sin ser Scrum Master", userId, proyectoId);
+            throw new SecurityException("Solo el Scrum Master del proyecto puede generar insights");
         }
     }
 

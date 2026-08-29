@@ -3,6 +3,7 @@ package com.mpdia.service;
 
 import com.mpdia.dto.ai.*;
 import com.mpdia.dto.analytics.*;
+import com.mpdia.entity.ProjectMember;
 import com.mpdia.entity.Sprint;
 import com.mpdia.repository.ProjectMemberRepository;
 import com.mpdia.repository.SprintRepository;
@@ -52,8 +53,8 @@ public class AIReportService {
         Sprint sprint = sprintRepository.findById(sprintId)
                 .orElseThrow(() -> new IllegalArgumentException("Sprint no encontrado: " + sprintId));
         
-        // 2. Validar autorización
-        validateUserAccess(userId, sprint.getProyectoId());
+        // 2. Validar autorización (generar reportes es una acción restringida al Scrum Master del proyecto)
+        validateScrumMasterAccess(userId, sprint.getProyectoId());
         
         // 3. Recopilar datos objetivos
         Map<String, BigDecimal> metricas = getSprintMetrics(sprintId);
@@ -99,11 +100,19 @@ public class AIReportService {
         );
     }
     
-    private void validateUserAccess(String userId, UUID proyectoId) {
-        boolean hasAccess = projectMemberRepository.existsByProyectoIdAndUserId(proyectoId, userId);
-        if (!hasAccess) {
-            log.warn("Usuario {} intentó acceder a sprint del proyecto {} sin autorización", userId, proyectoId);
-            throw new SecurityException("No tienes acceso a este proyecto");
+    /**
+     * Valida que el usuario sea miembro del proyecto Y su Scrum Master (rol de liderazgo
+     * a nivel de proyecto). Usado solo para la acción restringida de generar el reporte.
+     */
+    private void validateScrumMasterAccess(String userId, UUID proyectoId) {
+        ProjectMember member = projectMemberRepository.findByProyectoIdAndUserId(proyectoId, userId)
+                .orElseThrow(() -> {
+                    log.warn("Usuario {} intentó acceder a sprint del proyecto {} sin autorización", userId, proyectoId);
+                    return new SecurityException("No tienes acceso a este proyecto");
+                });
+        if (!"scrum_master".equals(member.getRol())) {
+            log.warn("Usuario {} intentó generar un reporte del proyecto {} sin ser Scrum Master", userId, proyectoId);
+            throw new SecurityException("Solo el Scrum Master del proyecto puede generar reportes");
         }
     }
     

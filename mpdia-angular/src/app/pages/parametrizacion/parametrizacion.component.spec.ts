@@ -334,6 +334,196 @@ describe('ParametrizacionComponent - Fase 16.5', () => {
     });
   });
 
+  // ══════════════════════════════════════════════════════════════════════
+  // Corrección del manejo de escalas — el formulario debe capturar la escala
+  // de forma estructurada (tipo/min/max/paso/sinLimite/descripcion), no solo
+  // el texto libre "escala", y debe validarla espejando al backend
+  // (ParametrizacionService.validarEscalaEstructurada()) antes de enviar.
+  // ══════════════════════════════════════════════════════════════════════
+  describe('Escala estructurada', () => {
+
+    function formularioBase(): void {
+      component.metrica = mockMetrica;
+      component.form.objetivo = 'obj';
+      component.form.procedimiento = 'proc';
+      component.form.indicadorVariable = 'ind';
+      localStorage.setItem('mpdia_proyecto_activo', JSON.stringify({ id: 'proj-1' }));
+    }
+
+    afterEach(() => localStorage.removeItem('mpdia_proyecto_activo'));
+
+    it('sin ningún campo estructurado: guarda igual (compatibilidad histórica)', () => {
+      formularioBase();
+      component.form.escala = 'texto libre sin estructurar';
+
+      component.guardar();
+
+      const req = httpMock.expectOne(`${environment.apiBaseUrl}/metric-ranking/parametrizacion`);
+      expect(req.request.body.escalaTipo).toBeUndefined();
+      req.flush({ id: 'p1', status: 'pendiente' });
+    });
+
+    it('escala 0-10 entera: envía los 5 campos estructurados correctos al backend', () => {
+      formularioBase();
+      component.form.escalaTipo = 'NUMERICA_ENTERA';
+      component.form.escalaMin = 0;
+      component.form.escalaMax = 10;
+      component.form.escalaPaso = 1;
+      component.form.escalaSinLimite = false;
+      component.form.escalaDescripcion = '0 = Muy malo; 10 = Excelente';
+
+      component.guardar();
+
+      const req = httpMock.expectOne(`${environment.apiBaseUrl}/metric-ranking/parametrizacion`);
+      expect(req.request.body.escalaTipo).toBe('NUMERICA_ENTERA');
+      expect(req.request.body.escalaMin).toBe(0);
+      expect(req.request.body.escalaMax).toBe(10);
+      expect(req.request.body.escalaPaso).toBe(1);
+      expect(req.request.body.escalaSinLimite).toBe(false);
+      req.flush({ id: 'p1', status: 'pendiente' });
+    });
+
+    it('escala sin límite superior: NO llama al backend con la petición inválida cuando falta el mínimo', () => {
+      formularioBase();
+      component.form.escalaTipo = 'NUMERICA_ENTERA';
+      component.form.escalaMin = undefined;
+      component.form.escalaSinLimite = true;
+      component.form.escalaPaso = 1;
+
+      component.guardar();
+
+      httpMock.expectNone(`${environment.apiBaseUrl}/metric-ranking/parametrizacion`);
+      expect(component.errorEscala).toContain('mínimo');
+    });
+
+    it('máximo menor que mínimo: se rechaza en el frontend antes de llamar al backend', () => {
+      formularioBase();
+      component.form.escalaTipo = 'NUMERICA_ENTERA';
+      component.form.escalaMin = 10;
+      component.form.escalaMax = 0;
+      component.form.escalaPaso = 1;
+
+      component.guardar();
+
+      httpMock.expectNone(`${environment.apiBaseUrl}/metric-ranking/parametrizacion`);
+      expect(component.errorEscala).toContain('menor que el mínimo');
+    });
+
+    it('paso <= 0: se rechaza en el frontend antes de llamar al backend', () => {
+      formularioBase();
+      component.form.escalaTipo = 'NUMERICA_ENTERA';
+      component.form.escalaMin = 0;
+      component.form.escalaMax = 10;
+      component.form.escalaPaso = 0;
+
+      component.guardar();
+
+      httpMock.expectNone(`${environment.apiBaseUrl}/metric-ranking/parametrizacion`);
+      expect(component.errorEscala).toContain('paso');
+    });
+
+    it('decimal en escala entera: se rechaza en el frontend antes de llamar al backend', () => {
+      formularioBase();
+      component.form.escalaTipo = 'NUMERICA_ENTERA';
+      component.form.escalaMin = 0.5;
+      component.form.escalaMax = 10;
+      component.form.escalaPaso = 1;
+
+      component.guardar();
+
+      httpMock.expectNone(`${environment.apiBaseUrl}/metric-ranking/parametrizacion`);
+      expect(component.errorEscala).toContain('enteros');
+    });
+
+    it('escalaSinLimite=true: al marcar el checkbox se limpia escalaMax', () => {
+      component.form.escalaMax = 999;
+      component.form.escalaSinLimite = true;
+
+      component.onEscalaSinLimiteChange();
+
+      expect(component.form.escalaMax).toBeUndefined();
+    });
+
+    it('escala de conteo (min=0, sin límite, paso=1): guarda correctamente', () => {
+      formularioBase();
+      component.form.escalaTipo = 'NUMERICA_ENTERA';
+      component.form.escalaMin = 0;
+      component.form.escalaSinLimite = true;
+      component.form.escalaPaso = 1;
+      component.form.escalaDescripcion = 'Cantidad de defectos encontrados durante el sprint.';
+
+      component.guardar();
+
+      const req = httpMock.expectOne(`${environment.apiBaseUrl}/metric-ranking/parametrizacion`);
+      expect(req.request.body.escalaSinLimite).toBe(true);
+      expect(req.request.body.escalaMax).toBeUndefined();
+      req.flush({ id: 'p1', status: 'pendiente' });
+    });
+
+    it('usarPropuesta() copia la escala estructurada de la IA al formulario', () => {
+      component.usarPropuesta({
+        ...mockPropuestaUnica,
+        escalaTipo: 'NUMERICA_ENTERA',
+        escalaMin: 0,
+        escalaMax: null as any,
+        escalaPaso: 1,
+        escalaSinLimite: true,
+        escalaDescripcion: 'Cantidad de problemas.'
+      });
+
+      expect(component.form.escalaTipo).toBe('NUMERICA_ENTERA');
+      expect(component.form.escalaSinLimite).toBe(true);
+      expect(component.form.escalaDescripcion).toBe('Cantidad de problemas.');
+    });
+  });
+
+  // ── Corrección de duplicados en Verificación: doble clic en el frontend ──
+  // guardar() (y guardarPropuesta()) fijaban this.guardando = true pero nunca
+  // comprobaban su valor anterior — un segundo clic disparado antes de que
+  // Angular reflejara [disabled]="guardando" en el DOM disparaba una SEGUNDA
+  // petición HTTP real. La protección definitiva contra duplicados está en el
+  // backend (advisory lock en MetricRankingService); esto solo evita la
+  // petición redundante en el caso común de un clic doble accidental.
+  describe('Doble clic en "Enviar al Scrum Master" (defensa de UX, no la protección principal)', () => {
+
+    function formularioBase(): void {
+      component.metrica = mockMetrica;
+      component.form.objetivo = 'obj';
+      component.form.procedimiento = 'proc';
+      component.form.indicadorVariable = 'ind';
+      component.form.escala = 'texto libre';
+      localStorage.setItem('mpdia_proyecto_activo', JSON.stringify({ id: 'proj-1' }));
+    }
+
+    afterEach(() => localStorage.removeItem('mpdia_proyecto_activo'));
+
+    it('dos llamadas a guardar() antes de que responda el backend generan una sola petición HTTP', () => {
+      formularioBase();
+
+      component.guardar(); // primer "clic": guardando pasa a true, se dispara el POST
+      component.guardar(); // segundo "clic" antes de que el backend responda: debe bloquearse
+
+      const req = httpMock.expectOne(`${environment.apiBaseUrl}/metric-ranking/parametrizacion`);
+      expect(component.guardando).toBeTrue();
+      req.flush({ id: 'p1', status: 'pendiente' });
+    });
+
+    it('tras terminar la primera petición (guardando vuelve a false), un reintento sí funciona', () => {
+      formularioBase();
+
+      component.guardar();
+      const primera = httpMock.expectOne(`${environment.apiBaseUrl}/metric-ranking/parametrizacion`);
+      primera.flush({ id: 'p1', status: 'pendiente' });
+      expect(component.guardando).toBeFalse();
+
+      component.guardar();
+      const segunda = httpMock.expectOne(`${environment.apiBaseUrl}/metric-ranking/parametrizacion`);
+      segunda.flush({ id: 'p1', status: 'pendiente' });
+
+      expect(component.guardando).toBeFalse();
+    });
+  });
+
   describe('Navegación', () => {
     
     it('volver() debe navegar a resumen-seleccion', () => {

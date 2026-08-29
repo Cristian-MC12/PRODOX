@@ -1,7 +1,9 @@
 // Autor: Cristian Santiago Martinez Cordoba — MPDIA
-// FASE 16 — Tests de EvaluacionComponent: la gráfica ahora usa MiniChartComponent
-// (ejes X/Y con numeración) pero la fuente de datos sigue siendo exactamente
-// la misma (EvaluacionService.detalle), sin ninguna fuente nueva ni duplicada.
+// Tests de EvaluacionComponent: la gráfica usa EvaluacionMetricChartComponent
+// (Chart.js con 2+ registros reales, tarjeta de dato único con 1, estado vacío
+// con 0 — ver metric-chart.component.spec.ts para el detalle de esos 3 estados)
+// pero la fuente de datos sigue siendo exactamente la misma
+// (EvaluacionService.detalle), sin ninguna fuente nueva ni duplicada.
 import { Component } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
@@ -22,16 +24,23 @@ function metricaDetalle(overrides: Partial<MetricaEvaluacionDetalleDto> = {}): M
     tipoAlcance: 'grupal',
     frecuenciaCaptura: 'por_sprint',
     formulaTexto: null,
+    // Dos sprints DISTINTOS (s1/s2): para frecuenciaCaptura='por_sprint', dos registros
+    // del MISMO sprint son 1 solo período (ver EvaluacionMetricChartComponent) — este
+    // fixture representa 2 períodos reales y comparables, que es lo que este describe
+    // ejercita (tendencia calculable, línea con 2 puntos).
     registros: [
       { id: 'r1', valor: 7, registradoAt: '2026-08-21T00:00:00Z', sprintId: 's1', sprintNumero: 1, userId: 'sm@test.com' },
-      { id: 'r2', valor: 8, registradoAt: '2026-08-22T00:00:00Z', sprintId: 's1', sprintNumero: 1, userId: 'sm@test.com' }
+      { id: 'r2', valor: 8, registradoAt: '2026-08-22T00:00:00Z', sprintId: 's2', sprintNumero: 2, userId: 'sm@test.com' }
     ],
     estadisticas: {
       totalRegistros: 2, promedio: 7.5, minimo: 7, maximo: 8, primerValor: 7, ultimoValor: 8,
       cambio: 1, cambioPct: 14.3, tendencia: 'ascendente', pendiente: 1,
       desviacionEstandar: null, coeficienteVariacion: null, variabilidad: null
     },
-    porSprint: [{ sprintId: 's1', sprintNumero: 1, totalRegistros: 2, promedio: 7.5, minimo: 7, maximo: 8 }],
+    porSprint: [
+      { sprintId: 's1', sprintNumero: 1, totalRegistros: 1, promedio: 7, minimo: 7, maximo: 7 },
+      { sprintId: 's2', sprintNumero: 2, totalRegistros: 1, promedio: 8, minimo: 8, maximo: 8 }
+    ],
     ...overrides
   };
 }
@@ -83,28 +92,27 @@ describe('EvaluacionComponent', () => {
     expect(component.datos.length).toBe(1);
   });
 
-  it('convierte los registros reales al formato de MiniChartComponent sin inventar datos', () => {
+  it('pasa los registros reales (sin transformar) al componente de gráfica de Evaluación', () => {
     evaluacionService.detalle.and.returnValue(of([metricaDetalle()]));
     fixture.detectChanges();
+    // Ver todos los sprints (comparación): el auto-filtro al sprint más reciente
+    // (cargar()) es una vista deliberada aparte, no lo que este test ejercita.
+    component.sprintFiltro = null;
+    fixture.detectChanges();
 
-    const puntos = component.paraMiniChart(component.datos[0].registros);
-    expect(puntos).toEqual([
-      { fecha: '2026-08-21T00:00:00Z', valor: 7 },
-      { fecha: '2026-08-22T00:00:00Z', valor: 8 }
-    ]);
+    const chartEl = fixture.nativeElement.querySelector('app-evaluacion-metric-chart');
+    expect(chartEl).toBeTruthy();
+    expect(component.registrosParaVista(component.datos[0])).toEqual(component.datos[0].registros);
   });
 
-  it('renderiza la gráfica (app-mini-chart) con ejes/numeración para la métrica con datos', () => {
+  it('renderiza Chart.js (canvas) para la métrica con 2 registros reales', () => {
     evaluacionService.detalle.and.returnValue(of([metricaDetalle()]));
     fixture.detectChanges();
+    component.sprintFiltro = null; // ver todos los sprints: los 2 registros (2 períodos) juntos
+    fixture.detectChanges();
 
-    const miniChart = fixture.nativeElement.querySelector('app-mini-chart');
-    expect(miniChart).toBeTruthy();
-    // MiniChartComponent dibuja sus propios ejes con numeración — ya cubierto
-    // por mini-chart.component.spec.ts; aquí solo verificamos que Evaluación
-    // efectivamente lo usa en vez del SVG artesanal anterior.
-    expect(fixture.nativeElement.querySelector('svg')).toBeTruthy();
-    expect(fixture.nativeElement.querySelectorAll('circle').length).toBe(2);
+    expect(fixture.nativeElement.querySelector('app-evaluacion-metric-chart')).toBeTruthy();
+    expect(fixture.nativeElement.querySelector('canvas')).toBeTruthy();
   });
 
   it('sin datos, muestra el mensaje de "completá Ejecución primero" y ningún gráfico', () => {
@@ -112,7 +120,7 @@ describe('EvaluacionComponent', () => {
     fixture.detectChanges();
 
     expect(fixture.nativeElement.textContent).toContain('Completá la fase de Ejecución primero');
-    expect(fixture.nativeElement.querySelector('app-mini-chart')).toBeFalsy();
+    expect(fixture.nativeElement.querySelector('app-evaluacion-metric-chart')).toBeFalsy();
   });
 
   // FASE 8C — título de card usa variableDescripcion (nombre amigable) cuando existe,

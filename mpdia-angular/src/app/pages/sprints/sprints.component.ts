@@ -10,6 +10,8 @@ import { SprintService } from '../../services/sprint.service';
 import { SprintDto } from '../../models/sprint.model';
 import { ProyectoDto } from '../../models/proyecto.model';
 
+type AccionSprint = 'cerrar' | 'reabrir' | 'finalizar';
+
 @Component({
   selector: 'app-sprints',
   standalone: true,
@@ -58,12 +60,12 @@ import { ProyectoDto } from '../../models/proyecto.model';
           </div>
         </div>
 
-        <!-- Cerrar sprint e iniciar siguiente (solo SM) -->
+        <!-- Finalizar sprint en ejecución e iniciar el siguiente (solo SM) -->
         @if (esScrumMaster && sprintActivo) {
           <div class="card mb-4">
             <div class="card-header fw-semibold small">
               <i class="bi bi-arrow-right-circle me-1 text-warning"></i>
-              Cerrar Sprint {{ sprintActivo.numero }} e iniciar Sprint {{ sprintActivo.numero + 1 }}
+              Finalizar Sprint {{ sprintActivo.numero }} e iniciar Sprint {{ sprintActivo.numero + 1 }}
             </div>
             <div class="card-body">
               <div class="mb-3">
@@ -76,14 +78,10 @@ import { ProyectoDto } from '../../models/proyecto.model';
                           [(ngModel)]="nuevoSprintGoal"></textarea>
               </div>
               <button class="btn btn-warning btn-sm"
-                      [disabled]="!nuevoSprintGoal.trim() || cerrando"
-                      (click)="cerrarEIniciarSiguiente()">
-                @if (cerrando) {
-                  <span class="spinner-border spinner-border-sm me-1"></span>
-                } @else {
-                  <i class="bi bi-arrow-clockwise me-1"></i>
-                }
-                Cerrar Sprint {{ sprintActivo.numero }} e iniciar Sprint {{ sprintActivo.numero + 1 }}
+                      [disabled]="!nuevoSprintGoal.trim() || procesando"
+                      (click)="pedirCerrarSiguiente()">
+                <i class="bi bi-arrow-clockwise me-1"></i>
+                Finalizar Sprint {{ sprintActivo.numero }} e iniciar Sprint {{ sprintActivo.numero + 1 }}
               </button>
             </div>
           </div>
@@ -112,6 +110,9 @@ import { ProyectoDto } from '../../models/proyecto.model';
                     <th style="width:120px">Inicio</th>
                     <th style="width:120px">Fin</th>
                     <th style="width:100px">Estado</th>
+                    @if (esScrumMaster) {
+                      <th style="width:140px" class="text-end pe-3">Acciones</th>
+                    }
                   </tr>
                 </thead>
                 <tbody>
@@ -137,11 +138,57 @@ import { ProyectoDto } from '../../models/proyecto.model';
                              s.estado === 'reabierto'    ? 'Reabierto' : 'Finalizado' }}
                         </span>
                       </td>
+                      @if (esScrumMaster) {
+                        <td class="align-middle text-end pe-3">
+                          @if (s.estado === 'finalizado') {
+                            <button class="btn btn-outline-info btn-sm py-0 px-2"
+                                    [disabled]="procesando"
+                                    (click)="pedirReabrir(s)">
+                              <i class="bi bi-arrow-counterclockwise me-1"></i>Reabrir
+                            </button>
+                          } @else if (s.estado === 'reabierto') {
+                            <button class="btn btn-outline-secondary btn-sm py-0 px-2"
+                                    [disabled]="procesando"
+                                    (click)="pedirFinalizar(s)">
+                              <i class="bi bi-check2-circle me-1"></i>Finalizar
+                            </button>
+                          }
+                        </td>
+                      }
                     </tr>
                   }
                 </tbody>
               </table>
             }
+          </div>
+        </div>
+      }
+
+      <!-- Modal de confirmación (mismo patrón visual que Proyectos: eliminar proyecto) -->
+      @if (accionPendiente) {
+        <div class="modal d-block" style="background-color: rgba(0,0,0,0.5)" (click)="cancelarAccion()">
+          <div class="modal-dialog" (click)="$event.stopPropagation()">
+            <div class="modal-content">
+              <div class="modal-header">
+                <h5 class="modal-title">
+                  <i class="bi bi-question-circle-fill me-2 text-warning"></i>
+                  {{ tituloAccion() }}
+                </h5>
+                <button type="button" class="btn-close" [disabled]="procesando" (click)="cancelarAccion()"></button>
+              </div>
+              <div class="modal-body">
+                <p>{{ mensajeAccion() }}</p>
+              </div>
+              <div class="modal-footer">
+                <button class="btn btn-outline-secondary btn-sm" [disabled]="procesando" (click)="cancelarAccion()">
+                  Cancelar
+                </button>
+                <button class="btn btn-warning btn-sm" [disabled]="procesando" (click)="confirmarAccion()">
+                  @if (procesando) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                  Sí, confirmar
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       }
@@ -154,10 +201,13 @@ export class SprintsComponent implements OnInit {
   sprintActivo: SprintDto | null = null;
   proyecto: ProyectoDto | null   = null;
   cargando        = true;
-  cerrando        = false;
   nuevoSprintGoal = '';
   alertMsg   = '';
   alertClass = 'alert-success';
+
+  /** Acción de cambio de estado pendiente de confirmación. */
+  accionPendiente: { tipo: AccionSprint; sprint?: SprintDto } | null = null;
+  procesando = false;
 
   constructor(
     public  auth: AuthService,
@@ -190,23 +240,82 @@ export class SprintsComponent implements OnInit {
     });
   }
 
-  cerrarEIniciarSiguiente(): void {
-    if (!this.nuevoSprintGoal.trim() || !this.proyecto) return;
-    this.cerrando = true;
-    this.sprintService.cerrarEIniciarSiguiente(this.proyecto.id, this.nuevoSprintGoal).pipe(
+  // ── Confirmación de acciones de estado ──────────────────────────────────
+
+  /** Cerrar el sprint activo e iniciar el siguiente; no elimina nada todavía. */
+  pedirCerrarSiguiente(): void {
+    if (!this.nuevoSprintGoal.trim() || !this.sprintActivo) return;
+    this.accionPendiente = { tipo: 'cerrar' };
+  }
+
+  pedirReabrir(s: SprintDto): void {
+    this.accionPendiente = { tipo: 'reabrir', sprint: s };
+  }
+
+  pedirFinalizar(s: SprintDto): void {
+    this.accionPendiente = { tipo: 'finalizar', sprint: s };
+  }
+
+  cancelarAccion(): void {
+    if (this.procesando) return;
+    this.accionPendiente = null;
+  }
+
+  tituloAccion(): string {
+    switch (this.accionPendiente?.tipo) {
+      case 'cerrar':    return 'Finalizar sprint';
+      case 'reabrir':   return 'Reabrir sprint';
+      case 'finalizar': return 'Finalizar sprint';
+      default:          return '';
+    }
+  }
+
+  mensajeAccion(): string {
+    const accion = this.accionPendiente;
+    if (!accion) return '';
+    if (accion.tipo === 'cerrar' && this.sprintActivo) {
+      return `¿Seguro que querés finalizar el Sprint ${this.sprintActivo.numero} e iniciar el Sprint ${this.sprintActivo.numero + 1}?`;
+    }
+    if (accion.tipo === 'reabrir' && accion.sprint) {
+      return `¿Seguro que querés reabrir el Sprint ${accion.sprint.numero}?`;
+    }
+    if (accion.tipo === 'finalizar' && accion.sprint) {
+      return `¿Seguro que querés volver a finalizar el Sprint ${accion.sprint.numero}?`;
+    }
+    return '';
+  }
+
+  confirmarAccion(): void {
+    if (!this.accionPendiente || this.procesando) return;
+    const accion = this.accionPendiente;
+    this.procesando = true;
+
+    const obs = accion.tipo === 'cerrar'
+      ? this.sprintService.cerrarEIniciarSiguiente(this.proyecto!.id, this.nuevoSprintGoal)
+      : accion.tipo === 'reabrir'
+        ? this.sprintService.reabrir(accion.sprint!.id)
+        : this.sprintService.finalizarReabierto(accion.sprint!.id);
+
+    obs.pipe(
       catchError(err => {
-        this.showAlert(err?.error?.error ?? 'Error al cerrar el sprint.', 'alert-danger');
-        this.cerrando = false;
+        this.showAlert(err?.error?.error ?? 'Error al actualizar el sprint.', 'alert-danger');
         return of(null);
       })
-    ).subscribe(nuevoSprint => {
-      if (nuevoSprint) {
-        localStorage.setItem('mpdia_sprint_activo', JSON.stringify(nuevoSprint));
-        this.nuevoSprintGoal = '';
-        this.showAlert(`Sprint ${nuevoSprint.numero} iniciado.`, 'alert-success');
+    ).subscribe(resultado => {
+      if (resultado) {
+        if (accion.tipo === 'cerrar') {
+          localStorage.setItem('mpdia_sprint_activo', JSON.stringify(resultado));
+          this.nuevoSprintGoal = '';
+          this.showAlert(`Sprint ${resultado.numero} iniciado.`, 'alert-success');
+        } else if (accion.tipo === 'reabrir') {
+          this.showAlert(`Sprint ${resultado.numero} reabierto.`, 'alert-success');
+        } else {
+          this.showAlert(`Sprint ${resultado.numero} finalizado.`, 'alert-success');
+        }
         this.cargar();
       }
-      this.cerrando = false;
+      this.procesando = false;
+      this.accionPendiente = null;
     });
   }
 

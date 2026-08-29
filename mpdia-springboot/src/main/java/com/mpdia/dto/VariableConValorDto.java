@@ -22,5 +22,9 @@ public record VariableConValorDto(
     String valorTexto,
     Boolean valorBool,
     /** FASE 16 — frecuencia de captura de la variable (diaria | semanal | por_sprint | ilimitada). */
-    String frecuenciaCaptura
+    String frecuenciaCaptura,
+    /** Escala estructurada — NUMERICA_ENTERA | NUMERICA_DECIMAL, NULL = sin estructura. */
+    String escalaTipo,
+    BigDecimal escalaPaso,
+    Boolean escalaSinLimite
 ) {}

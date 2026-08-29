@@ -1,0 +1,11 @@
+<!-- Autor: Cristian Santiago Martinez Cordoba — MPDIA -->
+@if (dataPoints && dataPoints.length > 0) {
+  <div class="chart-canvas-wrap">
+    <canvas #canvasRef></canvas>
+  </div>
+} @else {
+  <div class="empty-chart">
+    <i class="bi bi-graph-up"></i>
+    <p class="mb-0">No hay datos suficientes</p>
+  </div>
+}

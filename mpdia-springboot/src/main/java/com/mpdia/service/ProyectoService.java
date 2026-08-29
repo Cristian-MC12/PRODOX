@@ -66,8 +66,11 @@ public class ProyectoService {
                 .toList();
     }
 
-    /** Obtener proyecto por ID */
-    public ProyectoDto getById(UUID id) {
+    /** Obtener proyecto por ID — requiere ser miembro del proyecto */
+    public ProyectoDto getById(UUID id, String userId) {
+        if (!memberRepo.existsByProyectoIdAndUserId(id, userId)) {
+            throw new SecurityException("No tienes acceso a este proyecto");
+        }
         return proyectoRepo.findById(id)
                 .map(this::toDto)
                 .orElseThrow(() -> new IllegalArgumentException("Proyecto no encontrado."));
@@ -84,6 +87,29 @@ public class ProyectoService {
         p.setEstado("finalizado");
         p.setUpdatedAt(Instant.now());
         return toDto(proyectoRepo.save(p));
+    }
+
+    /**
+     * Eliminar proyecto — solo el Scrum Master dueño del proyecto (FASE 21).
+     * La autorización se valida acá en el backend (no solo ocultando el botón
+     * en Angular): se exige rol scrum_master Y que sea el dueño de ESTE
+     * proyecto, mismo criterio que finalizar(). El borrado en cascada de
+     * sprints, miembros, invitaciones, variables y resultados está a cargo
+     * de las FK ON DELETE CASCADE definidas en las migraciones.
+     */
+    @Transactional
+    public void eliminar(UUID id, String userId) {
+        Proyecto p = proyectoRepo.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Proyecto no encontrado."));
+
+        var user = userRepo.findById(UUID.fromString(userId))
+                .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado."));
+
+        if (!"scrum_master".equals(user.getRole()) || !p.getScrumMasterId().equals(userId)) {
+            throw new IllegalArgumentException("Solo el Scrum Master del proyecto puede eliminarlo.");
+        }
+
+        proyectoRepo.delete(p);
     }
 
     private ProyectoDto toDto(Proyecto p) {

@@ -111,7 +111,17 @@ public class MetricaSimilitudService {
                     + (mismaCategoria ? PESO_CATEGORIA : 0.0);
             int scorePorcentaje = (int) Math.round(total * 100);
 
-            if (scorePorcentaje < UMBRAL_POSIBLE_DUPLICADO) {
+            // Causa raíz de un duplicado real encontrado en catálogo ("Defectos" vs.
+            // "Defectos encontrados", categorías 1 y 3): el formulario de Crear métrica
+            // con IA no le pide categoría a Gemini y siempre parte de categoriaId=1 hasta
+            // que el Scrum Master la cambia manualmente — si no coincide con la categoría
+            // real de la métrica existente, PESO_CATEGORIA (15 pts) no suma y el score
+            // total cae por debajo del umbral aunque el NOMBRE por sí solo ya sea muy
+            // similar (Jaccard 0.5, ej. "defectos" ⊂ "defectos encontrados"). Un nombre
+            // fuertemente similar debe bastar por sí mismo para avisar, sin depender de
+            // que la categoría (nunca sugerida por la IA) también coincida.
+            boolean nombreMuySimilar = scoreNombre >= 0.5;
+            if (scorePorcentaje < UMBRAL_POSIBLE_DUPLICADO && !nombreMuySimilar) {
                 continue;
             }
 

@@ -61,7 +61,19 @@ import { filter, Subscription } from 'rxjs';
           </a>
         </li>
 
-        <!-- Equipo: inmediatamente debajo de Proyectos (reorganización de navegación) -->
+        <!-- Sprints: estructura del proyecto (no es una fase secuencial del
+             proceso como Planeación/Ejecución/Evaluación), agrupado junto a
+             Proyectos/Equipo. Mismo routerLink /sprints, sin duplicar la ruta. -->
+        @if (proyectoActivo()) {
+          <li class="nav-item">
+            <a class="nav-link" routerLink="/sprints" routerLinkActive="active" (click)="close()">
+              <i class="bi bi-calendar3-range"></i>
+              <span>Sprints</span>
+            </a>
+          </li>
+        }
+
+        <!-- Equipo: inmediatamente debajo de Proyectos/Sprints (reorganización de navegación) -->
         <li class="nav-item">
           <a class="nav-link" routerLink="/equipo" routerLinkActive="active" (click)="close()">
             <i class="bi bi-people"></i>Equipo

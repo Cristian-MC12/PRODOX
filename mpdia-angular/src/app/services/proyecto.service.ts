@@ -28,4 +28,9 @@ export class ProyectoService {
   finalizar(id: string): Observable<ProyectoDto> {
     return this.http.patch<ProyectoDto>(`${this.base}/${id}/finalizar`, {});
   }
+
+  /** Eliminar proyecto (solo Scrum Master dueño, validado también en backend) */
+  eliminar(id: string): Observable<void> {
+    return this.http.delete<void>(`${this.base}/${id}`);
+  }
 }

@@ -262,7 +262,22 @@ export class ResumenSeleccionComponent implements OnInit {
             objetivo: p.objetivo,
             procedimiento: p.procedimiento,
             indicadorVariable: p.indicadorVariable || p.escala,
-            escala: p.escala
+            escala: p.escala,
+            // Corrección de duplicados en Verificación: si esta parametrización ya tiene
+            // escala estructurada en el backend, hay que conservarla acá — de lo contrario
+            // un reenvío desde esta pantalla la manda en null y aceptar() abajo la trata
+            // como contenido distinto, creando una versión nueva innecesaria (duplicado).
+            tipoOperacion: p.tipoOperacion ?? null,
+            formulaAcademica: p.formulaAcademica ?? null,
+            unidadResultado: p.unidadResultado ?? null,
+            fuenteAcademica: p.fuenteAcademica ?? null,
+            frecuenciaCaptura: p.frecuenciaCaptura ?? null,
+            escalaTipo: p.escalaTipo ?? null,
+            escalaMin: p.escalaMin ?? null,
+            escalaMax: p.escalaMax ?? null,
+            escalaPaso: p.escalaPaso ?? null,
+            escalaSinLimite: p.escalaSinLimite ?? null,
+            escalaDescripcion: p.escalaDescripcion ?? null
           }
         }));
         this.cargando = false;
@@ -343,7 +358,20 @@ export class ResumenSeleccionComponent implements OnInit {
         // Revisión de frecuencia de captura: antes no se propagaba aquí tampoco,
         // dejando la parametrización siempre en "por_sprint" al enviarla al
         // Scrum Master por este flujo (ver MetricRankingService.guardarPorMetrica()).
-        frecuenciaCaptura: s.parametrizacion!.frecuenciaCaptura ?? 'por_sprint'
+        frecuenciaCaptura: s.parametrizacion!.frecuenciaCaptura ?? 'por_sprint',
+        // Corrección de duplicados en Verificación: esta pantalla puede reenviar una
+        // métrica que YA fue enviada individualmente desde Parametrización (el usuario
+        // llega acá y vuelve a pulsar "Enviar al Scrum Master"). Antes este payload no
+        // incluía la escala estructurada, así que el backend veía un contenido distinto
+        // al ya pendiente y creaba una versión nueva — dos filas "pendiente" para la
+        // misma métrica. Enviando los mismos campos que parametrizacion.component.ts,
+        // el backend reconoce el reenvío como idéntico y no duplica.
+        escalaTipo:        s.parametrizacion!.escalaTipo ?? null,
+        escalaMin:         s.parametrizacion!.escalaMin ?? null,
+        escalaMax:         s.parametrizacion!.escalaMax ?? null,
+        escalaPaso:        s.parametrizacion!.escalaPaso ?? null,
+        escalaSinLimite:   s.parametrizacion!.escalaSinLimite ?? null,
+        escalaDescripcion: s.parametrizacion!.escalaDescripcion ?? null
       }).pipe(
         map(() => ({ ok: true as const, nombre: s.metricaNombre })),
         catchError(err => of({

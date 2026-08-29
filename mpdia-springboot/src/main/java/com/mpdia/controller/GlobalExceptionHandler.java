@@ -143,6 +143,21 @@ public class GlobalExceptionHandler {
         return buildResponse(HttpStatus.NOT_FOUND, "Recurso no encontrado: " + ex.getResourcePath());
     }
 
+    /**
+     * Método HTTP no soportado en esa ruta (ej: DELETE contra un mapping que
+     * solo expone GET/PATCH). Sin este handler específico caía en
+     * handleGeneric() y se devolvía un 500 genérico — indistinguible para el
+     * frontend de un error real del servidor, cuando en realidad el método no
+     * está mapeado (típicamente porque el backend en ejecución quedó con
+     * bytecode viejo, sin recompilar/reiniciar tras agregar el endpoint).
+     */
+    @ExceptionHandler(org.springframework.web.HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<Map<String, Object>> handleMethodNotSupported(
+            org.springframework.web.HttpRequestMethodNotSupportedException ex) {
+        return buildResponse(HttpStatus.METHOD_NOT_ALLOWED,
+                "Método " + ex.getMethod() + " no soportado en este recurso.");
+    }
+
     /** Cualquier otra excepción no controlada */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, Object>> handleGeneric(Exception ex) {

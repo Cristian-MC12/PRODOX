@@ -64,6 +64,29 @@ public class MetricParametrizacion {
     @Column(nullable = false, length = 255)
     private String escala;
 
+    /**
+     * Escala estructurada (reemplaza depender de parsear `escala` en texto libre).
+     * escalaTipo NULL = parametrización histórica sin estructura — no se infiere,
+     * se deja explícitamente sin restricción (ver migración V32).
+     */
+    @Column(name = "escala_tipo", length = 30)
+    private String escalaTipo;
+
+    @Column(name = "escala_min")
+    private java.math.BigDecimal escalaMin;
+
+    @Column(name = "escala_max")
+    private java.math.BigDecimal escalaMax;
+
+    @Column(name = "escala_paso")
+    private java.math.BigDecimal escalaPaso;
+
+    @Column(name = "escala_sin_limite")
+    private Boolean escalaSinLimite;
+
+    @Column(name = "escala_descripcion", columnDefinition = "TEXT")
+    private String escalaDescripcion;
+
     /** Si esta parametrización fue copiada de otra, apunta a la original */
     @Column(name = "metrica_base_id")
     private UUID metricaBaseId;

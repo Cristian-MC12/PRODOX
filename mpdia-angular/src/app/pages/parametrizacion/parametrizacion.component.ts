@@ -275,7 +275,18 @@ import { environment } from '../../../environments/environment';
                 <dt class="col-sm-3 text-muted">
                   <i class="bi bi-bar-chart-steps me-1"></i>Escala
                 </dt>
-                <dd class="col-sm-9">{{ propuestas[0].escala }}</dd>
+                <dd class="col-sm-9">
+                  {{ propuestas[0].escala }}
+                  @if (propuestas[0].escalaTipo) {
+                    <div class="text-muted" style="font-size:0.72rem">
+                      {{ propuestas[0].escalaTipo === 'NUMERICA_ENTERA' ? 'Entera' : 'Decimal' }},
+                      {{ propuestas[0].escalaMin }}
+                      –
+                      {{ propuestas[0].escalaSinLimite ? 'sin límite' : propuestas[0].escalaMax }},
+                      paso {{ propuestas[0].escalaPaso }}
+                    </div>
+                  }
+                </dd>
 
                 @if (propuestas[0].formulaAcademica) {
                   <dt class="col-sm-3 text-muted">
@@ -379,13 +390,50 @@ import { environment } from '../../../environments/environment';
                        placeholder="Ej: Velocidad = SP completados / SP planificados"
                        [(ngModel)]="form.indicadorVariable">
               </div>
-              <div class="col-md-6">
+              <div class="col-12">
                 <label class="form-label small fw-semibold">
                   Escala de medición <span class="text-danger">*</span>
                 </label>
-                <input type="text" class="form-control form-control-sm"
-                       placeholder="Ej: Porcentual 0-100%, Numérica 0-50 pts..."
-                       [(ngModel)]="form.escala">
+                <div class="row g-2 p-2 rounded" style="background-color:var(--background)">
+                  <div class="col-md-3">
+                    <label class="form-label small text-muted mb-1">Tipo</label>
+                    <select class="form-select form-select-sm" [(ngModel)]="form.escalaTipo">
+                      <option [ngValue]="undefined">Sin definir</option>
+                      <option value="NUMERICA_ENTERA">Numérica entera</option>
+                      <option value="NUMERICA_DECIMAL">Numérica decimal</option>
+                    </select>
+                  </div>
+                  <div class="col-md-3">
+                    <label class="form-label small text-muted mb-1">Mínimo</label>
+                    <input type="number" class="form-control form-control-sm" [(ngModel)]="form.escalaMin">
+                  </div>
+                  <div class="col-md-3">
+                    <label class="form-label small text-muted mb-1">Máximo</label>
+                    <input type="number" class="form-control form-control-sm"
+                           [(ngModel)]="form.escalaMax" [disabled]="!!form.escalaSinLimite">
+                  </div>
+                  <div class="col-md-3">
+                    <label class="form-label small text-muted mb-1">Paso</label>
+                    <input type="number" class="form-control form-control-sm" step="0.01" min="0.01"
+                           [(ngModel)]="form.escalaPaso">
+                  </div>
+                  <div class="col-md-6 d-flex align-items-center">
+                    <div class="form-check mt-3">
+                      <input class="form-check-input" type="checkbox" id="escalaSinLimite"
+                             [(ngModel)]="form.escalaSinLimite" (ngModelChange)="onEscalaSinLimiteChange()">
+                      <label class="form-check-label small" for="escalaSinLimite">Sin límite superior</label>
+                    </div>
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label small text-muted mb-1">Descripción de los valores (opcional)</label>
+                    <input type="text" class="form-control form-control-sm"
+                           placeholder="Ej: 0 = Muy malo; 10 = Excelente"
+                           [(ngModel)]="form.escalaDescripcion">
+                  </div>
+                  @if (errorEscala) {
+                    <div class="col-12"><div class="text-danger small mb-0">{{ errorEscala }}</div></div>
+                  }
+                </div>
               </div>
               <div class="col-md-6">
                 <label class="form-label small fw-semibold">
@@ -490,6 +538,8 @@ export class ParametrizacionComponent implements OnInit {
   generando  = false;
   guardando  = false;
   errorGenAI = '';
+  /** Corrección del manejo de escalas: error de validación de la escala estructurada. */
+  errorEscala = '';
   
   // FASE 16.6: Aprobación y versionado
   parametrizacionId: string | null = null;
@@ -582,8 +632,15 @@ export class ParametrizacionComponent implements OnInit {
       fuenteAcademica:   t.fuenteAcademica ?? undefined,
       formulaAcademica:  t.formulaAcademica ?? undefined,
       tipoOperacion:     t.tipoOperacion ?? undefined,
-      unidadResultado:   t.unidadResultado ?? undefined
+      unidadResultado:   t.unidadResultado ?? undefined,
+      escalaTipo:        t.escalaTipo,
+      escalaMin:         t.escalaMin,
+      escalaMax:         t.escalaMax,
+      escalaPaso:        t.escalaPaso,
+      escalaSinLimite:   t.escalaSinLimite,
+      escalaDescripcion: t.escalaDescripcion
     };
+    this.errorEscala = '';
     this.propuestaElegida = null;
     // Incrementar el ranking de uso de esta parametrización
     if (this.metrica?.factorId) {
@@ -622,7 +679,13 @@ export class ParametrizacionComponent implements OnInit {
           fuenteAcademica: parametrizacion.fuenteAcademica || '',
           formulaAcademica: parametrizacion.formulaAcademica || '',
           tipoOperacion: parametrizacion.tipoOperacion || '',
-          unidadResultado: parametrizacion.unidadResultado || ''
+          unidadResultado: parametrizacion.unidadResultado || '',
+          escalaTipo: parametrizacion.escalaTipo ?? undefined,
+          escalaMin: parametrizacion.escalaMin ?? undefined,
+          escalaMax: parametrizacion.escalaMax ?? undefined,
+          escalaPaso: parametrizacion.escalaPaso ?? undefined,
+          escalaSinLimite: parametrizacion.escalaSinLimite ?? undefined,
+          escalaDescripcion: parametrizacion.escalaDescripcion ?? undefined
         };
       } else {
         // No existe parametrización aprobada aún
@@ -650,9 +713,16 @@ export class ParametrizacionComponent implements OnInit {
       fuenteAcademica:   b.fuenteAcademica ?? undefined,
       formulaAcademica:  b.formulaAcademica ?? undefined,
       tipoOperacion:     b.tipoOperacion ?? undefined,
-      unidadResultado:   b.unidadResultado ?? undefined
+      unidadResultado:   b.unidadResultado ?? undefined,
+      escalaTipo:        b.escalaTipo,
+      escalaMin:         b.escalaMin,
+      escalaMax:         b.escalaMax,
+      escalaPaso:        b.escalaPaso,
+      escalaSinLimite:   b.escalaSinLimite,
+      escalaDescripcion: b.escalaDescripcion
     };
     this.propuestaElegida = null;
+    this.errorEscala = '';
   }
 
   generarPropuestas(): void {
@@ -692,8 +762,18 @@ export class ParametrizacionComponent implements OnInit {
       tipoOperacion:     p.tipoOperacion || '',
       unidadResultado:   p.unidadResultado || '',
       nombreVariable:    p.nombreVariable || '',
-      propuestaElegida:  0  // índice 0 ya que ahora solo hay 1 propuesta
+      propuestaElegida:  0,  // índice 0 ya que ahora solo hay 1 propuesta
+      // Corrección del manejo de escalas: la IA propone una escala estructurada
+      // coherente con la métrica (nunca 0-10 forzado) — el Scrum Master puede
+      // ajustarla en el formulario antes de guardar/aprobar.
+      escalaTipo:        p.escalaTipo,
+      escalaMin:         p.escalaMin,
+      escalaMax:         p.escalaMax,
+      escalaPaso:        p.escalaPaso,
+      escalaSinLimite:   p.escalaSinLimite,
+      escalaDescripcion: p.escalaDescripcion
     };
+    this.errorEscala = '';
     // Scroll al formulario para que el usuario vea los cambios
     setTimeout(() => {
       const formulario = document.querySelector('.card:last-of-type');
@@ -730,13 +810,95 @@ export class ParametrizacionComponent implements OnInit {
       [this.calcularEstado()];
   }
 
+  /**
+   * Corrección del manejo de escalas: si se marca "Sin límite superior", el
+   * máximo deja de ser obligatorio/editable — se limpia para que nunca se
+   * envíe un valor inconsistente con escalaSinLimite=true.
+   */
+  onEscalaSinLimiteChange(): void {
+    if (this.form.escalaSinLimite) {
+      this.form.escalaMax = undefined;
+    }
+  }
+
+  /**
+   * Espeja ParametrizacionService.validarEscalaEstructurada() en el backend:
+   * misma autoridad, pero acá se ejecuta ANTES de enviar la petición para que
+   * el Scrum Master vea el error de inmediato, sin esperar un 400 del servidor.
+   * El backend sigue siendo la autoridad final — esta validación es una
+   * comodidad de UI, nunca un sustituto de la del servidor.
+   */
+  private validarEscala(): boolean {
+    this.errorEscala = '';
+    const { escalaTipo, escalaMin, escalaMax, escalaPaso, escalaSinLimite } = this.form;
+    const algunCampoInformado = escalaTipo != null || escalaMin != null || escalaMax != null
+      || escalaPaso != null || escalaSinLimite != null;
+    if (!algunCampoInformado) {
+      return true; // no estructurada: compatibilidad, se permite (ver backend)
+    }
+    if (!escalaTipo) {
+      this.errorEscala = 'Seleccioná el tipo de escala.';
+      return false;
+    }
+    if (escalaMin == null) {
+      this.errorEscala = 'El mínimo de la escala es obligatorio.';
+      return false;
+    }
+    if (escalaPaso == null || escalaPaso <= 0) {
+      this.errorEscala = 'El paso de la escala debe ser mayor que 0.';
+      return false;
+    }
+    if (!escalaSinLimite) {
+      if (escalaMax == null) {
+        this.errorEscala = 'El máximo de la escala es obligatorio (o marcá "Sin límite superior").';
+        return false;
+      }
+      if (escalaMax < escalaMin) {
+        this.errorEscala = 'El máximo no puede ser menor que el mínimo.';
+        return false;
+      }
+    }
+    if (escalaTipo === 'NUMERICA_ENTERA') {
+      const esEntero = (n: number) => Number.isInteger(n);
+      if (!esEntero(escalaMin) || !esEntero(escalaPaso) || (!escalaSinLimite && !esEntero(escalaMax!))) {
+        this.errorEscala = 'Para escala numérica entera, mínimo/máximo/paso deben ser números enteros.';
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /** Resumen legible auto-generado desde la escala estructurada, para el campo de texto libre `escala`. */
+  private escalaTexto(): string {
+    const f = this.form;
+    if (!f.escalaTipo || f.escalaMin == null) {
+      return f.escala || 'Escala no definida';
+    }
+    const tipo = f.escalaTipo === 'NUMERICA_ENTERA' ? 'Numérica entera' : 'Numérica decimal';
+    const rango = f.escalaSinLimite ? `${f.escalaMin} o más` : `${f.escalaMin} a ${f.escalaMax}`;
+    const paso = f.escalaPaso != null ? `, paso ${f.escalaPaso}` : '';
+    return `${tipo}, ${rango}${paso}`;
+  }
+
   guardar(): void {
     if (!this.metrica) return;
+    // Corrección de duplicados en Verificación: reentrada bloqueada sobre el estado
+    // real del componente, no solo sobre [disabled]="guardando" del template — dos
+    // clics muy rápidos pueden invocar guardar() dos veces antes de que Angular
+    // refleje el atributo disabled en el DOM (mismo patrón ya aplicado en
+    // resumen-seleccion.component.ts:aceptar()). La protección real y definitiva
+    // contra duplicados sigue estando en el backend (MetricRankingService), esto
+    // es solo una mejora de UX que evita una petición HTTP innecesaria.
+    if (this.guardando) return;
+    if (!this.validarEscala()) return;
     this.guardando = true;
+
+    const escalaTexto = this.escalaTexto();
 
     // Guardar en localStorage (estado local del sprint)
     this.seleccionService.parametrizar(this.metrica.id, {
       ...this.form,
+      escala: escalaTexto,
       propuestaElegida: this.propuestaElegida ?? undefined
     });
 
@@ -749,7 +911,7 @@ export class ParametrizacionComponent implements OnInit {
       objetivo:          this.form.objetivo,
       procedimiento:     this.form.procedimiento,
       indicadorVariable: this.form.indicadorVariable,
-      escala:            this.form.escala,
+      escala:            escalaTexto,
       metricaBaseId:     this.parametrizacionBase?.id ?? null,
       proyectoId:        proyectoId,
       metricaId:         this.metrica.factorId,  // desde Planeación, factorId contiene el metricaId
@@ -762,10 +924,23 @@ export class ParametrizacionComponent implements OnInit {
       // Revisión de frecuencia de captura: antes no se enviaba acá, por lo que el
       // backend la persistía siempre como "por_sprint" sin importar lo elegido
       // en el selector de arriba (ver MetricRankingService.guardarPorMetrica()).
-      frecuenciaCaptura: this.form.frecuenciaCaptura || 'por_sprint'
+      frecuenciaCaptura: this.form.frecuenciaCaptura || 'por_sprint',
+      // Corrección del manejo de escalas: fuente de verdad estructurada que
+      // Ejecución usará para mostrar y validar los valores.
+      escalaTipo:        this.form.escalaTipo,
+      escalaMin:         this.form.escalaMin,
+      escalaMax:         this.form.escalaMax,
+      escalaPaso:        this.form.escalaPaso,
+      escalaSinLimite:   this.form.escalaSinLimite,
+      escalaDescripcion: this.form.escalaDescripcion
     }).pipe(
-      catchError(() => of(null))
-    ).subscribe(() => {
+      catchError(err => {
+        this.guardando = false;
+        this.errorEscala = err?.error?.mensaje || err?.error?.error || '';
+        return of(null);
+      })
+    ).subscribe(resultado => {
+      if (!resultado) return;
       this.guardando = false;
       this.router.navigate(['/resumen-seleccion']);
     });
@@ -795,33 +970,41 @@ export class ParametrizacionComponent implements OnInit {
    */
   guardarPropuesta(): void {
     if (!this.metrica || !this.propuestas[0]) return;
-    
+    if (this.guardando) return; // ver comentario de reentrada en guardar()
+    if (!this.validarEscala()) return;
+
     this.guardando = true;
     this.errorGuardar = '';
-    
+
     const proyectoActivo = localStorage.getItem('mpdia_proyecto_activo');
     const proyectoId = proyectoActivo ? JSON.parse(proyectoActivo)?.id : null;
-    
+
     if (!proyectoId) {
       this.errorGuardar = 'No se pudo identificar el proyecto activo';
       this.guardando = false;
       return;
     }
-    
+
     const request = {
       metricaId: this.metrica.factorId,  // factorId contiene el metricaId en Planeación
       proyectoId: proyectoId,
       objetivo: this.form.objetivo,
       procedimiento: this.form.procedimiento,
       indicadorVariable: this.form.indicadorVariable,
-      escala: this.form.escala,
+      escala: this.escalaTexto(),
       frecuenciaCaptura: this.form.frecuenciaCaptura || 'por_sprint',
       fuenteAcademica: this.form.fuenteAcademica || null,
       formulaAcademica: this.form.formulaAcademica || null,
       tipoOperacion: this.form.tipoOperacion || null,
       unidadResultado: this.form.unidadResultado || null,
       nombreVariable: this.form.nombreVariable || null,
-      propuestaIAJson: JSON.stringify(this.propuestas[0])
+      propuestaIAJson: JSON.stringify(this.propuestas[0]),
+      escalaTipo: this.form.escalaTipo ?? null,
+      escalaMin: this.form.escalaMin ?? null,
+      escalaMax: this.form.escalaMax ?? null,
+      escalaPaso: this.form.escalaPaso ?? null,
+      escalaSinLimite: this.form.escalaSinLimite ?? null,
+      escalaDescripcion: this.form.escalaDescripcion ?? null
     };
     
     this.http.post<any>(`${this.apiBase}/parametrizacion/guardar-propuesta`, request)
@@ -859,7 +1042,9 @@ export class ParametrizacionComponent implements OnInit {
    */
   aprobarParametrizacion(): void {
     if (!this.parametrizacionId) return;
-    
+    if (this.aprobando) return; // ver comentario de reentrada en guardar()
+    if (!this.validarEscala()) return;
+
     this.aprobando = true;
     this.errorAprobar = '';
 
@@ -877,7 +1062,16 @@ export class ParametrizacionComponent implements OnInit {
       formulaAcademica: fuente.formulaAcademica || null,
       tipoOperacion: fuente.tipoOperacion || null,
       unidadResultado: fuente.unidadResultado || null,
-      nombreVariable: fuente.nombreVariable || null
+      nombreVariable: fuente.nombreVariable || null,
+      // Corrección del manejo de escalas: prioriza lo que el Scrum Master tiene
+      // en el formulario ahora mismo (puede haber ajustado la escala propuesta
+      // por la IA antes de aprobar) sobre lo que ya se guardó como propuesta.
+      escalaTipo: this.form.escalaTipo ?? fuente.escalaTipo ?? null,
+      escalaMin: this.form.escalaMin ?? fuente.escalaMin ?? null,
+      escalaMax: this.form.escalaMax ?? fuente.escalaMax ?? null,
+      escalaPaso: this.form.escalaPaso ?? fuente.escalaPaso ?? null,
+      escalaSinLimite: this.form.escalaSinLimite ?? fuente.escalaSinLimite ?? null,
+      escalaDescripcion: this.form.escalaDescripcion ?? fuente.escalaDescripcion ?? null
     };
     
     this.http.post<any>(`${this.apiBase}/parametrizacion/${this.parametrizacionId}/aprobar`, request)

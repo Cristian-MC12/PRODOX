@@ -16,11 +16,30 @@ export interface MetricaSeleccionada {
   creadoEn: string;
 }
 
-export interface Parametrizacion {
+/**
+ * Escala estructurada — corrección del manejo de escalas (antes solo existía
+ * `escala` como texto libre, ej. "Numérica, entera (0 o más)", que Ejecución
+ * no podía usar para validar de verdad). Estos campos son la fuente de verdad
+ * funcional; `escala` se conserva como resumen legible auto-generado.
+ */
+export type EscalaTipo = 'NUMERICA_ENTERA' | 'NUMERICA_DECIMAL';
+
+export interface EscalaEstructurada {
+  escalaTipo?: EscalaTipo | null;
+  escalaMin?: number | null;
+  /** Ignorado (debe quedar null/undefined) cuando escalaSinLimite es true. */
+  escalaMax?: number | null;
+  escalaPaso?: number | null;
+  escalaSinLimite?: boolean | null;
+  /** Significado de los valores, ej: "0 = Muy malo; 10 = Excelente". */
+  escalaDescripcion?: string | null;
+}
+
+export interface Parametrizacion extends EscalaEstructurada {
   objetivo: string;
   procedimiento: string;       // fórmula o procedimiento de medición
   indicadorVariable: string;   // indicador y variables involucradas
-  escala: string;              // escala de medición
+  escala: string;              // resumen legible de la escala (auto-generado desde los campos estructurados)
   frecuenciaCaptura?: string;  // por_sprint | semanal | diaria | ilimitada
   // Campos académicos
   fuenteAcademica?: string;    // Fuente académica de referencia
@@ -32,7 +51,7 @@ export interface Parametrizacion {
   propuestaElegida?: number;   // 0, 1 o 2
 }
 
-export interface PropuestaGenAI {
+export interface PropuestaGenAI extends EscalaEstructurada {
   titulo: string;
   objetivo: string;
   procedimiento: string;

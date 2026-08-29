@@ -3,9 +3,11 @@ package com.mpdia.service;
 
 import com.mpdia.dto.RegistrarValorRequest;
 import com.mpdia.dto.RegistroValorDto;
+import com.mpdia.entity.ProjectMember;
 import com.mpdia.entity.RegistroValor;
 import com.mpdia.entity.Sprint;
 import com.mpdia.entity.Variable;
+import com.mpdia.repository.ProjectMemberRepository;
 import com.mpdia.repository.RegistroValorRepository;
 import com.mpdia.repository.SprintRepository;
 import com.mpdia.repository.VariableRepository;
@@ -44,31 +46,60 @@ class EjecucionServiceTest {
     @Mock private RegistroValorRepository registroRepo;
     @Mock private VariableRepository variableRepo;
     @Mock private SprintRepository sprintRepo;
+    @Mock private ProjectMemberRepository projectMemberRepo;
 
     private EjecucionService service;
 
     private UUID sprintId;
     private UUID variableId;
+    private UUID proyectoId;
 
     @BeforeEach
     void setUp() {
-        service = new EjecucionService(registroRepo, variableRepo, sprintRepo);
+        service = new EjecucionService(registroRepo, variableRepo, sprintRepo, projectMemberRepo);
         sprintId = UUID.randomUUID();
         variableId = UUID.randomUUID();
+        proyectoId = UUID.randomUUID();
     }
 
     /** Sprint sintético que abarca todo agosto de 2026, usado por los tests de fechaCaptura explícita. */
     private Sprint sprintQueAbarcaAgosto2026() {
         Sprint sprint = new Sprint();
         sprint.setId(sprintId);
+        sprint.setProyectoId(proyectoId);
         sprint.setFechaInicio(LocalDate.of(2026, 8, 1));
         sprint.setFechaFin(LocalDate.of(2026, 8, 31));
         return sprint;
     }
 
+    /** Sprint del proyecto de prueba, sin restricción de fechas (usado por los tests de registrar()). */
+    private Sprint sprintDelProyecto() {
+        Sprint sprint = new Sprint();
+        sprint.setId(sprintId);
+        sprint.setProyectoId(proyectoId);
+        return sprint;
+    }
+
+    private ProjectMember scrumMaster() {
+        ProjectMember m = new ProjectMember();
+        m.setProyectoId(proyectoId);
+        m.setUserId("user-a");
+        m.setRol("scrum_master");
+        return m;
+    }
+
+    private ProjectMember miembroNormal() {
+        ProjectMember m = new ProjectMember();
+        m.setProyectoId(proyectoId);
+        m.setUserId("user-a");
+        m.setRol("scrum_member");
+        return m;
+    }
+
     private Variable variableGrupal() {
         Variable v = new Variable();
         v.setId(variableId);
+        v.setProyectoId(proyectoId);
         v.setNombre("variable_grupal_test");
         v.setTipoAlcance("grupal");
         v.setActiva(true);
@@ -78,6 +109,7 @@ class EjecucionServiceTest {
     private Variable variableIndividual() {
         Variable v = new Variable();
         v.setId(variableId);
+        v.setProyectoId(proyectoId);
         v.setNombre("variable_individual_test");
         v.setTipoAlcance("individual");
         v.setActiva(true);
@@ -233,10 +265,24 @@ class EjecucionServiceTest {
     }
 
     @Test
+    void registrar_sprintNoEncontrado_lanzaExcepcion() {
+        Variable variable = variableGrupal();
+        when(variableRepo.findById(variableId)).thenReturn(Optional.of(variable));
+        when(sprintRepo.findById(sprintId)).thenReturn(Optional.empty());
+        RegistrarValorRequest req = new RegistrarValorRequest(variableId, sprintId, new BigDecimal("1"), null, null, null);
+
+        assertThatThrownBy(() -> service.registrar("user-a", req))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("Sprint no encontrado");
+    }
+
+    @Test
     void registrar_variableInactiva_lanzaExcepcion() {
         Variable variable = variableGrupal();
         variable.setActiva(false);
         when(variableRepo.findById(variableId)).thenReturn(Optional.of(variable));
+        when(sprintRepo.findById(sprintId)).thenReturn(Optional.of(sprintDelProyecto()));
+        when(projectMemberRepo.findByProyectoIdAndUserId(proyectoId, "user-a")).thenReturn(Optional.of(scrumMaster()));
         RegistrarValorRequest req = new RegistrarValorRequest(variableId, sprintId, new BigDecimal("1"), null, null, null);
 
         assertThatThrownBy(() -> service.registrar("user-a", req))
@@ -248,6 +294,8 @@ class EjecucionServiceTest {
     void registrar_primeraCaptura_creaRegistroYRetornaDto() {
         Variable variable = variableGrupal();
         when(variableRepo.findById(variableId)).thenReturn(Optional.of(variable));
+        when(sprintRepo.findById(sprintId)).thenReturn(Optional.of(sprintDelProyecto()));
+        when(projectMemberRepo.findByProyectoIdAndUserId(proyectoId, "user-a")).thenReturn(Optional.of(scrumMaster()));
         when(registroRepo.findFirstBySprintIdAndVariable_IdOrderByRegistradoAtDesc(sprintId, variableId))
             .thenReturn(Optional.empty());
         when(registroRepo.save(any(RegistroValor.class))).thenAnswer(inv -> inv.getArgument(0));
@@ -274,6 +322,8 @@ class EjecucionServiceTest {
         existente.setValorNum(new BigDecimal("7"));
 
         when(variableRepo.findById(variableId)).thenReturn(Optional.of(variable));
+        when(sprintRepo.findById(sprintId)).thenReturn(Optional.of(sprintDelProyecto()));
+        when(projectMemberRepo.findByProyectoIdAndUserId(proyectoId, "user-a")).thenReturn(Optional.of(scrumMaster()));
         when(registroRepo.findFirstBySprintIdAndVariable_IdOrderByRegistradoAtDesc(sprintId, variableId))
             .thenReturn(Optional.of(existente));
         when(registroRepo.save(any(RegistroValor.class))).thenAnswer(inv -> inv.getArgument(0));
@@ -286,6 +336,125 @@ class EjecucionServiceTest {
         assertThat(dto.id()).isEqualTo(idExistente);
         assertThat(dto.valorNum()).isEqualByComparingTo("11");
         verify(registroRepo, times(1)).save(any(RegistroValor.class));
+    }
+
+    // ========================================================================
+    // Revisión de seguridad — autorización y consistencia sprint↔variable↔proyecto
+    // ========================================================================
+
+    @Test
+    void registrar_sprintYVariableDeProyectosDistintos_seRechaza() {
+        Variable variable = variableGrupal(); // proyectoId = proyectoId
+        Sprint sprintDeOtroProyecto = new Sprint();
+        sprintDeOtroProyecto.setId(sprintId);
+        sprintDeOtroProyecto.setProyectoId(UUID.randomUUID()); // OTRO proyecto
+
+        when(variableRepo.findById(variableId)).thenReturn(Optional.of(variable));
+        when(sprintRepo.findById(sprintId)).thenReturn(Optional.of(sprintDeOtroProyecto));
+
+        RegistrarValorRequest req = new RegistrarValorRequest(variableId, sprintId, new BigDecimal("1"), null, null, null);
+
+        assertThatThrownBy(() -> service.registrar("user-a", req))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("no pertenecen al mismo proyecto");
+
+        verify(registroRepo, never()).save(any());
+        verifyNoInteractions(projectMemberRepo); // nunca llega a evaluar autorización con datos inconsistentes
+    }
+
+    @Test
+    void registrar_usuarioExternoAlProyecto_lanzaSecurityException403() {
+        Variable variable = variableGrupal();
+        when(variableRepo.findById(variableId)).thenReturn(Optional.of(variable));
+        when(sprintRepo.findById(sprintId)).thenReturn(Optional.of(sprintDelProyecto()));
+        when(projectMemberRepo.findByProyectoIdAndUserId(proyectoId, "user-externo")).thenReturn(Optional.empty());
+
+        RegistrarValorRequest req = new RegistrarValorRequest(variableId, sprintId, new BigDecimal("1"), null, null, null);
+
+        assertThatThrownBy(() -> service.registrar("user-externo", req))
+            .isInstanceOf(SecurityException.class)
+            .hasMessageContaining("No tienes acceso a este proyecto");
+
+        verify(registroRepo, never()).save(any());
+    }
+
+    @Test
+    void registrar_miembroNormalDelProyecto_lanzaSecurityException403() {
+        Variable variable = variableGrupal();
+        when(variableRepo.findById(variableId)).thenReturn(Optional.of(variable));
+        when(sprintRepo.findById(sprintId)).thenReturn(Optional.of(sprintDelProyecto()));
+        when(projectMemberRepo.findByProyectoIdAndUserId(proyectoId, "user-a")).thenReturn(Optional.of(miembroNormal()));
+
+        RegistrarValorRequest req = new RegistrarValorRequest(variableId, sprintId, new BigDecimal("1"), null, null, null);
+
+        assertThatThrownBy(() -> service.registrar("user-a", req))
+            .isInstanceOf(SecurityException.class)
+            .hasMessageContaining("Solo el Scrum Master");
+
+        verify(registroRepo, never()).save(any());
+    }
+
+    @Test
+    void listarPorSprint_usuarioExternoAlProyecto_lanzaSecurityException403() {
+        when(sprintRepo.findById(sprintId)).thenReturn(Optional.of(sprintDelProyecto()));
+        when(projectMemberRepo.existsByProyectoIdAndUserId(proyectoId, "user-externo")).thenReturn(false);
+
+        assertThatThrownBy(() -> service.listarPorSprint("user-externo", sprintId))
+            .isInstanceOf(SecurityException.class)
+            .hasMessageContaining("No tienes acceso a este proyecto");
+    }
+
+    @Test
+    void listarPorSprint_miembroDelProyecto_permitido() {
+        when(sprintRepo.findById(sprintId)).thenReturn(Optional.of(sprintDelProyecto()));
+        when(projectMemberRepo.existsByProyectoIdAndUserId(proyectoId, "user-a")).thenReturn(true);
+        when(registroRepo.findBySprintId(sprintId)).thenReturn(List.of());
+
+        List<RegistroValorDto> resultado = service.listarPorSprint("user-a", sprintId);
+
+        assertThat(resultado).isEmpty();
+    }
+
+    @Test
+    void listarPorVariable_variableDeOtroProyectoQueElSprint_seRechaza() {
+        Variable variable = variableGrupal(); // proyectoId = proyectoId
+        Sprint sprintDeOtroProyecto = new Sprint();
+        sprintDeOtroProyecto.setId(sprintId);
+        sprintDeOtroProyecto.setProyectoId(UUID.randomUUID());
+
+        when(variableRepo.findById(variableId)).thenReturn(Optional.of(variable));
+        when(sprintRepo.findById(sprintId)).thenReturn(Optional.of(sprintDeOtroProyecto));
+
+        assertThatThrownBy(() -> service.listarPorVariable("user-a", variableId, sprintId))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("no pertenecen al mismo proyecto");
+
+        verifyNoInteractions(projectMemberRepo);
+    }
+
+    @Test
+    void listarPorVariable_usuarioDeOtroProyecto_lanzaSecurityException403() {
+        Variable variable = variableGrupal();
+        when(variableRepo.findById(variableId)).thenReturn(Optional.of(variable));
+        when(sprintRepo.findById(sprintId)).thenReturn(Optional.of(sprintDelProyecto()));
+        when(projectMemberRepo.existsByProyectoIdAndUserId(proyectoId, "user-b")).thenReturn(false);
+
+        assertThatThrownBy(() -> service.listarPorVariable("user-b", variableId, sprintId))
+            .isInstanceOf(SecurityException.class)
+            .hasMessageContaining("No tienes acceso a este proyecto");
+    }
+
+    @Test
+    void validarMismoProyecto_idsInexistentes_seRechazanAntesDeLlegarAAutorizacion() {
+        UUID variableInexistente = UUID.randomUUID();
+        when(variableRepo.findById(variableInexistente)).thenReturn(Optional.empty());
+
+        RegistrarValorRequest req = new RegistrarValorRequest(variableInexistente, sprintId, new BigDecimal("1"), null, null, null);
+
+        assertThatThrownBy(() -> service.registrar("user-a", req))
+            .isInstanceOf(IllegalArgumentException.class);
+
+        verifyNoInteractions(projectMemberRepo);
     }
 
     // ========================================================================
@@ -670,6 +839,172 @@ class EjecucionServiceTest {
             .hasMessageContaining("mayor al máximo permitido (5)");
 
         verify(registroRepo, never()).save(any(RegistroValor.class));
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // Corrección del manejo de escalas — Ejecución debe ser la autoridad final
+    // sobre tipo (entero/decimal), paso y "sin límite", no solo min/max.
+    // La escala llega a Variable ya copiada por ParametrizacionService /
+    // VariableDinamicaService (nunca inventada por Ejecución) — este bloque
+    // solo prueba que, una vez ahí, se hace cumplir de verdad.
+    // ══════════════════════════════════════════════════════════════════════
+
+    private Variable variableConEscalaCompleta(String tipo, BigDecimal min, BigDecimal max,
+                                                BigDecimal paso, Boolean sinLimite) {
+        Variable v = variableGrupal();
+        v.setEscalaTipo(tipo);
+        v.setEscalaMin(min);
+        v.setEscalaMax(max);
+        v.setEscalaPaso(paso);
+        v.setEscalaSinLimite(sinLimite);
+        return v;
+    }
+
+    private RegistroValor aceptar(Variable variable, BigDecimal valor) {
+        Instant fecha = Instant.parse("2026-08-21T00:00:00Z");
+        when(sprintRepo.findById(sprintId)).thenReturn(Optional.of(sprintQueAbarcaAgosto2026()));
+        when(registroRepo.findBySprintIdAndVariable_Id(sprintId, variableId)).thenReturn(List.of());
+        when(registroRepo.findFirstBySprintIdAndVariable_IdAndRegistradoAt(sprintId, variableId, fecha))
+            .thenReturn(Optional.empty());
+        when(registroRepo.save(any(RegistroValor.class))).thenAnswer(inv -> inv.getArgument(0));
+        return service.guardarOActualizarValor(variable, sprintId, "user-a", valor, null, null, null, fecha);
+    }
+
+    private org.assertj.core.api.ThrowableAssert.ThrowingCallable rechazar(Variable variable, BigDecimal valor) {
+        Instant fecha = Instant.parse("2026-08-21T00:00:00Z");
+        return () -> service.guardarOActualizarValor(variable, sprintId, "user-a", valor, null, null, null, fecha);
+    }
+
+    // 1. Escala 0-10 entero: 0, 5 y 10 se aceptan.
+    @Test
+    void escala0a10Entera_aceptaLimitesYValorIntermedio() {
+        Variable v = variableConEscalaCompleta("NUMERICA_ENTERA", BigDecimal.ZERO, BigDecimal.TEN, BigDecimal.ONE, false);
+        assertThat(aceptar(v, BigDecimal.ZERO).getValorNum()).isEqualByComparingTo("0");
+        assertThat(aceptar(v, new BigDecimal("5")).getValorNum()).isEqualByComparingTo("5");
+        assertThat(aceptar(v, BigDecimal.TEN).getValorNum()).isEqualByComparingTo("10");
+    }
+
+    // 2. Escala 0-100 entero.
+    @Test
+    void escala0a100Entera_aceptaValorDentroDelRango() {
+        Variable v = variableConEscalaCompleta("NUMERICA_ENTERA", BigDecimal.ZERO, new BigDecimal("100"), BigDecimal.ONE, false);
+        assertThat(aceptar(v, new BigDecimal("57")).getValorNum()).isEqualByComparingTo("57");
+    }
+
+    // 3. Escala 0-sin límite entero: acepta valores grandes.
+    @Test
+    void escala0aSinLimiteEntera_aceptaValoresGrandes() {
+        Variable v = variableConEscalaCompleta("NUMERICA_ENTERA", BigDecimal.ZERO, null, BigDecimal.ONE, true);
+        assertThat(aceptar(v, new BigDecimal("100")).getValorNum()).isEqualByComparingTo("100");
+        assertThat(aceptar(v, new BigDecimal("100000")).getValorNum()).isEqualByComparingTo("100000");
+    }
+
+    // 4. Escala decimal: 0-100 con paso 0.01 acepta un valor decimal válido.
+    @Test
+    void escalaDecimal_aceptaValorConDecimalesDentroDelPaso() {
+        Variable v = variableConEscalaCompleta("NUMERICA_DECIMAL", BigDecimal.ZERO, new BigDecimal("100"),
+            new BigDecimal("0.01"), false);
+        assertThat(aceptar(v, new BigDecimal("57.34")).getValorNum()).isEqualByComparingTo("57.34");
+    }
+
+    // 5. Paso > 1: solo múltiplos del paso a partir del mínimo son válidos.
+    @Test
+    void pasoMayorQueUno_aceptaMultiploYRechazaNoMultiplo() {
+        Variable v = variableConEscalaCompleta("NUMERICA_ENTERA", BigDecimal.ZERO, new BigDecimal("20"),
+            new BigDecimal("5"), false);
+        assertThat(aceptar(v, new BigDecimal("15")).getValorNum()).isEqualByComparingTo("15");
+        assertThatThrownBy(rechazar(v, new BigDecimal("12")))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("no respeta el paso permitido");
+    }
+
+    // 6. escalaMax menor que escalaMin -> ParametrizacionService.validarEscalaEstructurada() rechaza (ver ParametrizacionServiceEscalaTest).
+
+    // 7. escalaPaso <= 0 -> ver ParametrizacionServiceEscalaTest (rechazado antes de llegar a Variable).
+
+    // 8. Decimal en escala entera -> rechazo.
+    @Test
+    void escalaEntera_rechazaValorConDecimales() {
+        Variable v = variableConEscalaCompleta("NUMERICA_ENTERA", BigDecimal.ZERO, BigDecimal.TEN, BigDecimal.ONE, false);
+        assertThatThrownBy(rechazar(v, new BigDecimal("7.5")))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("debe ser un número entero");
+    }
+
+    // 9. Valor menor al mínimo -> rechazo (ya cubierto arriba, se repite aquí con escala completa).
+    @Test
+    void escalaCompleta_valorMenorAlMinimo_rechaza() {
+        Variable v = variableConEscalaCompleta("NUMERICA_ENTERA", BigDecimal.ZERO, BigDecimal.TEN, BigDecimal.ONE, false);
+        assertThatThrownBy(rechazar(v, new BigDecimal("-1")))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("menor al mínimo permitido (0)");
+    }
+
+    // 10. Valor mayor al máximo -> rechazo.
+    @Test
+    void escalaCompleta_valorMayorAlMaximo_rechaza() {
+        Variable v = variableConEscalaCompleta("NUMERICA_ENTERA", BigDecimal.ZERO, BigDecimal.TEN, BigDecimal.ONE, false);
+        assertThatThrownBy(rechazar(v, new BigDecimal("11")))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("mayor al máximo permitido (10)");
+    }
+
+    // 11. Valor fuera del paso -> rechazo (paso=1 en escala 0-100 con decimales).
+    @Test
+    void escalaEntera_valorFueraDelPaso_rechaza() {
+        // Paso 2 a partir de 0: 0,2,4... — 3 no es múltiplo.
+        Variable v = variableConEscalaCompleta("NUMERICA_ENTERA", BigDecimal.ZERO, new BigDecimal("10"),
+            new BigDecimal("2"), false);
+        assertThatThrownBy(rechazar(v, new BigDecimal("3")))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("no respeta el paso permitido");
+    }
+
+    // 12. Valor válido respetando paso -> aceptación.
+    @Test
+    void escalaEntera_valorQueRespetaElPaso_seAcepta() {
+        Variable v = variableConEscalaCompleta("NUMERICA_ENTERA", BigDecimal.ZERO, new BigDecimal("10"),
+            new BigDecimal("2"), false);
+        assertThat(aceptar(v, new BigDecimal("4")).getValorNum()).isEqualByComparingTo("4");
+    }
+
+    // 13. Sin límite superior -> acepta valores mayores que cualquier máximo "razonable".
+    @Test
+    void sinLimiteSuperior_aceptaValorMuyGrande() {
+        Variable v = variableConEscalaCompleta("NUMERICA_ENTERA", BigDecimal.ZERO, null, BigDecimal.ONE, true);
+        assertThat(aceptar(v, new BigDecimal("999999")).getValorNum()).isEqualByComparingTo("999999");
+    }
+
+    // 14. Negativo en escala mínima 0 (incluso sin límite superior) -> rechazo.
+    @Test
+    void escalaMinimaCero_rechazaNegativoAunSinLimiteSuperior() {
+        Variable v = variableConEscalaCompleta("NUMERICA_ENTERA", BigDecimal.ZERO, null, BigDecimal.ONE, true);
+        assertThatThrownBy(rechazar(v, new BigDecimal("-1")))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("menor al mínimo permitido (0)");
+    }
+
+    // Caso adicional real (E2E sección 14): conteo de defectos, min=0, sin límite,
+    // paso=1 — acepta 0, 1 y 100; rechaza negativo y decimal.
+    @Test
+    void metricaDeConteo_aceptaEnterosNoNegativos_rechazaNegativoYDecimal() {
+        Variable v = variableConEscalaCompleta("NUMERICA_ENTERA", BigDecimal.ZERO, null, BigDecimal.ONE, true);
+        assertThat(aceptar(v, BigDecimal.ZERO).getValorNum()).isEqualByComparingTo("0");
+        assertThat(aceptar(v, BigDecimal.ONE).getValorNum()).isEqualByComparingTo("1");
+        assertThat(aceptar(v, new BigDecimal("100")).getValorNum()).isEqualByComparingTo("100");
+        assertThatThrownBy(rechazar(v, new BigDecimal("-1")))
+            .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(rechazar(v, new BigDecimal("1.5")))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("debe ser un número entero");
+    }
+
+    // Variable sin escala estructurada en absoluto (histórica, ver migración V32):
+    // Ejecución no restringe nada — ni tipo ni paso — solo min/max si existieran.
+    @Test
+    void variableSinEscalaEstructurada_noRestringeTipoNiPaso() {
+        Variable v = variableGrupal(); // escalaTipo/Paso/SinLimite quedan null
+        assertThat(aceptar(v, new BigDecimal("3.14159")).getValorNum()).isEqualByComparingTo("3.14159");
     }
 
     // ══════════════════════════════════════════════════════════════════════

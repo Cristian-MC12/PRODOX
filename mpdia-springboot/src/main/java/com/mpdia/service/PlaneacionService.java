@@ -280,6 +280,7 @@ public class PlaneacionService {
                 v.getEscalaMin(), v.getEscalaMax(),
                 v.getActiva(), v.getCreatedAt(),
                 v.getFormulaTexto(), v.getFormulaJson(), v.getFrecuenciaCaptura(),
-                objetivo, procedimiento, escalaDefinicion);
+                objetivo, procedimiento, escalaDefinicion,
+                v.getEscalaTipo(), v.getEscalaPaso(), v.getEscalaSinLimite());
     }
 }

@@ -112,4 +112,19 @@ describe('ProyectoService', () => {
     expect(http.request.method).toBe('PATCH');
     http.flush(finalizado);
   });
+
+  // ── eliminar ──────────────────────────────────────────────────────────────
+
+  it('eliminar: debe hacer DELETE a /proyectos/{id}', () => {
+    const id = 'uuid-proyecto-1';
+    let completado = false;
+
+    service.eliminar(id).subscribe(() => completado = true);
+
+    const http = httpMock.expectOne(`${environment.apiBaseUrl}/proyectos/${id}`);
+    expect(http.request.method).toBe('DELETE');
+    http.flush(null, { status: 204, statusText: 'No Content' });
+
+    expect(completado).toBe(true);
+  });
 });

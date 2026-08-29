@@ -31,6 +31,7 @@ public class CalculoMetricaService {
     private final VariableRepository variableRepo;
     private final RegistroValorRepository registroRepo;
     private final ResultadoMetricaRepository resultadoRepo;
+    private final ProjectMemberRepository projectMemberRepo;
     private final FormulaEvaluator evaluator;
     private final ObjectMapper objectMapper;
     
@@ -46,12 +47,16 @@ public class CalculoMetricaService {
         
         Proyecto proyecto = proyectoRepo.findById(request.proyectoId())
             .orElseThrow(() -> new IllegalArgumentException("Proyecto no encontrado"));
-        
+
         Sprint sprint = sprintRepo.findById(request.sprintId())
             .orElseThrow(() -> new IllegalArgumentException("Sprint no encontrado"));
-        
+
         if (!sprint.getProyectoId().equals(request.proyectoId())) {
             throw new IllegalArgumentException("El sprint no pertenece al proyecto");
+        }
+
+        if (!projectMemberRepo.existsByProyectoIdAndUserId(request.proyectoId(), userId)) {
+            throw new SecurityException("No tienes acceso a este proyecto");
         }
         
         // 2. Obtener parametrización aprobada

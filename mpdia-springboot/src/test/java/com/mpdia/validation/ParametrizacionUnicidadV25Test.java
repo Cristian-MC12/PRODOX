@@ -137,7 +137,7 @@ class ParametrizacionUnicidadV25Test {
             PROYECTO_1,
             METRICA_VEL,
             "SUMA", "SUMA(indicador_ranking_v25)", "unidades", "fuente test", null
-        );
+        , null, null, null, null, null, null);
 
         var dto = rankingService.guardar(req, userId, userId + "@test.mpdia.com");
         assertThat(dto).isNotNull();
@@ -164,7 +164,7 @@ class ParametrizacionUnicidadV25Test {
             req.proyectoId(), req.metricaId(),
             req.tipoOperacion(), req.formulaAcademica(), req.unidadResultado(), req.fuenteAcademica(),
             req.frecuenciaCaptura()
-        );
+        , null, null, null, null, null, null);
         var dto2 = rankingService.guardar(req2, userId, userId + "@test.mpdia.com");
         assertThat(dto2.id()).isNotEqualTo(dto.id());
         assertThat(dto2.version()).isEqualTo(dto.version() + 1);
@@ -211,7 +211,7 @@ class ParametrizacionUnicidadV25Test {
             METRICA_VEL, PROYECTO_1,
             "Objetivo v4", "Procedimiento v4", "Indicador v4", "Escala v4", "por_sprint",
             "Fuente v4", "Σ x", "SUMA", "unidad v4", "{}", "nombre_v4"
-        );
+        , null, null, null, null, null, null);
 
         // Antes de esta corrección, esto lanzaba DataIntegrityViolationException
         // por colisionar con (proyecto_id, metrica_id, version)=(..., 972) al
@@ -270,7 +270,7 @@ class ParametrizacionUnicidadV25Test {
         AprobarParametrizacionRequest req = new AprobarParametrizacionRequest(
             "Objetivo v4", "Procedimiento v4", "Indicador v4", "Escala v4", "por_sprint",
             "Fuente v4", "Σ x", "SUMA", "unidad v4", "nombre_v4_g"
-        );
+        , null, null, null, null, null, null);
 
         // Antes de esta corrección, aprobarParametrizacion() buscaba version-1
         // (v3, status='propuesta') en vez de la última aprobada real (v2), y

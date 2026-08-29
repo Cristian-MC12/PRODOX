@@ -1,4 +1,5 @@
 // Autor: Cristian Santiago Martinez Cordoba — MPDIA
+import { EscalaEstructurada } from './seleccion.model';
 
 export interface RankingMetrica {
   factorId:         string;
@@ -8,7 +9,7 @@ export interface RankingMetrica {
   parametrizacionId: string;
 }
 
-export interface MetricParametrizacionBase {
+export interface MetricParametrizacionBase extends EscalaEstructurada {
   id:                string;
   factorId:          string;
   factorNombre:      string;
@@ -27,7 +28,7 @@ export interface MetricParametrizacionBase {
   unidadResultado?:  string | null;
 }
 
-export interface GuardarParametrizacionRequest {
+export interface GuardarParametrizacionRequest extends EscalaEstructurada {
   factorId?:         string | null;
   objetivo:          string;
   procedimiento:     string;
@@ -47,7 +48,7 @@ export interface GuardarParametrizacionRequest {
   frecuenciaCaptura?: string | null;
 }
 
-export interface TopParametrizacion {
+export interface TopParametrizacion extends EscalaEstructurada {
   id:                string;
   userEmail:         string;
   objetivo:          string;

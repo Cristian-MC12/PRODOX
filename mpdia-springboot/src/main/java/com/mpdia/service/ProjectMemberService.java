@@ -51,8 +51,11 @@ public class ProjectMemberService {
         }
     }
 
-    /** Lista miembros de un proyecto */
-    public List<ProjectMemberDto> listarMiembros(UUID proyectoId) {
+    /** Lista miembros de un proyecto — requiere ser miembro del proyecto */
+    public List<ProjectMemberDto> listarMiembros(UUID proyectoId, String userId) {
+        if (!memberRepo.existsByProyectoIdAndUserId(proyectoId, userId)) {
+            throw new SecurityException("No tienes acceso a este proyecto");
+        }
         return memberRepo.findByProyectoId(proyectoId).stream()
                 .map(m -> new ProjectMemberDto(m.getProyectoId(), m.getUserId(),
                         m.getUserEmail(), m.getRol(), m.getJoinedAt()))

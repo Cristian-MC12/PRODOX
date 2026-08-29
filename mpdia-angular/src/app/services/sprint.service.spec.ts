@@ -100,4 +100,34 @@ describe('SprintService', () => {
     expect(http.request.body).toEqual({ sprintGoal: 'Completar módulo de proyectos' });
     http.flush(nuevoSprint);
   });
+
+  // ── reabrir ───────────────────────────────────────────────────────────────
+
+  it('reabrir: debe hacer PATCH a /sprints/{sprintId}/reabrir', () => {
+    const sprintId = 'uuid-sprint-1';
+    const reabierto: SprintDto = { ...mockSprint, id: sprintId, estado: 'reabierto' };
+
+    service.reabrir(sprintId).subscribe(sprint => {
+      expect(sprint.estado).toBe('reabierto');
+    });
+
+    const http = httpMock.expectOne(`${environment.apiBaseUrl}/sprints/${sprintId}/reabrir`);
+    expect(http.request.method).toBe('PATCH');
+    http.flush(reabierto);
+  });
+
+  // ── finalizarReabierto ───────────────────────────────────────────────────
+
+  it('finalizarReabierto: debe hacer PATCH a /sprints/{sprintId}/finalizar', () => {
+    const sprintId = 'uuid-sprint-1';
+    const finalizado: SprintDto = { ...mockSprint, id: sprintId, estado: 'finalizado' };
+
+    service.finalizarReabierto(sprintId).subscribe(sprint => {
+      expect(sprint.estado).toBe('finalizado');
+    });
+
+    const http = httpMock.expectOne(`${environment.apiBaseUrl}/sprints/${sprintId}/finalizar`);
+    expect(http.request.method).toBe('PATCH');
+    http.flush(finalizado);
+  });
 });

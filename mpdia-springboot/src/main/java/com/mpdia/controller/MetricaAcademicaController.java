@@ -81,7 +81,13 @@ public class MetricaAcademicaController {
             request.tipoOperacion(),
             request.unidadResultado(),
             "Propuesta académica",
-            null // nombreVariable: fuera de alcance de este endpoint (Fase 16.9.1, no forma parte del incremento 16.10-E)
+            null, // nombreVariable: fuera de alcance de este endpoint (Fase 16.9.1, no forma parte del incremento 16.10-E)
+            request.escalaTipo(),
+            request.escalaMin(),
+            request.escalaMax(),
+            request.escalaPaso(),
+            request.escalaSinLimite(),
+            request.escalaDescripcion()
         );
         
         MetricParametrizacion parametrizacion = service.guardarPropuestaAcademica(
@@ -151,5 +157,12 @@ record GuardarPropuestaAcademicaRequest(
     String procedimiento,
     String indicadorVariable,
     String escala,
-    String frecuenciaCaptura
+    String frecuenciaCaptura,
+    /** Escala estructurada — ver ParametrizacionService.validarEscalaEstructurada(). */
+    String escalaTipo,
+    java.math.BigDecimal escalaMin,
+    java.math.BigDecimal escalaMax,
+    java.math.BigDecimal escalaPaso,
+    Boolean escalaSinLimite,
+    String escalaDescripcion
 ) {}

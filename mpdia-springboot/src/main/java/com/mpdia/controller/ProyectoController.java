@@ -37,10 +37,10 @@ public class ProyectoController {
         return ResponseEntity.ok(proyectoService.listarMisProyectos(auth.getName()));
     }
 
-    /** GET /api/proyectos/{id} — Detalle de un proyecto */
+    /** GET /api/proyectos/{id} — Detalle de un proyecto (solo miembros) */
     @GetMapping("/{id}")
-    public ResponseEntity<ProyectoDto> getById(@PathVariable UUID id) {
-        return ResponseEntity.ok(proyectoService.getById(id));
+    public ResponseEntity<ProyectoDto> getById(@PathVariable UUID id, Authentication auth) {
+        return ResponseEntity.ok(proyectoService.getById(id, auth.getName()));
     }
 
     /** PATCH /api/proyectos/{id}/finalizar — Finalizar proyecto */
@@ -49,5 +49,14 @@ public class ProyectoController {
             @PathVariable UUID id,
             Authentication auth) {
         return ResponseEntity.ok(proyectoService.finalizar(id, auth.getName()));
+    }
+
+    /** DELETE /api/proyectos/{id} — Eliminar proyecto (solo Scrum Master dueño, FASE 21) */
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> eliminar(
+            @PathVariable UUID id,
+            Authentication auth) {
+        proyectoService.eliminar(id, auth.getName());
+        return ResponseEntity.noContent().build();
     }
 }

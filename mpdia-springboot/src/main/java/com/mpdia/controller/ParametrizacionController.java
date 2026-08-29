@@ -9,6 +9,7 @@ import com.mpdia.dto.ParametrizacionRequest;
 import com.mpdia.dto.PropuestaParametrizacionDto;
 import com.mpdia.entity.MetricParametrizacion;
 import com.mpdia.repository.MetricParametrizacionRepository;
+import com.mpdia.repository.ProjectMemberRepository;
 import com.mpdia.service.NombreVariableInvalidoException;
 import com.mpdia.service.ParametrizacionService;
 import com.mpdia.service.TipoOperacionInvalidoException;
@@ -18,6 +19,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -43,6 +45,7 @@ public class ParametrizacionController {
     
     private final MetricParametrizacionRepository parametrizacionRepository;
     private final ParametrizacionService parametrizacionService;
+    private final ProjectMemberRepository projectMemberRepository;
     
     /**
      * Obtiene la última versión aprobada de una parametrización.
@@ -60,8 +63,13 @@ public class ParametrizacionController {
     @PreAuthorize("hasRole('USER')")
     public ResponseEntity<MetricParametrizacion> obtenerUltimaAprobada(
             @RequestParam UUID metricaId,
-            @RequestParam UUID proyectoId) {
-        
+            @RequestParam UUID proyectoId,
+            Authentication auth) {
+
+        if (!projectMemberRepository.existsByProyectoIdAndUserId(proyectoId, auth.getName())) {
+            throw new SecurityException("No tienes acceso a este proyecto");
+        }
+
         return parametrizacionRepository
                 .findUltimaVersionAprobada(metricaId, proyectoId)
                 .map(ResponseEntity::ok)

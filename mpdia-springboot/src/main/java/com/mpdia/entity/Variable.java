@@ -59,6 +59,17 @@ public class Variable {
     @Column(name = "escala_max", precision = 10, scale = 2)
     private BigDecimal escalaMax;
 
+    /** NUMERICA_ENTERA | NUMERICA_DECIMAL. NULL = sin escala estructurada (compatibilidad histórica). */
+    @Column(name = "escala_tipo", length = 30)
+    private String escalaTipo;
+
+    @Column(name = "escala_paso", precision = 10, scale = 2)
+    private BigDecimal escalaPaso;
+
+    /** true = sin máximo superior (escalaMax queda NULL a propósito, no por falta de datos). */
+    @Column(name = "escala_sin_limite")
+    private Boolean escalaSinLimite;
+
     @Column(nullable = false)
     private Boolean activa = true;
 
