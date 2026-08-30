@@ -1,390 +1,1096 @@
 // Autor: Cristian Santiago Martinez Cordoba — MPDIA
 // ============================================================
-// FASE 1 del rediseño visual — overrides de Bootstrap ANTES del
-// @import: así todas las clases Bootstrap ya usadas en cada pantalla
-// (.btn-*, .card, .badge, .alert-*, .form-control, .text-muted...)
-// heredan la nueva paleta/tipografía/radios/sombras sin tocar el
-// markup ni la lógica de ningún componente de página. Nombres y
-// valores por defecto confirmados contra
-// node_modules/bootstrap/scss/_variables.scss (Bootstrap 5.3.3).
+// FASE 1 — REDISEÑO VISUAL PRODOX
+// Design System Global basado en las referencias visuales proporcionadas.
+// Paleta principal: Navy/violeta (IA/primario) + turquesa (operativo).
+// Override de Bootstrap 5.3.3 ANTES del @import para que todas las clases
+// existentes (.btn-*, .card, .badge, etc.) hereden automáticamente la
+// nueva identidad visual sin tocar markup ni lógica de componentes.
 // ============================================================
-$primary:   #0E7C86; // teal de marca
-$secondary: #5B6B70; // pizarra — botones/textos secundarios
-$success:   #1E8E5A;
-$info:      #5A96C4; // azul acero, verificado ≥4.5:1 sobre text-dark
-$warning:   #D99A2B; // ámbar, verificado ≥4.5:1 sobre text-dark
-$danger:    #C23B34;
 
-$body-bg:              #F5F6F4;
-$body-color:            #161B1F;
-$body-secondary-color:  #5B6B70; // deriva .text-muted en Bootstrap 5.3
-$border-color:           #D9DEDC;
+// ============================================================
+// COLORES — Paleta PRODOX
+// ============================================================
+// Violeta — acciones principales, IA, producto
+$primary:   #7C3AED; // violeta vibrante
+$primary-hover: #6D28D9;
+$primary-tint:  #EDE9FE; // fondo suave para estados hover/activos
 
-$border-radius:     .625rem; // 10px — md
-$border-radius-sm:  .375rem; // 6px  — sm
-$border-radius-lg:  1rem;    // 16px — lg
+// Turquesa — acciones operativas, secundarias
+$secondary: #14B8A6; // turquesa/teal
+$secondary-hover: #0D9488;
 
-$box-shadow-sm: 0 1px 2px rgba(22, 27, 31, .08);
-$box-shadow:    0 4px 12px rgba(22, 27, 31, .10);
-$box-shadow-lg: 0 16px 32px rgba(22, 27, 31, .16);
+// Estados semánticos
+$success:   #10B981; // verde
+$info:      #3B82F6; // azul
+$warning:   #F59E0B; // ámbar
+$danger:    #EF4444; // rojo
 
-$font-family-sans-serif: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
-$font-family-monospace:  'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+// Fondos y superficies
+$body-bg:              #F9FAFB; // gris muy claro
+$body-color:            #111827; // gris oscuro casi negro
+$body-secondary-color:  #6B7280; // gris medio
+$border-color:          #E5E7EB; // borde sutil
 
-// FASE 2 — badges más "chip" (menos redondeados que el radio md por
-// defecto) y pestañas activas con el color de marca en vez del gris
-// genérico de Bootstrap ($nav-tabs-link-active-color por defecto usa
-// --bs-emphasis-color, no la marca).
+// Navy para sidebar (dark theme)
+$sidebar-bg:       #1E293B; // slate oscuro
+$sidebar-text:     #94A3B8; // slate claro
+$sidebar-active:   #7C3AED; // violeta
+
+// ============================================================
+// TIPOGRAFÍA
+// ============================================================
+$font-family-sans-serif: 'Inter', 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+$font-family-monospace:  'JetBrains Mono', 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+$font-size-base: 1rem; // 16px — mejor para zoom 100%
+$line-height-base: 1.6;
+
+// ============================================================
+// BORDER RADIUS — esquinas redondeadas modernas
+// ============================================================
+$border-radius:     0.5rem;   // 8px — md
+$border-radius-sm:  0.375rem; // 6px — sm
+$border-radius-lg:  0.75rem;  // 12px — lg
+$border-radius-xl:  1rem;     // 16px — xl
+$border-radius-2xl: 1.5rem;   // 24px — 2xl
+
+// ============================================================
+// SOMBRAS — sutiles, modernas
+// ============================================================
+$box-shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+$box-shadow:    0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+$box-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+
+// ============================================================
+// COMPONENTES BOOTSTRAP — ajustes finos
+// ============================================================
 $badge-border-radius: $border-radius-sm;
+$badge-padding-y: 0.35em;
+$badge-padding-x: 0.65em;
+$badge-font-weight: 600;
+
 $nav-tabs-link-active-color: $primary;
+$nav-tabs-border-radius: $border-radius-sm;
+
+$btn-border-radius: $border-radius;
+$btn-border-radius-sm: $border-radius-sm;
+$btn-border-radius-lg: $border-radius-lg;
+$btn-font-weight: 600;
+
+$card-border-radius: $border-radius-lg;
+$card-box-shadow: $box-shadow-sm;
+
+$modal-content-border-radius: $border-radius-xl;
+
+$input-border-radius: $border-radius;
+$input-border-radius-sm: $border-radius-sm;
+$input-border-radius-lg: $border-radius-lg;
 
 // Bootstrap 5
 @import "bootstrap/scss/bootstrap";
 @import "bootstrap-icons/font/bootstrap-icons.css";
 
 // ============================================================
-// MPDIA — Design tokens
+// DESIGN TOKENS — CSS Custom Properties (reutilizables globalmente)
 // ============================================================
 :root {
-  // Identidad (alias legibles sobre las variables Bootstrap de arriba)
-  --brand: #{$primary};
-  --brand-hover: #0B6169;
-  --brand-tint: #E3F0F0;
-  --surface: #FFFFFF;
-  --background: #{$body-bg};
-  --text-primary: #{$body-color};
-  --text-secondary: #{$body-secondary-color};
-  --border: #{$border-color};
+  // ── COLORES ──
+  --brand-primary: #{$primary};
+  --brand-primary-hover: #{$primary-hover};
+  --brand-primary-tint: #{$primary-tint};
+  --brand-secondary: #{$secondary};
+  --brand-secondary-hover: #{$secondary-hover};
+  
   --success: #{$success};
   --warning: #{$warning};
   --danger: #{$danger};
   --info: #{$info};
 
-  // Espaciado
-  --space-1: 4px;
-  --space-2: 8px;
-  --space-3: 12px;
-  --space-4: 16px;
-  --space-5: 24px;
-  --space-6: 32px;
-  --space-7: 48px;
+  --surface: #FFFFFF;
+  --background: #{$body-bg};
+  --background-alt: #F3F4F6; // fondo alternativo para secciones
+  
+  --text-primary: #{$body-color};
+  --text-secondary: #{$body-secondary-color};
+  --text-muted: #9CA3AF;
+  --text-disabled: #D1D5DB;
+  
+  --border: #{$border-color};
+  --border-hover: #D1D5DB;
 
-  // Radios
-  --radius-sm: #{$border-radius-sm};
-  --radius-md: #{$border-radius};
-  --radius-lg: #{$border-radius-lg};
+  // Sidebar темный (navy theme)
+  --sidebar-bg: #{$sidebar-bg};
+  --sidebar-text: #E2E8F0; // texto más claro (slate-200)
+  --sidebar-text-hover: #FFFFFF; // blanco puro en hover
+  --sidebar-active: #{$sidebar-active};
+  --sidebar-active-bg: rgba(124, 58, 237, 0.15);
+  --sidebar-border: #334155;
 
-  // Sombras
+  // ── ESPACIADO ──
+  --space-1: 0.25rem;   // 4px
+  --space-2: 0.5rem;    // 8px
+  --space-3: 0.75rem;   // 12px
+  --space-4: 1rem;      // 16px
+  --space-5: 1.5rem;    // 24px
+  --space-6: 2rem;      // 32px
+  --space-7: 3rem;      // 48px
+  --space-8: 4rem;      // 64px
+
+  // ── BORDER RADIUS ──
+  --radius-sm: #{$border-radius-sm};   // 6px
+  --radius-md: #{$border-radius};      // 8px
+  --radius-lg: #{$border-radius-lg};   // 12px
+  --radius-xl: #{$border-radius-xl};   // 16px
+  --radius-2xl: #{$border-radius-2xl}; // 24px
+  --radius-full: 9999px;
+
+  // ── SOMBRAS ──
   --shadow-sm: #{$box-shadow-sm};
   --shadow-md: #{$box-shadow};
   --shadow-lg: #{$box-shadow-lg};
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
 
-  // Tipografía
+  // ── TIPOGRAFÍA ──
   --font-sans: #{$font-family-sans-serif};
   --font-mono: #{$font-family-monospace};
-  // Micro-escala: mismos valores que ya usaba el sidebar de forma dispersa
-  // (0.6/0.65/0.7rem repetidos como style="" inline en 4+ lugares distintos)
-  // — ahora nombrados y centralizados, sin cambiar ningún tamaño real.
-  --text-3xs: .6rem;
-  --text-2xs: .65rem;
-  --text-xs: .7rem;
-  --text-sm: .82rem;
+  
+  // Escala tipográfica - REDUCIDA para contenido más compacto
+  --text-2xs: 0.6875rem;   // 11px
+  --text-xs: 0.75rem;      // 12px
+  --text-sm: 0.8125rem;    // 13px
+  --text-base: 0.875rem;   // 14px - BASE REDUCIDO
+  --text-md: 0.9375rem;    // 15px
+  --text-lg: 1rem;         // 16px
+  --text-xl: 1.125rem;     // 18px
+  --text-2xl: 1.25rem;     // 20px
+  --text-3xl: 1.5rem;      // 24px
+  --text-4xl: 1.875rem;    // 30px
 
-  // Layout del shell (sin cambio de comportamiento, solo agrupados aquí)
-  --mpdia-sidebar-width: 260px;
-  --mpdia-sidebar-bg: var(--surface);
-  --mpdia-sidebar-border: var(--border);
-  --mpdia-header-height: 60px;
+  // ── LAYOUT ──
+  --sidebar-width: 260px;
+  --header-height: 56px;   // REDUCIDO de 64px
+  --page-max-width: 1400px;
+  --content-padding: var(--space-5); // REDUCIDO de space-6
+
+  // ── TRANSICIONES ──
+  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-base: 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-slow: 300ms cubic-bezier(0.4, 0, 0.2, 1);
+
+  // ── Z-INDEX (capas de profundidad) ──
+  --z-dropdown: 1000;
+  --z-sticky: 1020;
+  --z-fixed: 1030;
+  --z-modal-backdrop: 1040;
+  --z-modal: 1050;
+  --z-popover: 1060;
+  --z-tooltip: 1070;
 }
 
 body {
   font-family: var(--font-sans);
   background-color: var(--background);
   color: var(--text-primary);
+  font-size: var(--text-base); // Ahora 14px en lugar de 16px
+  line-height: 1.5; // Reducido de 1.6
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-// Sidebar
+// ============================================================
+// LAYOUT — Sidebar + Main Content
+// ============================================================
 .sidebar {
-  width: var(--mpdia-sidebar-width);
-  min-height: 100vh;
-  background-color: var(--mpdia-sidebar-bg);
-  border-right: 1px solid var(--mpdia-sidebar-border);
+  width: var(--sidebar-width);
+  height: 100vh;
+  background: 
+    radial-gradient(circle at 20% 30%, rgba(124, 58, 237, 0.15) 0%, transparent 40%),
+    radial-gradient(circle at 80% 70%, rgba(79, 70, 229, 0.12) 0%, transparent 40%),
+    linear-gradient(180deg, rgba(15, 23, 42, 0.5) 0%, rgba(10, 15, 30, 0.5) 100%),
+    url('/assets/images/backgrounds/Slidebar_BG.png') center center / cover no-repeat;
   position: fixed;
   top: 0;
   left: 0;
-  z-index: 100;
-  transition: transform 0.3s ease;
+  z-index: var(--z-fixed);
+  transition: transform var(--transition-base);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  overflow-x: hidden;
+  
+  // Partículas decorativas
+  &::before,
+  &::after {
+    content: '';
+    position: absolute;
+    border-radius: 50%;
+    background: rgba(124, 58, 237, 0.4);
+    animation: float 8s ease-in-out infinite;
+    pointer-events: none;
+  }
+  
+  &::before {
+    width: 4px;
+    height: 4px;
+    top: 20%;
+    right: 10%;
+    box-shadow: 
+      0 0 15px rgba(124, 58, 237, 0.6),
+      25px 35px 0 2px rgba(79, 70, 229, 0.5),
+      -20px 50px 0 1px rgba(124, 58, 237, 0.4),
+      35px 90px 0 2px rgba(255, 255, 255, 0.3);
+  }
+  
+  &::after {
+    width: 3px;
+    height: 3px;
+    top: 50%;
+    left: 15%;
+    box-shadow: 
+      0 0 12px rgba(79, 70, 229, 0.5),
+      -30px -25px 0 2px rgba(124, 58, 237, 0.4),
+      45px 20px 0 1px rgba(255, 255, 255, 0.4);
+    animation-delay: -4s;
+  }
+  
+  @keyframes float {
+    0%, 100% { transform: translateY(0) translateX(0); }
+    25% { transform: translateY(-8px) translateX(5px); }
+    50% { transform: translateY(-15px) translateX(-3px); }
+    75% { transform: translateY(-5px) translateX(8px); }
+  }
 
-  // Altura propia (no ligada a --mpdia-header-height, que es la barra
-  // superior compartida por todas las pantallas) para que el logo respire
-  // sin afectar el header de ninguna otra pantalla.
+  // Brand / Logo - MÁS GRANDE
   .sidebar-brand {
-    min-height: 108px;
+    min-height: 60px;
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: .75rem 1.25rem;
-    border-bottom: 1px solid var(--mpdia-sidebar-border);
+    padding: 0.75rem 1rem;
     text-decoration: none;
+    flex-shrink: 0;
 
     .sidebar-brand-logo {
       display: block;
       width: auto;
       height: auto;
       max-width: 100%;
-      max-height: 88px;
+      max-height: 100px;
       object-fit: contain;
+      filter: brightness(1.2) drop-shadow(0 2px 8px rgba(124, 58, 237, 0.3));
     }
   }
 
+  // Proyecto activo - CARD oscuro
+  > .px-3:first-of-type {
+    padding: 0.75rem;
+    flex-shrink: 0;
+    
+    > div {
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid rgba(124, 58, 237, 0.2);
+      border-radius: var(--radius-lg);
+      padding: 0.75rem;
+      backdrop-filter: blur(10px);
+      
+      .small {
+        font-size: 0.6rem;
+        color: var(--sidebar-text);
+        opacity: 0.6;
+        line-height: 1.2;
+        margin-bottom: 0.25rem;
+      }
+      
+      .fw-semibold {
+        color: var(--sidebar-text-hover);
+        font-size: 0.85rem;
+        line-height: 1.2;
+        margin-bottom: 0.5rem;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        
+        i {
+          font-size: 0.75rem;
+          opacity: 0.7;
+        }
+      }
+
+      .d-flex.gap-1 {
+        gap: 0.35rem !important;
+      }
+
+      .badge {
+        font-size: 0.6rem;
+        padding: 0.2em 0.5em;
+        font-weight: 600;
+      }
+    }
+  }
+
+  // Badge Scrum Master - CARD violeta
+  > .px-3:nth-of-type(2) {
+    padding: 0.75rem;
+    flex-shrink: 0;
+    
+    .badge {
+      background: linear-gradient(135deg, var(--brand-primary) 0%, #{$primary-hover} 100%) !important;
+      color: white !important;
+      font-weight: 600;
+      padding: 0.6rem 0.75rem;
+      font-size: 0.75rem;
+      border-radius: var(--radius-lg);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-shadow: 0 4px 12px rgba(124, 58, 237, 0.4);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+
+      i, .bi {
+        font-size: 0.9rem;
+      }
+    }
+  }
+
+  // Nav container
+  .nav, ul.nav {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 0.5rem 0;
+
+    &::-webkit-scrollbar {
+      width: 4px;
+    }
+
+    &::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    &::-webkit-scrollbar-thumb {
+      background: rgba(124, 58, 237, 0.3);
+      border-radius: var(--radius-full);
+
+      &:hover {
+        background: rgba(124, 58, 237, 0.5);
+      }
+    }
+  }
+
+  // Nav Links - AÚN MÁS COMPACTOS
   .nav-link {
-    color: var(--text-secondary);
-    padding: 0.6rem 1.25rem;
-    border-radius: var(--radius-sm);
-    margin: 0.1rem 0.5rem;
+    color: #FFFFFF; // Blanco brillante para los títulos
+    padding: 0.35rem 0.75rem;
+    border-radius: var(--radius-md);
+    margin: 0.08rem 0.75rem;
     display: flex;
     align-items: center;
-    gap: 0.6rem;
-    font-size: 0.9rem;
-    transition: background-color 0.15s, color 0.15s;
+    gap: 0.45rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    transition: all var(--transition-fast);
+    position: relative;
+    line-height: 1.1;
+    border: none !important;
+
+    i, .bi {
+      font-size: 0.9rem;
+      flex-shrink: 0;
+      width: 15px;
+      text-align: center;
+    }
 
     &:hover {
-      background-color: var(--background);
-      color: var(--text-primary);
+      background-color: rgba(124, 58, 237, 0.15);
+      color: #FFFFFF;
+      transform: translateX(3px);
     }
 
     &.active {
-      background-color: var(--brand-tint);
-      color: var(--brand);
+      background: linear-gradient(90deg, rgba(124, 58, 237, 0.25) 0%, rgba(124, 58, 237, 0.1) 100%);
+      color: #FFFFFF;
       font-weight: 600;
+
+      &::before {
+        content: '';
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 3px;
+        background: linear-gradient(180deg, var(--brand-primary) 0%, #{$primary-hover} 100%);
+        border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+        box-shadow: 0 0 10px rgba(124, 58, 237, 0.6);
+      }
+    }
+  }
+
+  // Separadores - BLANCO BRILLANTE
+  .nav-item {
+    small.text-muted, small.text-uppercase {
+      color: #FFFFFF !important; // Blanco brillante para títulos de sección
+      opacity: 0.5 !important;
+      font-size: 0.52rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      padding: 0.4rem 0.75rem 0.2rem 0.75rem;
+      margin-top: 0.3rem;
+      display: block;
+      line-height: 1;
+      border: none !important;
+    }
+  }
+
+  // Footer con usuario - MÁS COMPACTO
+  .border-top {
+    border: none !important;
+    border-top: 1px solid rgba(124, 58, 237, 0.15) !important;
+    background: linear-gradient(180deg, transparent 0%, rgba(15, 23, 42, 0.8) 100%);
+    flex-shrink: 0;
+    margin-top: auto;
+    padding: 0.75rem 0.75rem 0.5rem 0.75rem;
+    position: relative;
+    
+    // Espacio para el astronauta (se renderiza desde el template)
+    
+    small {
+      color: #FFFFFF !important; // Blanco brillante para "General"
+      opacity: 0.5 !important;
+      font-size: 0.52rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-weight: 700;
+      margin-bottom: 0.5rem;
+      display: block;
+      line-height: 1;
     }
 
-    i { font-size: 1rem; }
+    .d-flex {
+      align-items: center;
+      gap: 0.5rem;
+      margin-bottom: 0.5rem;
+      position: relative;
+      z-index: 1;
+      background: rgba(15, 23, 42, 0.7);
+      padding: 0.5rem;
+      border-radius: var(--radius-lg);
+      border: 1px solid rgba(124, 58, 237, 0.2);
+      
+      // Ocultar ícono por defecto
+      > i.bi-person-circle {
+        display: none;
+      }
+      
+      // Avatar CM turquesa - MÁS PEQUEÑO
+      &::before {
+        content: 'CM';
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 2rem;
+        height: 2rem;
+        border-radius: 50%;
+        background: linear-gradient(135deg, var(--brand-secondary) 0%, #0D9488 100%);
+        color: white;
+        font-weight: 700;
+        font-size: 0.75rem;
+        flex-shrink: 0;
+        box-shadow: 0 4px 15px rgba(20, 184, 166, 0.5);
+      }
+
+      > div {
+        flex: 1;
+        
+        strong {
+          display: block;
+          color: var(--sidebar-text-hover);
+          font-size: 0.8rem;
+          font-weight: 600;
+          line-height: 1.2;
+          margin-bottom: 0.1rem;
+        }
+        
+        small.text-muted {
+          color: var(--sidebar-text) !important;
+          opacity: 0.6;
+          font-size: 0.6rem;
+          font-weight: 400;
+          line-height: 1.2;
+          text-transform: uppercase;
+          letter-spacing: 0.03em;
+        }
+      }
+      
+      // Menú 3 puntos
+      > i.bi-three-dots-vertical {
+        color: var(--sidebar-text);
+        opacity: 0.5;
+        font-size: 1rem;
+        cursor: pointer;
+        flex-shrink: 0;
+        
+        &:hover {
+          opacity: 1;
+        }
+      }
+    }
+
+    .btn-outline-secondary {
+      color: var(--sidebar-text);
+      border-color: rgba(255, 255, 255, 0.1);
+      font-size: 0.7rem;
+      padding: 0.4rem 0.6rem;
+      line-height: 1.2;
+      position: relative;
+      z-index: 1;
+      background: rgba(15, 23, 42, 0.5);
+      border-radius: var(--radius-lg);
+      font-weight: 500;
+
+      &:hover {
+        background-color: rgba(255, 255, 255, 0.05);
+        border-color: rgba(255, 255, 255, 0.2);
+        color: var(--sidebar-text-hover);
+      }
+
+      i, .bi {
+        font-size: 0.8rem;
+      }
+    }
   }
 }
 
 // Main content area
 .main-content {
-  margin-left: var(--mpdia-sidebar-width);
+  margin-left: var(--sidebar-width);
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+  background-color: var(--background);
 }
 
+// Page header (topbar)
 .page-header {
-  height: var(--mpdia-header-height);
+  height: var(--header-height);
   background: var(--surface);
   border-bottom: 1px solid var(--border);
   display: flex;
   align-items: center;
-  padding: 0 1.5rem;
+  padding: 0 var(--content-padding);
   position: sticky;
   top: 0;
-  z-index: 99;
+  z-index: var(--z-sticky);
+  box-shadow: var(--shadow-sm);
 
   h1 {
-    font-size: 1.1rem;
-    font-weight: 600;
+    font-size: var(--text-xl);
+    font-weight: 700;
     margin: 0;
     color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+
+    i, .bi {
+      color: var(--brand-primary);
+    }
   }
 }
 
+// Page body (content container)
 .page-body {
-  padding: 1.5rem;
+  padding: var(--content-padding);
   flex: 1;
+  max-width: var(--page-max-width);
+  width: 100%;
+  margin: 0 auto;
 }
 
-// Cards
-.card {
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-sm);
-}
-
-// KPI cards
-.kpi-card {
-  .kpi-value {
-    font-size: 1.75rem;
-    font-weight: 700;
-    line-height: 1;
-  }
-  .kpi-label {
-    font-size: .75rem;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: var(--text-secondary);
-  }
-}
-
-// Factor cards
-.factor-card {
-  cursor: default;
-  transition: border-color 0.15s;
-
-  &.selected {
-    border-color: var(--brand);
-    background-color: var(--brand-tint);
-  }
-}
-
-// Responsive sidebar collapse
+// ============================================================
+// RESPONSIVE — Mobile/Tablet
+// ============================================================
 @media (max-width: 768px) {
   .sidebar {
     transform: translateX(-100%);
-    &.open { transform: translateX(0); }
+    
+    &.open {
+      transform: translateX(0);
+    }
   }
-  .main-content { margin-left: 0; }
+
+  .main-content {
+    margin-left: 0;
+  }
+
+  .page-header {
+    padding: 0 var(--space-4);
+  }
+
+  .page-body {
+    padding: var(--space-4);
+  }
 }
 
-// Toast / alert overrides
-.alert { border-radius: var(--radius-md); }
-
-// Table
-.table th {
-  font-size: 0.8rem;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--text-secondary);
-  font-weight: 600;
+// ============================================================
+// CARDS — Sistema global de tarjetas - MÁS COMPACTAS
+// ============================================================
+.card {
   background-color: var(--surface);
-}
-
-// Hover de fila consistente en toda tabla, tenga o no la clase
-// table-hover (hoy solo algunas pantallas la usan) — puramente
-// cosmético, no cambia ningún dato ni comportamiento de clic.
-.table tbody tr {
-  transition: background-color .1s ease;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow var(--transition-base), border-color var(--transition-base);
 
   &:hover {
-    background-color: var(--background);
+    box-shadow: var(--shadow-md);
+  }
+
+  .card-header {
+    background-color: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: var(--space-3) var(--space-4); // REDUCIDO
+    font-weight: 600;
+    font-size: var(--text-sm);
+    color: var(--text-primary);
+
+    i, .bi {
+      color: var(--brand-primary);
+      margin-right: var(--space-2);
+    }
+  }
+
+  .card-body {
+    padding: var(--space-4); // REDUCIDO de space-5
+  }
+
+  .card-footer {
+    background-color: var(--background-alt);
+    border-top: 1px solid var(--border);
+    padding: var(--space-3) var(--space-4); // REDUCIDO
+  }
+}
+
+// Card variante destacada (header con color)
+.card-primary {
+  border-color: var(--brand-primary);
+
+  .card-header {
+    background: linear-gradient(135deg, var(--brand-primary) 0%, #{$primary-hover} 100%);
+    color: white;
+    border-bottom: none;
+
+    i, .bi {
+      color: white;
+    }
+  }
+}
+
+// Card variante con hover interactivo
+.card-interactive {
+  cursor: pointer;
+  transition: all var(--transition-base);
+
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-lg);
+    border-color: var(--brand-primary);
   }
 }
 
 // ============================================================
-// FASE 2 — primitivos visuales reutilizables de PRODOX
-//
-// Regla seguida: los estados que Bootstrap ya deriva correctamente del
-// $primary/$border-radius/$box-shadow sobrescritos en la Fase 1 (foco de
-// inputs, hover de .btn-primary, sombra de modales) NO se repiten acá.
-// Solo se agrega lo que Bootstrap no cubre por defecto (disabled más
-// legible, foco visible por teclado en botones) y clases .prox-* NUEVAS,
-// opcionales, para que las pantallas de fases futuras dejen de reinventar
-// el mismo patrón visual archivo por archivo (estado vacío, KPI, título
-// de sección, header de tarjeta destacada). Ninguna pantalla existente
-// las usa todavía — no se retocó ningún componente de página para esto.
+// BOTONES — Sistema global
 // ============================================================
-
-// ---- Botones: disabled más diferenciado, foco visible por teclado ----
 .btn {
+  font-weight: 600;
+  border-radius: var(--radius-md);
+  transition: all var(--transition-fast);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+
+  i, .bi {
+    flex-shrink: 0;
+  }
+
+  &:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-sm);
+  }
+
+  &:active {
+    transform: translateY(0);
+  }
+
   &:disabled,
   &.disabled {
-    opacity: .55;
+    opacity: 0.5;
     cursor: not-allowed;
+    transform: none !important;
   }
 
   &:focus-visible {
-    outline: 2px solid var(--brand);
+    outline: 2px solid var(--brand-primary);
     outline-offset: 2px;
+    box-shadow: 0 0 0 4px var(--brand-primary-tint);
   }
 }
 
-// Utilidad opcional para botones ícono-solo: área de clic cuadrada y
-// consistente (hoy hay 3 densidades de padding distintas entre pantallas).
+// Botón primario (violeta)
+.btn-primary {
+  background: linear-gradient(135deg, var(--brand-primary) 0%, #{$primary-hover} 100%);
+  border: none;
+  color: white;
+
+  &:hover {
+    background: linear-gradient(135deg, #{$primary-hover} 0%, #5B21B6 100%);
+  }
+}
+
+// Botón secundario (turquesa)
+.btn-secondary {
+  background: linear-gradient(135deg, var(--brand-secondary) 0%, #{$secondary-hover} 100%);
+  border: none;
+  color: white;
+
+  &:hover {
+    background: linear-gradient(135deg, #{$secondary-hover} 0%, #0F766E 100%);
+  }
+}
+
+// Botón icon-only (cuadrado, sin texto)
 .btn-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 2rem;
-  height: 2rem;
+  width: 2.5rem;
+  height: 2.5rem;
   padding: 0;
   line-height: 1;
+  
+  &.btn-sm {
+    width: 2rem;
+    height: 2rem;
+  }
+  
+  &.btn-lg {
+    width: 3rem;
+    height: 3rem;
+  }
 }
 
-// ---- Inputs / selects: disabled consistente con los tokens ----
-.form-control:disabled,
-.form-control[readonly],
-.form-select:disabled {
-  background-color: var(--background);
-  color: var(--text-secondary);
-}
-
-// ---- Cards ----
-.card-header {
-  background-color: var(--surface);
-  border-bottom: 1px solid var(--border);
+// ============================================================
+// BADGES — Estados y categorías - MÁS COMPACTOS
+// ============================================================
+.badge {
   font-weight: 600;
+  padding: 0.2rem 0.5rem; // Más compacto
+  border-radius: var(--radius-md);
+  font-size: var(--text-2xs); // Más pequeño (11px)
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
 }
 
-// Variante opcional de header "destacado", para normalizar el patrón que
-// hoy algunas pantallas arman a mano con bg-primary bg-opacity-10.
-.prox-card-header-accent {
-  background-color: var(--brand-tint);
-  border-bottom: 1px solid var(--border);
+// Badge pequeño
+.prox-badge-sm {
+  font-size: 0.625rem; // 10px
+  padding: 0.15rem 0.4rem;
+}
+
+// ============================================================
+// INPUTS Y FORMULARIOS - MÁS COMPACTOS
+// ============================================================
+.form-label {
   font-weight: 600;
   color: var(--text-primary);
+  font-size: var(--text-sm);
+  margin-bottom: var(--space-2);
 }
 
-// ---- Badge chico opcional, para los ~6 tamaños de fuente sueltos que
-// hoy existen inline en distintas pantallas (no se tocaron esas pantallas). ----
-.prox-badge-sm {
-  font-size: var(--text-2xs);
-  padding: .25em .55em;
-  font-weight: 600;
-}
+.form-control,
+.form-select {
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  transition: all var(--transition-fast);
+  font-size: var(--text-sm);
+  padding: 0.45rem 0.75rem; // Padding más compacto
 
-// ---- Estado vacío reutilizable (ícono + texto), opcional ----
-.prox-empty-state {
-  text-align: center;
-  padding: var(--space-6) var(--space-4);
-  color: var(--text-secondary);
-
-  > i, > .bi {
-    display: block;
-    font-size: 2.5rem;
-    opacity: .3;
-    margin-bottom: var(--space-3);
+  &:focus {
+    border-color: var(--brand-primary);
+    box-shadow: 0 0 0 3px var(--brand-primary-tint);
   }
 
-  // El texto secundario hereda el color del contenedor, pero el título
-  // debe seguir leyéndose como título (jerarquía), no como texto muted.
+  &:disabled,
+  &[readonly] {
+    background-color: var(--background-alt);
+    color: var(--text-secondary);
+    cursor: not-allowed;
+  }
+}
+
+.form-control-sm,
+.form-select-sm {
+  border-radius: var(--radius-sm);
+  padding: 0.35rem 0.6rem; // Aún más compacto
+  font-size: var(--text-xs);
+}
+
+// ============================================================
+// TABLAS - MÁS COMPACTAS
+// ============================================================
+.table {
+  th {
+    font-size: var(--text-2xs); // Más pequeño
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-secondary);
+    font-weight: 700;
+    background-color: var(--background-alt);
+    border-bottom: 2px solid var(--border);
+    padding: 0.5rem 0.75rem; // Más compacto
+  }
+
+  td {
+    padding: 0.5rem 0.75rem; // Más compacto
+    vertical-align: middle;
+    font-size: var(--text-sm);
+  }
+
+  tbody tr {
+    transition: background-color var(--transition-fast);
+
+    &:hover {
+      background-color: var(--background-alt);
+    }
+  }
+}
+
+// ============================================================
+// ALERTAS
+// ============================================================
+.alert {
+  border-radius: var(--radius-lg);
+  border: none;
+  padding: var(--space-4) var(--space-5);
+  display: flex;
+  align-items: start;
+  gap: var(--space-3);
+
+  i, .bi {
+    flex-shrink: 0;
+    font-size: var(--text-lg);
+  }
+}
+
+// ============================================================
+// MODALES
+// ============================================================
+.modal-content {
+  border-radius: var(--radius-xl);
+  border: none;
+  box-shadow: var(--shadow-xl);
+}
+
+.modal-header {
+  border-bottom: 1px solid var(--border);
+  padding: var(--space-5);
+
+  .modal-title {
+    font-weight: 700;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+  }
+}
+
+.modal-body {
+  padding: var(--space-5);
+}
+
+.modal-footer {
+  border-top: 1px solid var(--border);
+  padding: var(--space-4) var(--space-5);
+  background-color: var(--background-alt);
+}
+
+// ============================================================
+// ESTADOS VACÍOS (Empty States)
+// ============================================================
+.prox-empty-state {
+  text-align: center;
+  padding: var(--space-8) var(--space-6);
+  color: var(--text-secondary);
+
+  i, .bi {
+    display: block;
+    font-size: 3rem;
+    opacity: 0.3;
+    margin-bottom: var(--space-4);
+    color: var(--brand-primary);
+  }
+
   h4, h5, h6 {
     color: var(--text-primary);
     font-weight: 600;
+    margin-bottom: var(--space-2);
   }
 
-  p { margin: 0; }
+  p {
+    margin: 0;
+    font-size: var(--text-sm);
+  }
+
+  .btn {
+    margin-top: var(--space-4);
+  }
 }
 
-// ---- Indicador / KPI reutilizable, opcional ----
+// ============================================================
+// KPI / STATS CARDS - MÁS COMPACTOS
+// ============================================================
 .prox-stat {
   .prox-stat-label {
-    font-size: var(--text-2xs);
+    font-size: var(--text-2xs); // Más pequeño
     text-transform: uppercase;
-    letter-spacing: .05em;
+    letter-spacing: 0.05em;
     color: var(--text-secondary);
-    margin-bottom: .25rem;
+    margin-bottom: var(--space-1);
+    font-weight: 700;
   }
 
   .prox-stat-value {
     font-family: var(--font-mono);
     font-variant-numeric: tabular-nums;
-    font-size: 1.5rem;
-    font-weight: 600;
+    font-size: var(--text-2xl); // REDUCIDO de 3xl
+    font-weight: 700;
     color: var(--text-primary);
+    line-height: 1.2;
   }
 }
 
-// ---- Títulos de sección reutilizables, opcionales ----
+.kpi-card {
+  .kpi-value {
+    font-size: var(--text-2xl); // REDUCIDO de 3xl
+    font-weight: 700;
+    line-height: 1.2;
+    font-family: var(--font-mono);
+  }
+
+  .kpi-label {
+    font-size: var(--text-2xs); // Más pequeño
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-secondary);
+    font-weight: 700;
+  }
+}
+
+// ============================================================
+// TÍTULOS DE SECCIÓN - MÁS COMPACTOS
+// ============================================================
 .prox-section-title {
-  font-size: 1rem;
-  font-weight: 600;
+  font-size: var(--text-md); // REDUCIDO de lg
+  font-weight: 700;
   color: var(--text-primary);
-  margin-bottom: var(--space-3);
+  margin-bottom: var(--space-3); // REDUCIDO
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+
+  i, .bi {
+    color: var(--brand-primary);
+  }
 }
 
 .prox-section-subtitle {
-  font-size: .8125rem;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
-  margin-bottom: var(--space-4);
+  margin-bottom: var(--space-3); // REDUCIDO
+}
+
+// ============================================================
+// UTILIDADES ADICIONALES
+// ============================================================
+
+// Hover de factor cards (para Planeación)
+.factor-card {
+  cursor: pointer;
+  transition: all var(--transition-base);
+
+  &.selected,
+  &:hover {
+    border-color: var(--brand-primary);
+    background-color: var(--brand-primary-tint);
+  }
+}
+
+// Nav Tabs mejorados
+.nav-tabs {
+  border-bottom: 2px solid var(--border);
+
+  .nav-link {
+    border: none;
+    border-bottom: 3px solid transparent;
+    color: var(--text-secondary);
+    font-weight: 600;
+    padding: var(--space-3) var(--space-4);
+    transition: all var(--transition-fast);
+
+    &:hover {
+      color: var(--text-primary);
+      border-bottom-color: var(--border-hover);
+    }
+
+    &.active {
+      color: var(--brand-primary);
+      border-bottom-color: var(--brand-primary);
+      background-color: transparent;
+    }
+  }
+}
+
+// Separador vertical
+.vr {
+  background-color: var(--border);
+  opacity: 1;
+}
+
+// Spinner de carga
+.spinner-border {
+  border-color: var(--brand-primary);
+  border-right-color: transparent;
+}
+
+// Loading states
+.loading-overlay {
+  position: absolute;
+  inset: 0;
+  background-color: rgba(255, 255, 255, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  border-radius: inherit;
+}
+
+// Scrollbar personalizado (solo webkit)
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--background-alt);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-hover);
+  border-radius: var(--radius-full);
+
+  &:hover {
+    background: var(--text-secondary);
+  }
 }

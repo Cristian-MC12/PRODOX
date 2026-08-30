@@ -17,12 +17,15 @@ import { catchError, of } from 'rxjs';
 
       <div class="main-content w-100">
         <!-- Header -->
-        <header class="page-header d-flex align-items-center gap-3">
+        <header class="page-header d-flex align-items-center justify-content-between gap-3">
           <button class="btn btn-sm btn-outline-secondary d-md-none"
                   (click)="sidebar.toggle()">
             <i class="bi bi-list"></i>
           </button>
-          <h1>{{ title }}</h1>
+          @if (title) {
+            <h1>{{ title }}</h1>
+          }
+          <ng-content select="[slot='header']"></ng-content>
         </header>
 
         <!-- Banner contextual: proyecto + sprint activo -->

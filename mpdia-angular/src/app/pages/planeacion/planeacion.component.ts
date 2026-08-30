@@ -24,7 +24,36 @@ type Paso = 'metricas' | 'variables' | 'sprints';
   standalone: true,
   imports: [CommonModule, FormsModule, ShellComponent],
   template: `
-    <app-shell title="Planeación">
+    <app-shell title="" [showBanner]="false">
+      <!-- Header personalizado con slot -->
+      <div slot="header" class="d-flex align-items-center justify-content-between flex-grow-1 gap-3">
+        <div class="d-flex align-items-center gap-3">
+          <h1 style="font-size: 24px; font-weight: 600; color: #1F2937; margin: 0;">Planeación</h1>
+          <div class="d-flex align-items-center gap-2">
+            <i class="bi bi-folder" style="color: #3B82F6; font-size: 16px;"></i>
+            <span style="color: #1F2937; font-weight: 500; font-size: 14px;">{{ proyecto?.nombre || 'Sin proyecto' }}</span>
+            @if (proyecto) {
+              <span class="badge" style="background: #8B5CF6; font-size: 11px; padding: 4px 10px; border-radius: 6px; font-weight: 600;">
+                {{ proyecto.metodo | uppercase }}
+              </span>
+              <span class="badge" style="background: #10B981; font-size: 11px; padding: 4px 10px; border-radius: 6px; font-weight: 600;">
+                Sprint 5 de 5
+              </span>
+            }
+          </div>
+        </div>
+        @if (proyecto) {
+          <div class="d-flex align-items-center gap-2">
+            <button class="btn d-flex align-items-center gap-2"
+                    style="background: #8B5CF6; color: white; border: none; border-radius: 8px; padding: 10px 18px; font-size: 14px; font-weight: 500; box-shadow: 0 2px 8px rgba(139, 92, 246, 0.3);"
+                    (click)="router.navigate(['/crear-metrica-ia'])"
+                    title="Crear métrica con Inteligencia Artificial">
+              <i class="bi bi-stars" style="font-size: 18px;"></i>
+              Crear métrica con IA
+            </button>
+          </div>
+        }
+      </div>
 
       @if (!proyecto) {
         <div class="prox-empty-state">
@@ -39,39 +68,75 @@ type Paso = 'metricas' | 'variables' | 'sprints';
         @if (alertMsg()) {
           <div class="alert py-2 small mb-3" [class]="alertClass()">{{ alertMsg() }}</div>
         }
+        <div class="card mb-3" style="background: linear-gradient(135deg, #F5F3FF 0%, #EDE9FE 100%); border: 1px solid #E9D5FF; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+          <div class="card-body d-flex align-items-center gap-3 py-2 px-3">
+            <!-- Icono principal -->
+            <div class="d-flex align-items-center justify-content-center flex-shrink-0" 
+                 style="width: 44px; height: 44px; background: linear-gradient(135deg, #A78BFA 0%, #8B5CF6 100%); border-radius: 10px; box-shadow: 0 2px 6px rgba(139, 92, 246, 0.25);">
+              <i class="bi bi-bullseye" style="font-size: 22px; color: white;"></i>
+            </div>
+            
+            <!-- Título y descripción -->
+            <div class="flex-grow-1" style="min-width: 0; max-width: 420px;">
+              <h5 class="mb-0 fw-bold" style="font-size: 13px; color: #1F2937; line-height: 1.3;">
+                Validar FASE 21 — Dashboard y AI Insights
+              </h5>
+              <p class="mb-0" style="font-size: 10px; color: #6B7280; line-height: 1.4; word-wrap: break-word; white-space: normal;">
+                Definir y validar las métricas que permitirán analizar el rendimiento del equipo
+                y obtener insights con inteligencia artificial.
+              </p>
+            </div>
 
-        <!-- Info del proyecto -->
-        <div class="card mb-3 border-primary">
-          <div class="card-body py-2">
-            <div class="d-flex flex-wrap gap-3 align-items-center">
-              <div>
-                <div class="text-muted small">Proyecto</div>
-                <div class="fw-semibold">{{ proyecto.nombre }}</div>
+            <!-- Divisor vertical -->
+            <div style="width: 1px; height: 40px; background: linear-gradient(to bottom, transparent, #E9D5FF 20%, #E9D5FF 80%, transparent); flex-shrink: 0;"></div>
+
+            <!-- Métricas en línea con espacio distribuido -->
+            <div class="d-flex align-items-center justify-content-between flex-grow-1" style="padding-left: 12px;">
+              <!-- Sprints -->
+              <div class="text-center" style="min-width: 70px;">
+                <div class="d-flex align-items-center justify-content-center mb-1" 
+                     style="width: 36px; height: 36px; background: rgba(99, 102, 241, 0.1); border-radius: 50%; margin: 0 auto;">
+                  <i class="bi bi-calendar3" style="font-size: 16px; color: #6366F1;"></i>
+                </div>
+                <div class="fw-bold" style="font-size: 16px; color: #1F2937; line-height: 1.2;">{{ proyecto.numeroSprints }}</div>
+                <div style="font-size: 10px; color: #9CA3AF; line-height: 1.2;">Sprints</div>
               </div>
-              <div class="vr"></div>
-              <span class="badge" [class]="proyecto.metodo === 'scrum' ? 'bg-primary' : 'bg-info text-dark'">
-                {{ proyecto.metodo | uppercase }}
-              </span>
-              <div class="vr"></div>
-              <div>
-                <div class="text-muted small">Sprints</div>
-                <div class="fw-semibold">{{ proyecto.numeroSprints }} × {{ proyecto.timeBoxSemanas }} sem</div>
+
+              <!-- Semanas -->
+              <div class="text-center" style="min-width: 75px;">
+                <div class="d-flex align-items-center justify-content-center mb-1" 
+                     style="width: 36px; height: 36px; background: rgba(20, 184, 166, 0.1); border-radius: 50%; margin: 0 auto;">
+                  <i class="bi bi-clock" style="font-size: 16px; color: #14B8A6;"></i>
+                </div>
+                <div class="fw-bold" style="font-size: 16px; color: #1F2937; line-height: 1.2;">{{ proyecto.timeBoxSemanas }} sem</div>
+                <div style="font-size: 10px; color: #9CA3AF; line-height: 1.2;">por iteración</div>
               </div>
+
+              <!-- Fecha inicio -->
               @if (proyecto.fechaInicio) {
-                <div class="vr"></div>
-                <div>
-                  <div class="text-muted small">Inicio</div>
-                  <div class="fw-semibold">{{ proyecto.fechaInicio | date:'dd/MM/yyyy' }}</div>
+                <div class="text-center" style="min-width: 95px;">
+                  <div class="d-flex align-items-center justify-content-center mb-1" 
+                       style="width: 36px; height: 36px; background: rgba(139, 92, 246, 0.1); border-radius: 50%; margin: 0 auto;">
+                    <i class="bi bi-calendar-check" style="font-size: 16px; color: #8B5CF6;"></i>
+                  </div>
+                  <div class="fw-bold" style="font-size: 16px; color: #1F2937; line-height: 1.2;">{{ proyecto.fechaInicio | date:'dd/MM/yyyy' }}</div>
+                  <div style="font-size: 10px; color: #9CA3AF; line-height: 1.2;">Fecha de inicio</div>
                 </div>
               }
-              <div class="vr"></div>
-              <div>
-                <div class="text-muted small">Product Goal</div>
-                <div class="small">{{ proyecto.productGoal | slice:0:80 }}</div>
+
+              <!-- Progreso -->
+              <div class="text-center" style="min-width: 95px;">
+                <div class="d-flex align-items-center justify-content-center mb-1" 
+                     style="width: 36px; height: 36px; background: rgba(16, 185, 129, 0.1); border-radius: 50%; margin: 0 auto;">
+                  <i class="bi bi-check-circle" style="font-size: 16px; color: #10B981;"></i>
+                </div>
+                <div class="fw-bold" style="font-size: 16px; color: #1F2937; line-height: 1.2;">{{ progresoPlaneacion }}%</div>
+                <div style="font-size: 10px; color: #9CA3AF; line-height: 1.2;">Progreso de planeación</div>
               </div>
             </div>
           </div>
         </div>
+
 
         <!-- Tabs de fase -->
         <ul class="nav nav-tabs mb-3">
@@ -107,32 +172,33 @@ type Paso = 'metricas' | 'variables' | 'sprints';
 
             <!-- Panel izquierdo: catálogo agrupado -->
             <div class="col-lg-7">
-              <div class="card h-100">
-                <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-2 py-2">
-                  <span class="fw-semibold small">
+              <div class="card" style="height: calc(100vh - 340px); min-height: 500px; display: flex; flex-direction: column;">
+                <div class="card-header d-flex align-items-center justify-content-between gap-2 py-2" style="flex-shrink: 0; flex-wrap: nowrap;">
+                  <span class="fw-semibold small text-nowrap">
                     <i class="bi bi-grid me-1"></i>Catálogo de Métricas
                   </span>
-                  <div class="d-flex flex-wrap gap-2 align-items-center">
-                    <button class="btn btn-outline-primary btn-sm text-nowrap"
+                  <div class="d-flex gap-2 align-items-center" style="flex-wrap: nowrap;">
+                    <button class="btn btn-outline-primary btn-sm"
+                            style="white-space: nowrap; font-size: 12px; padding: 4px 8px;"
                             (click)="router.navigate(['/crear-metrica-ia'])"
-                            title="Proponer una nueva métrica con IA">
-                      <i class="bi bi-robot me-1"></i>Crear métrica con IA
+                            title="Crear métrica con IA">
+                      <i class="bi bi-robot me-1"></i>Crear con IA
                     </button>
                     <select class="form-select form-select-sm"
-                            style="max-width:150px"
+                            style="width: 140px; font-size: 12px;"
                             [(ngModel)]="categoriaFiltro">
-                      <option value="">Todas las categorías</option>
+                      <option value="">Todas</option>
                       @for (cat of categorias; track cat) {
                         <option [value]="cat">{{ cat }}</option>
                       }
                     </select>
                     <input type="text" class="form-control form-control-sm"
-                           style="max-width:160px"
+                           style="width: 120px; font-size: 12px;"
                            placeholder="Buscar..."
                            [(ngModel)]="busqueda">
                   </div>
                 </div>
-                <div class="card-body p-0" style="max-height:500px;overflow-y:auto">
+                <div class="card-body p-0 flex-grow-1" style="overflow-y:auto">
                   @if (cargando) {
                     <div class="text-center py-4 text-muted small">
                       <span class="spinner-border spinner-border-sm me-2"></span>Cargando...
@@ -224,159 +290,128 @@ type Paso = 'metricas' | 'variables' | 'sprints';
               </div>
             </div>
 
-            <!-- Panel derecho: seleccionadas + parametrización -->
+            <!-- Panel derecho: Plan de medición -->
             <div class="col-lg-5">
-              <div class="card mb-3">
-                <div class="card-header fw-semibold small py-2">
-                  <i class="bi bi-check2-square me-1"></i>Seleccionadas
-                  <span class="badge bg-primary ms-1">{{ totalSeleccionadas }}</span>
-                  <span class="badge bg-success ms-1">{{ totalAprobadas }} aprobadas</span>
-                </div>
-                <div style="max-height:280px;overflow-y:auto">
-                  @if (seleccionadasList.length === 0) {
-                    <div class="text-center text-muted py-3 small">
-                      Hacé click en <i class="bi bi-plus-lg"></i> para agregar métricas.
+              <div class="card" style="height: calc(100vh - 340px); min-height: 500px; display: flex; flex-direction: column;">
+                <div class="card-body p-3" style="display: flex; flex-direction: column; overflow: hidden;">
+                  <!-- Header: Plan de medición -->
+                  <div class="d-flex align-items-center justify-content-between mb-3" style="flex-shrink: 0;">
+                    <h6 class="mb-0" style="font-weight: 600; font-size: 15px; color: #1F2937;">Plan de medición</h6>
+                    <div class="d-flex align-items-center gap-2">
+                      <span class="badge" style="background: rgba(139, 92, 246, 0.1); color: #8B5CF6; font-size: 11px; padding: 4px 10px; border-radius: 12px; font-weight: 600;">
+                        {{ totalSeleccionadas }} seleccionadas
+                      </span>
+                      <span class="badge" style="background: rgba(16, 185, 129, 0.1); color: #10B981; font-size: 11px; padding: 4px 10px; border-radius: 12px; font-weight: 600;">
+                        <i class="bi bi-check-circle me-1"></i>{{ totalAprobadas }} aprobadas
+                      </span>
                     </div>
-                  } @else {
-                    <div class="table-responsive">
-                    <table class="table table-sm mb-0">
-                      <tbody>
-                        @for (m of seleccionadasList; track m.metricaId) {
-                            <tr>
-                              <td class="ps-3 small">{{ m.nombre }}</td>
-                              <td>
-                                <span class="badge prox-badge-sm"
-                                      [class]="badgeCategoria(m.categoria)">
-                                  {{ m.categoria }}
-                                </span>
-                              </td>
-                              <td class="text-center">
-                                @switch (estadoParametrizacion(m)) {
-                                  @case ('completa') {
-                                    <span class="badge bg-success prox-badge-sm">
-                                      <i class="bi bi-check-circle me-1"></i>Completa
-                                    </span>
-                                  }
-                                  @case ('parcial') {
-                                    <span class="badge bg-warning text-dark prox-badge-sm">
-                                      <i class="bi bi-exclamation-circle me-1"></i>Parcial
-                                    </span>
-                                  }
-                                  @default {
-                                    <span class="badge bg-secondary prox-badge-sm">
-                                      Sin parametrizar
-                                    </span>
-                                  }
-                                }
-                              </td>
-                              <td class="text-center">
-                                @if (estadoParametrizacion(m) !== 'sin_parametrizar') {
-                                  <button class="btn btn-sm btn-outline-info btn-icon me-1"
-                                          (click)="verParametrizacion(m)"
-                                          title="Ver parametrización">
-                                    <i class="bi bi-eye"></i>
-                                  </button>
-                                }
-                                <button class="btn btn-sm btn-icon"
-                                        [class]="estadoParametrizacion(m) === 'sin_parametrizar' ? 'btn-outline-primary' : 'btn-outline-success'"
-                                        (click)="irAParametrizar(m)"
-                                        title="Parametrizar con GenAI">
-                                  <i class="bi bi-stars"></i>
-                                </button>
-                              </td>
-                              <td class="text-end pe-2">
-                                <div class="d-flex align-items-center justify-content-end gap-2">
-                                  @if (m.aprobada) {
-                                    <i class="bi bi-check-circle-fill text-success"></i>
-                                  } @else {
-                                    <i class="bi bi-clock text-warning"></i>
-                                    <button class="btn btn-sm btn-outline-danger btn-icon"
-                                            (click)="deseleccionar(m)" title="Quitar de seleccionadas">
-                                      <i class="bi bi-x-lg"></i>
-                                    </button>
-                                  }
-                                </div>
-                              </td>
-                            </tr>
-                        }
-                      </tbody>
-                    </table>
-                    </div>
-                  }
-                </div>
-                @if (seleccionadasList.length > 0) {
-                  <div class="card-footer py-2 text-center">
-                    <button class="btn btn-sm w-100"
-                            [class]="parametrizacionesCompletas === seleccionadasList.length ? 'btn-success' : 'btn-outline-primary'"
-                            (click)="router.navigate(['/resumen-seleccion'])">
-                      <i class="bi bi-list-check me-1"></i>
-                      Ver resumen y enviar al Scrum Master
-                      @if (parametrizacionesCompletas < seleccionadasList.length) {
-                        <span class="badge bg-light text-dark ms-1">
-                          {{ parametrizacionesCompletas }}/{{ seleccionadasList.length }}
-                        </span>
-                      }
-                    </button>
                   </div>
-                }
-              </div>
 
-              <!-- Historial de seleccionadas: vista informativa, sin acciones -->
-              <div class="card mb-3">
-                <div class="card-header fw-semibold small py-2">
-                  <i class="bi bi-clock-history me-1"></i>Historial de seleccionadas
-                  <span class="badge bg-secondary ms-1">{{ historialSeleccionadas.length }}</span>
-                </div>
-                <div style="max-height:220px;overflow-y:auto">
-                  @if (historialSeleccionadas.length === 0) {
-                    <div class="text-center text-muted py-3 small">
-                      Todavía no se seleccionó ninguna métrica.
-                    </div>
-                  } @else {
-                    <ul class="list-group list-group-flush">
-                      @for (m of historialSeleccionadas; track m.metricaId) {
-                        <li class="list-group-item d-flex justify-content-between align-items-center py-2">
-                          <div>
-                            <div class="small">{{ m.nombre }}</div>
-                            @if (m.seleccionadaAt) {
-                              <div class="text-muted" style="font-size:0.68rem">
-                                Seleccionada: {{ m.seleccionadaAt | date:'dd/MM/yyyy HH:mm' }}
-                              </div>
-                            }
+                  <!-- Contenedor scrolleable -->
+                  <div style="flex-grow: 1; overflow-y: auto; overflow-x: hidden;">
+                    @if (seleccionadasList.length === 0 && historialAprobadas.length === 0) {
+                      <div class="text-center text-muted py-4" style="font-size: 13px;">
+                        Seleccioná métricas del catálogo para comenzar tu plan.
+                      </div>
+                    } @else {
+                      <!-- Métricas pendientes (no aprobadas) -->
+                      @for (m of seleccionadasList; track m.metricaId) {
+                        <div class="d-flex align-items-center justify-content-between py-2 border-bottom">
+                          <div class="d-flex align-items-center gap-2 flex-grow-1" style="min-width: 0;">
+                            <i class="bi bi-grip-vertical" style="color: #D1D5DB; font-size: 14px;"></i>
+                            <span style="font-size: 13px; font-weight: 500; color: #1F2937; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                              {{ m.nombre }}
+                            </span>
                           </div>
-                          <span class="badge prox-badge-sm"
-                                [class]="badgeCategoria(m.categoria)">
-                            {{ m.categoria }}
-                          </span>
-                        </li>
+                          <div class="d-flex align-items-center gap-2 flex-shrink-0">
+                            <!-- Botón parametrizar -->
+                            <button class="btn btn-sm d-flex align-items-center justify-content-center" 
+                                    style="width: 28px; height: 28px; background: rgba(139, 92, 246, 0.1); border: 1px solid #E9D5FF; border-radius: 6px; padding: 0;"
+                                    (click)="irAParametrizar(m)"
+                                    title="Parametrizar con GenAI">
+                              <i class="bi bi-stars" style="color: #8B5CF6; font-size: 13px;"></i>
+                            </button>
+                            
+                            <!-- Botón ver parametrización (solo si existe) -->
+                            @if (estadoParametrizacion(m) !== 'sin_parametrizar') {
+                              <button class="btn btn-sm d-flex align-items-center justify-content-center" 
+                                      style="width: 28px; height: 28px; background: rgba(59, 130, 246, 0.1); border: 1px solid #DBEAFE; border-radius: 6px; padding: 0;"
+                                      (click)="verParametrizacion(m)"
+                                      title="Ver parametrización">
+                                <i class="bi bi-eye" style="color: #3B82F6; font-size: 13px;"></i>
+                              </button>
+                            }
+                            
+                            <!-- Botón eliminar -->
+                            <button class="btn btn-sm d-flex align-items-center justify-content-center" 
+                                    style="width: 28px; height: 28px; background: rgba(239, 68, 68, 0.1); border: 1px solid #FEE2E2; border-radius: 6px; padding: 0;"
+                                    (click)="deseleccionar(m)" 
+                                    title="Quitar de seleccionadas">
+                              <i class="bi bi-x-lg" style="color: #EF4444; font-size: 13px;"></i>
+                            </button>
+                          </div>
+                        </div>
                       }
-                    </ul>
-                  }
-                </div>
-              </div>
+                      
+                      <!-- Historial desplegable de métricas aprobadas -->
+                      @if (historialAprobadas.length > 0) {
+                        <div class="mt-2">
+                          <button class="btn btn-sm w-100 d-flex align-items-center justify-content-between py-2 border-0"
+                                  style="background: rgba(16, 185, 129, 0.05); border-radius: 6px;"
+                                  (click)="historialDesplegado = !historialDesplegado">
+                            <div class="d-flex align-items-center gap-2">
+                              <i class="bi bi-clock-history" style="color: #10B981; font-size: 14px;"></i>
+                              <span style="font-size: 13px; font-weight: 500; color: #1F2937;">Historial de aprobadas</span>
+                              <span class="badge" style="background: #10B981; font-size: 10px; padding: 2px 6px; border-radius: 8px; color: white;">
+                                {{ historialAprobadas.length }}
+                              </span>
+                            </div>
+                            <i class="bi" [class]="historialDesplegado ? 'bi-chevron-up' : 'bi-chevron-down'" 
+                               style="color: #6B7280; font-size: 12px;"></i>
+                          </button>
+                          
+                          @if (historialDesplegado) {
+                            <div class="mt-2">
+                              @for (m of historialAprobadas; track m.metricaId) {
+                                <div class="d-flex align-items-center justify-content-between py-2 px-2 border-bottom" 
+                                     style="background: rgba(16, 185, 129, 0.02);">
+                                  <div class="flex-grow-1" style="min-width: 0;">
+                                    <div style="font-size: 13px; font-weight: 500; color: #1F2937; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                                      {{ m.nombre }}
+                                    </div>
+                                    @if (m.seleccionadaAt) {
+                                      <div style="font-size: 10px; color: #9CA3AF;">
+                                        Aprobada: {{ m.seleccionadaAt | date:'dd/MM/yyyy HH:mm' }}
+                                      </div>
+                                    }
+                                  </div>
+                                  <div class="d-flex align-items-center gap-2 flex-shrink-0">
+                                    <i class="bi bi-check-circle-fill" style="color: #10B981; font-size: 16px;" title="Aprobada"></i>
+                                  </div>
+                                </div>
+                              }
+                            </div>
+                          }
+                        </div>
+                      }
+                    }
+                  </div>
+                  </div>
+                  <!-- Fin contenedor scrolleable -->
 
-              <!-- Guía de estados -->
-              <div class="card mt-3">
-                <div class="card-header fw-semibold small py-2">
-                  <i class="bi bi-info-circle me-1"></i>Flujo de planeación
-                </div>
-                <div class="card-body py-2 small text-muted">
-                  <div class="d-flex gap-2 align-items-center mb-2">
-                    <i class="bi bi-plus-circle text-primary fs-5"></i>
-                    <div><strong>Seleccionar</strong> — agrega la métrica al proyecto.</div>
-                  </div>
-                  <div class="d-flex gap-2 align-items-center mb-2">
-                    <i class="bi bi-check-circle text-success fs-5"></i>
-                    <div><strong>Aprobar</strong> — genera automáticamente la variable con sus metadatos.</div>
-                  </div>
-                  <div class="d-flex gap-2 align-items-center">
-                    <i class="bi bi-lightning text-info fs-5"></i>
-                    <div><strong>Variable generada</strong> — lista para registrar valores en Ejecución.</div>
-                  </div>
+                  <!-- Botón compacto (fijo) -->
+                  @if (historialSeleccionadas.length > 0) {
+                    <button class="btn w-100 d-flex align-items-center justify-content-center gap-2"
+                            style="background: #0891B2; color: white; border: none; border-radius: 8px; padding: 8px 12px; font-size: 13px; font-weight: 500; box-shadow: 0 1px 3px rgba(8, 145, 178, 0.2); flex-shrink: 0; margin-top: 12px;"
+                            (click)="router.navigate(['/resumen-seleccion'])">
+                      Revisar y enviar al Scrum Master
+                      <i class="bi bi-arrow-right" style="font-size: 14px;"></i>
+                    </button>
+                  }
+                  <!-- Fin card-body scrolleable interno -->
                 </div>
               </div>
             </div>
-          </div>
         }
 
         <!-- ── TAB: VARIABLES ─────────────────────────────────────────── -->
@@ -558,6 +593,7 @@ export class PlaneacionComponent implements OnInit {
   busqueda = '';
   categoriaFiltro = '';
   aprobando: string | null = null;
+  historialDesplegado = false; // Control del accordion del historial
 
   alertMsg   = signal('');
   alertClass = signal('alert-success');
@@ -613,6 +649,28 @@ export class PlaneacionComponent implements OnInit {
     return this.seleccionadasList.filter(m => this.estadoParametrizacion(m) === 'completa').length;
   }
 
+  /** Calcula el progreso de planeación basado en métricas aprobadas y parametrizadas */
+  get progresoPlaneacion(): number {
+    if (this.metricas.length === 0) return 0;
+    
+    const totalMetricas = this.metricas.filter(m => m.seleccionada).length;
+    if (totalMetricas === 0) return 0;
+    
+    const metricasAprobadas = this.metricas.filter(m => m.aprobada).length;
+    const metricasParametrizadas = this.seleccionadasList.filter(m => 
+      this.estadoParametrizacion(m) === 'completa'
+    ).length;
+    
+    // Progreso = (aprobadas + parametrizadas completas) / total seleccionadas
+    const progreso = ((metricasAprobadas + metricasParametrizadas) / totalMetricas) * 100;
+    return Math.round(progreso);
+  }
+
+  /** Obtiene solo las métricas aprobadas del historial */
+  get historialAprobadas(): ProyectoMetricaDto[] {
+    return this.historialSeleccionadas.filter(m => m.aprobada);
+  }
+
   ngOnInit(): void {
     try {
       const p = localStorage.getItem('mpdia_proyecto_activo');
@@ -626,10 +684,12 @@ export class PlaneacionComponent implements OnInit {
       forkJoin({
         metricas: this.planeacionService.listarMetricas(this.proyecto.id).pipe(catchError(() => of([]))),
         sprints:  this.sprintService.listar(this.proyecto.id).pipe(catchError(() => of([]))),
-        parametrizaciones: this.http.get<any[]>(`${environment.apiBaseUrl}/metric-ranking/pendientes?proyectoId=${this.proyecto.id}`).pipe(catchError(() => of([])))
-      }).subscribe(({ metricas, sprints, parametrizaciones }) => {
+        parametrizaciones: this.http.get<any[]>(`${environment.apiBaseUrl}/metric-ranking/pendientes?proyectoId=${this.proyecto.id}`).pipe(catchError(() => of([]))),
+        variables: this.planeacionService.listarVariables(this.proyecto.id).pipe(catchError(() => of([])))
+      }).subscribe(({ metricas, sprints, parametrizaciones, variables }) => {
         this.metricas = metricas;
         this.sprints  = [...sprints].sort((a, b) => a.numero - b.numero);
+        this.variables = variables;
         
         // Indexar parametrizaciones por metricaId
         parametrizaciones.forEach(p => {
