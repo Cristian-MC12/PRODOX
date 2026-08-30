@@ -16,11 +16,16 @@ export class ProjectMemberService {
     return this.http.get<ProjectMemberDto[]>(`${this.base}/${proyectoId}`);
   }
 
-  invitar(proyectoId: string, email: string): Observable<{ codigo: string }> {
-    return this.http.post<{ codigo: string }>(`${this.base}/${proyectoId}/invitar`, { email });
+  invitar(proyectoId: string, email: string): Observable<{ codigo: string; emailEnviado: boolean }> {
+    return this.http.post<{ codigo: string; emailEnviado: boolean }>(`${this.base}/${proyectoId}/invitar`, { email });
   }
 
   unirse(codigo: string): Observable<ProjectMemberDto> {
     return this.http.post<ProjectMemberDto>(`${this.base}/unirse`, { codigo });
+  }
+
+  /** Estado público de una invitación (sin requerir sesión) — usado por /invitacion. */
+  consultarInvitacion(codigo: string): Observable<{ proyectoId: string | null; proyectoNombre: string | null; estado: string }> {
+    return this.http.get<{ proyectoId: string | null; proyectoNombre: string | null; estado: string }>(`${this.base}/invitacion/${codigo}`);
   }
 }

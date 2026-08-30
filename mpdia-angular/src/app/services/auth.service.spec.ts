@@ -132,4 +132,37 @@ describe('AuthService', () => {
     const newService = new AuthService(TestBed.inject(HttpClient), routerSpy);
     expect(newService.currentUser()?.email).toBe('test@mpdia.com');
   });
+
+  // ── persistFromToken (callback de Google OAuth2) ──────────────────────
+
+  it('persistFromToken: decodifica el JWT del callback y persiste la sesión con la misma clave que login/register', () => {
+    const payload = { sub: 'uuid-google-1', email: 'google@mpdia.com', role: 'scrum_member', nombre: 'Google User', exp: 4070908800 };
+    const fakeJwt = `${btoa(JSON.stringify({ alg: 'HS256' }))}.${btoa(JSON.stringify(payload))}.signature`;
+
+    service.persistFromToken(fakeJwt);
+
+    expect(localStorage.getItem('mpdia_token')).toBe(fakeJwt);
+    expect(service.currentUser()?.email).toBe('google@mpdia.com');
+    expect(service.currentUser()?.role).toBe('scrum_member');
+    expect(service.currentUser()?.userId).toBe('uuid-google-1');
+    expect(service.currentUser()?.nombre).toBe('Google User');
+    expect(service.isLoggedIn()).toBeTrue();
+  });
+
+  // ── invitación pendiente (preservada durante login/registro/Google) ────
+
+  it('setInvitacionPendiente / getInvitacionPendiente: guarda y recupera el código', () => {
+    service.setInvitacionPendiente('PRJ-ABC123');
+    expect(service.getInvitacionPendiente()).toBe('PRJ-ABC123');
+  });
+
+  it('getInvitacionPendiente: retorna null si no hay ninguna guardada', () => {
+    expect(service.getInvitacionPendiente()).toBeNull();
+  });
+
+  it('clearInvitacionPendiente: elimina el código guardado', () => {
+    service.setInvitacionPendiente('PRJ-ABC123');
+    service.clearInvitacionPendiente();
+    expect(service.getInvitacionPendiente()).toBeNull();
+  });
 });

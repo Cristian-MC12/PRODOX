@@ -1,25 +1,26 @@
 // Autor: Cristian Santiago Martinez Cordoba — MPDIA
 package com.mpdia.service;
 
+import com.mpdia.dto.InvitacionEstadoDto;
 import com.mpdia.dto.InvitarProyectoRequest;
+import com.mpdia.dto.InvitarProyectoResponse;
 import com.mpdia.dto.ProjectMemberDto;
 import com.mpdia.dto.UnirseProyectoRequest;
-// import com.mpdia.entity.ProjectInvitacion; // NOTA: Entidad NO existe
+import com.mpdia.entity.ProjectInvitacion;
 import com.mpdia.entity.ProjectMember;
 import com.mpdia.entity.Proyecto;
 import com.mpdia.repository.AppUserRepository;
-// import com.mpdia.repository.ProjectInvitacionRepository; // NOTA: Repository NO existe
+import com.mpdia.repository.ProjectInvitacionRepository;
 import com.mpdia.repository.ProjectMemberRepository;
 import com.mpdia.repository.ProyectoRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.mail.SimpleMailMessage;
-import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.security.SecureRandom;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.UUID;
 
@@ -28,15 +29,16 @@ import java.util.UUID;
 public class ProjectMemberService {
 
     private final ProjectMemberRepository    memberRepo;
-    // private final ProjectInvitacionRepository invRepo; // NOTA: Repository NO existe
+    private final ProjectInvitacionRepository invRepo;
     private final ProyectoRepository         proyectoRepo;
     private final AppUserRepository          userRepo;
-
-    @Autowired(required = false)
-    private JavaMailSender mailSender;
+    private final EmailService               emailService;
 
     @Value("${mpdia.app.url:http://localhost:4200}")
     private String appUrl;
+
+    @Value("${mpdia.invitacion.expiration-days:7}")
+    private long expirationDays;
 
     /** Agrega al SM como miembro al crear el proyecto */
     @Transactional
@@ -69,21 +71,9 @@ public class ProjectMemberService {
                 .toList();
     }
 
-    /*
-     * NOTA: Métodos invitar() y unirse() comentados temporalmente
-     * Razón: Dependen de ProjectInvitacion y ProjectInvitacionRepository que NO existen en el proyecto
-     * Este es un PROBLEMA PREEXISTENTE, NO relacionado con AI Copilot (Fase 12)
-     * 
-     * Para restaurar funcionalidad:
-     * 1. Crear entidad ProjectInvitacion con campos: id, proyectoId, email, codigo, token, usado
-     * 2. Crear ProjectInvitacionRepository
-     * 3. Descomentar los métodos invitar() y unirse()
-     */
-
-    /*
     // Genera código de invitación y envía email
     @Transactional
-    public String invitar(UUID proyectoId, String scrumMasterId, InvitarProyectoRequest req) {
+    public InvitarProyectoResponse invitar(UUID proyectoId, String scrumMasterId, InvitarProyectoRequest req) {
         Proyecto p = proyectoRepo.findById(proyectoId)
                 .orElseThrow(() -> new IllegalArgumentException("Proyecto no encontrado."));
 
@@ -99,26 +89,50 @@ public class ProjectMemberService {
         inv.setEmail(req.email());
         inv.setToken(token);
         inv.setCodigo(codigo);
+        inv.setExpiresAt(Instant.now().plus(expirationDays, ChronoUnit.DAYS));
         invRepo.save(inv);
 
-        if (mailSender != null) {
-            String link = appUrl + "/proyectos/unirse?codigo=" + codigo;
-            SimpleMailMessage msg = new SimpleMailMessage();
-            msg.setTo(req.email());
-            msg.setSubject("Invitación al proyecto MPDIA: " + p.getNombre());
-            msg.setText(
+        // Ruta Angular dedicada a aceptar la invitación (ver InvitacionComponent):
+        // antes apuntaba a /proyectos/unirse, una ruta que nunca existió — el
+        // enlace del correo terminaba cayendo en el wildcard de app.routes.ts
+        // y aterrizaba en /proyectos ("No estás en ningún proyecto todavía").
+        String link = appUrl + "/invitacion?codigo=" + codigo;
+        boolean emailEnviado = emailService.enviar(req.email(), "Invitación al proyecto MPDIA: " + p.getNombre(),
                 "Hola,\n\n" +
                 "Fuiste invitado al proyecto \"" + p.getNombre() + "\" en el sistema MPDIA.\n\n" +
                 "Método: " + p.getMetodo().toUpperCase() + " | Time Box: " + p.getTimeBoxSemanas() + " semana(s)\n\n" +
                 "Ingresá este código en la pantalla de Proyectos para unirte:\n\n" +
                 "  " + codigo + "\n\n" +
                 "O accedé directamente:\n" + link + "\n\n" +
+                "Este enlace vence en " + expirationDays + " día(s) y solo puede usarse una vez.\n\n" +
                 "Saludos,\nSistema MPDIA"
-            );
-            mailSender.send(msg);
-        }
+        );
 
-        return codigo;
+        return new InvitarProyectoResponse(codigo, emailEnviado);
+    }
+
+    /**
+     * Consulta pública (sin autenticación) del estado de una invitación por su
+     * código — usada por la ruta Angular /invitacion antes de forzar login,
+     * para poder mostrar "invitación válida/expirada/usada/inexistente" sin
+     * necesitar sesión todavía.
+     */
+    public InvitacionEstadoDto consultarInvitacion(String codigo) {
+        return invRepo.findByCodigo(codigo.toUpperCase())
+                .map(inv -> {
+                    String proyectoIdStr = inv.getProyectoId().toString();
+                    String nombre = proyectoRepo.findById(inv.getProyectoId())
+                            .map(Proyecto::getNombre).orElse(null);
+
+                    if (Boolean.TRUE.equals(inv.getUsado())) {
+                        return new InvitacionEstadoDto(proyectoIdStr, nombre, "usada");
+                    }
+                    if (inv.getExpiresAt() != null && inv.getExpiresAt().isBefore(Instant.now())) {
+                        return new InvitacionEstadoDto(proyectoIdStr, nombre, "expirada");
+                    }
+                    return new InvitacionEstadoDto(proyectoIdStr, nombre, "valida");
+                })
+                .orElse(new InvitacionEstadoDto(null, null, "no_existe"));
     }
 
     // Unirse a un proyecto usando código
@@ -127,9 +141,23 @@ public class ProjectMemberService {
         ProjectInvitacion inv = invRepo.findByCodigoAndUsadoFalse(req.codigo().toUpperCase())
                 .orElseThrow(() -> new IllegalArgumentException("Código inválido o ya usado."));
 
+        if (inv.getExpiresAt() != null && inv.getExpiresAt().isBefore(Instant.now())) {
+            throw new IllegalArgumentException("La invitación expiró.");
+        }
+
         String userEmail = userRepo.findById(UUID.fromString(userId))
                 .map(u -> u.getEmail())
                 .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado."));
+
+        // La invitación quedó asociada a un correo específico al generarse
+        // (ProjectMemberService.invitar) — solo la cuenta autenticada con ESE
+        // correo puede aceptarla, sin importar cómo inició sesión (login
+        // normal, registro o Google): acá siempre se compara contra el email
+        // ya validado de la sesión actual, nunca contra algo que mande Angular.
+        // Ni se crea el ProjectMember ni se marca usada la invitación si no coincide.
+        if (!inv.getEmail().equalsIgnoreCase(userEmail)) {
+            throw new IllegalArgumentException("Esta invitación fue enviada a otro correo.");
+        }
 
         if (memberRepo.existsByProyectoIdAndUserId(inv.getProyectoId(), userId)) {
             throw new IllegalArgumentException("Ya eres miembro de este proyecto.");
@@ -139,6 +167,10 @@ public class ProjectMemberService {
         m.setProyectoId(inv.getProyectoId());
         m.setUserId(userId);
         m.setUserEmail(userEmail);
+        // Rol de miembro fijo en "scrum_member": una invitación nunca otorga
+        // scrum_master, ni acá ni tocando el AppUser.role global del usuario
+        // (que ni siquiera se lee en este método) — el rol global inmutable
+        // solo se define al crear la cuenta (registro/Google).
         m.setRol("scrum_member");
         memberRepo.save(m);
 
@@ -148,7 +180,6 @@ public class ProjectMemberService {
         return new ProjectMemberDto(m.getProyectoId(), m.getUserId(),
                 m.getUserEmail(), m.getRol(), m.getJoinedAt());
     }
-    */
 
     private String generarCodigo() {
         String chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";

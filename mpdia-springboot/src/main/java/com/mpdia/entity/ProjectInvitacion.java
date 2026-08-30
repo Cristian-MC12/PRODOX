@@ -32,6 +32,11 @@ public class ProjectInvitacion {
     @Column(nullable = false)
     private Boolean usado = false;
 
+    /** Nullable: invitaciones creadas antes de V35 no la tienen y se tratan
+     *  como no-expirables (ver ProjectMemberService). */
+    @Column(name = "expires_at")
+    private Instant expiresAt;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
 }

@@ -40,6 +40,7 @@ class AuthServiceTest {
         usuario.setEmail("test@mpdia.com");
         usuario.setPasswordHash("hash_bcrypt");
         usuario.setRole("scrum_master");
+        usuario.setNombre("Test Usuario");
     }
 
     // ── register ─────────────────────────────────────────────────────────
@@ -50,15 +51,16 @@ class AuthServiceTest {
         when(userRepository.existsByEmail("test@mpdia.com")).thenReturn(false);
         when(passwordEncoder.encode("password123")).thenReturn("hash_bcrypt");
         when(userRepository.save(any(AppUser.class))).thenReturn(usuario);
-        when(jwtUtil.generateToken(any(), any(), any())).thenReturn("jwt.token.test");
+        when(jwtUtil.generateToken(any(), any(), any(), any())).thenReturn("jwt.token.test");
 
-        AuthRequest request = new AuthRequest("test@mpdia.com", "password123", "scrum_master");
+        AuthRequest request = new AuthRequest("test@mpdia.com", "password123", "scrum_master", "Test Usuario");
         AuthResponse response = authService.register(request);
 
         assertThat(response.token()).isEqualTo("jwt.token.test");
         assertThat(response.email()).isEqualTo("test@mpdia.com");
         assertThat(response.role()).isEqualTo("scrum_master");
-        verify(userRepository).save(any(AppUser.class));
+        assertThat(response.nombre()).isEqualTo("Test Usuario");
+        verify(userRepository).save(argThat(u -> "Test Usuario".equals(u.getNombre())));
     }
 
     @Test
@@ -73,9 +75,9 @@ class AuthServiceTest {
         when(userRepository.existsByEmail("member@mpdia.com")).thenReturn(false);
         when(passwordEncoder.encode(any())).thenReturn("hash");
         when(userRepository.save(any(AppUser.class))).thenReturn(userMember);
-        when(jwtUtil.generateToken(any(), any(), any())).thenReturn("token");
+        when(jwtUtil.generateToken(any(), any(), any(), any())).thenReturn("token");
 
-        AuthRequest request = new AuthRequest("member@mpdia.com", "password123", "rol_invalido");
+        AuthRequest request = new AuthRequest("member@mpdia.com", "password123", "rol_invalido", null);
         AuthResponse response = authService.register(request);
 
         assertThat(response.role()).isEqualTo("scrum_member");
@@ -86,7 +88,7 @@ class AuthServiceTest {
     void register_emailDuplicado_lanzaExcepcion() {
         when(userRepository.existsByEmail("test@mpdia.com")).thenReturn(true);
 
-        AuthRequest request = new AuthRequest("test@mpdia.com", "password123", "scrum_master");
+        AuthRequest request = new AuthRequest("test@mpdia.com", "password123", "scrum_master", "Test Usuario");
 
         assertThatThrownBy(() -> authService.register(request))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -100,13 +102,14 @@ class AuthServiceTest {
     void login_credencialesCorrectas_retornaAuthResponse() {
         when(userRepository.findByEmail("test@mpdia.com")).thenReturn(Optional.of(usuario));
         when(passwordEncoder.matches("password123", "hash_bcrypt")).thenReturn(true);
-        when(jwtUtil.generateToken(any(), any(), any())).thenReturn("jwt.token.test");
+        when(jwtUtil.generateToken(any(), any(), any(), any())).thenReturn("jwt.token.test");
 
-        AuthRequest request = new AuthRequest("test@mpdia.com", "password123", null);
+        AuthRequest request = new AuthRequest("test@mpdia.com", "password123", null, null);
         AuthResponse response = authService.login(request);
 
         assertThat(response.token()).isEqualTo("jwt.token.test");
         assertThat(response.email()).isEqualTo("test@mpdia.com");
+        assertThat(response.nombre()).isEqualTo("Test Usuario");
     }
 
     @Test
@@ -114,7 +117,7 @@ class AuthServiceTest {
     void login_usuarioNoExiste_lanzaExcepcion() {
         when(userRepository.findByEmail("noexiste@mpdia.com")).thenReturn(Optional.empty());
 
-        AuthRequest request = new AuthRequest("noexiste@mpdia.com", "pass", null);
+        AuthRequest request = new AuthRequest("noexiste@mpdia.com", "pass", null, null);
 
         assertThatThrownBy(() -> authService.login(request))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -127,7 +130,7 @@ class AuthServiceTest {
         when(userRepository.findByEmail("test@mpdia.com")).thenReturn(Optional.of(usuario));
         when(passwordEncoder.matches("wrong_pass", "hash_bcrypt")).thenReturn(false);
 
-        AuthRequest request = new AuthRequest("test@mpdia.com", "wrong_pass", null);
+        AuthRequest request = new AuthRequest("test@mpdia.com", "wrong_pass", null, null);
 
         assertThatThrownBy(() -> authService.login(request))
                 .isInstanceOf(IllegalArgumentException.class)

@@ -39,29 +39,46 @@ mpdia.cors.allowed-origins=http://localhost:4200
 mpdia.gemini.api-key=
 mpdia.gemini.api-url=https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent
 
+# Google OAuth 2.0 — login "Continuar con Google"
+# 1. Ve a https://console.cloud.google.com/apis/credentials
+# 2. Crea credenciales OAuth 2.0 (tipo "Aplicación web")
+# 3. Configura el URI de redirección autorizado: http://localhost:8080/login/oauth2/code/google
+# 4. Configurá las variables de entorno GOOGLE_CLIENT_ID y GOOGLE_CLIENT_SECRET
+spring.security.oauth2.client.registration.google.client-id=${GOOGLE_CLIENT_ID:}
+spring.security.oauth2.client.registration.google.client-secret=${GOOGLE_CLIENT_SECRET:}
+spring.security.oauth2.client.registration.google.scope=email,profile
+spring.security.oauth2.client.registration.google.redirect-uri={baseUrl}/login/oauth2/code/{registrationId}
+spring.security.oauth2.client.provider.google.authorization-uri=https://accounts.google.com/o/oauth2/v2/auth
+spring.security.oauth2.client.provider.google.token-uri=https://oauth2.googleapis.com/token
+spring.security.oauth2.client.provider.google.user-info-uri=https://www.googleapis.com/oauth2/v3/userinfo
+spring.security.oauth2.client.provider.google.user-name-attribute=sub
+
 # Logging
 logging.level.com.mpdia=DEBUG
 logging.level.org.springframework.security=INFO
 
-# Email (Gmail SMTP) — configurar contraseña de app real antes de usar invitaciones por email
+# Email (Gmail SMTP) — usado para invitaciones a proyectos y recuperación de
+# contraseña. Configurá las variables de entorno MAIL_USERNAME y MAIL_PASSWORD
+# (esta última es una "contraseña de aplicación" de Gmail, no la contraseña
+# de la cuenta: https://myaccount.google.com/apppasswords). Si quedan vacías,
+# el envío simplemente falla de forma controlada (ver EmailService) sin tumbar
+# el arranque de la app ni romper las funcionalidades que dependen del correo.
 spring.mail.host=smtp.gmail.com
 spring.mail.port=587
-spring.mail.username=tu-email@gmail.com
-spring.mail.password=tu-password-de-app-aqui
+spring.mail.username=${MAIL_USERNAME:}
+spring.mail.password=${MAIL_PASSWORD:}
 spring.mail.properties.mail.smtp.auth=true
 spring.mail.properties.mail.smtp.starttls.enable=true
 spring.mail.properties.mail.smtp.connectiontimeout=3000
 spring.mail.properties.mail.smtp.timeout=3000
 spring.mail.test-connection=false
-spring.autoconfigure.exclude=org.springframework.boot.autoconfigure.mail.MailSenderAutoConfiguration
 mpdia.app.url=http://localhost:4200
-spring.mail.properties.mail.smtp.auth=true
-spring.mail.properties.mail.smtp.starttls.enable=true
-spring.mail.properties.mail.smtp.connectiontimeout=3000
-spring.mail.properties.mail.smtp.timeout=3000
-spring.mail.test-connection=false
-spring.autoconfigure.exclude=org.springframework.boot.autoconfigure.mail.MailSenderAutoConfiguration
-mpdia.app.url=http://localhost:4200
+
+# Recuperación de contraseña — token de un solo uso, expira a los N minutos
+mpdia.password-reset.expiration-minutes=30
+
+# Invitaciones a proyecto — código de un solo uso, expira a los N días
+mpdia.invitacion.expiration-days=7
 
 # AI Copilot - Rate Limiting
 # Límite de requests por usuario autenticado para proteger el AI Copilot

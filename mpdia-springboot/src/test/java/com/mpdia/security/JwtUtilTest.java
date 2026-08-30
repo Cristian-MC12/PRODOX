@@ -52,6 +52,20 @@ class JwtUtilTest {
     }
 
     @Test
+    @DisplayName("generateToken con nombre: getNombre extrae el claim")
+    void generateToken_conNombre_getNombreLoExtrae() {
+        String token = jwtUtil.generateToken("uuid-123", "user@mpdia.com", "scrum_master", "Juan Pérez");
+        assertThat(jwtUtil.getNombre(token)).isEqualTo("Juan Pérez");
+    }
+
+    @Test
+    @DisplayName("generateToken sin nombre (overload de 3 args): getNombre retorna null")
+    void generateToken_sinNombre_getNombreRetornaNull() {
+        String token = jwtUtil.generateToken("uuid-123", "user@mpdia.com", "scrum_master");
+        assertThat(jwtUtil.getNombre(token)).isNull();
+    }
+
+    @Test
     @DisplayName("isValid: retorna true con token válido")
     void isValid_tokenValido_retornaTrue() {
         String token = jwtUtil.generateToken("uuid-123", "user@mpdia.com", "scrum_member");

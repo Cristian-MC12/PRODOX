@@ -251,7 +251,11 @@ export class EquipoComponent implements OnInit {
       if (res) {
         this.codigoGenerado = res.codigo;
         this.emailInvitar   = '';
-        this.showAlert(`Código generado: ${res.codigo}. Compartilo con el miembro.`, 'alert-success');
+        if (res.emailEnviado) {
+          this.showAlert(`Código generado: ${res.codigo}. Se envió un correo con la invitación.`, 'alert-success');
+        } else {
+          this.showAlert(`Código generado: ${res.codigo}. No se pudo enviar el correo automáticamente; compartí el código manualmente.`, 'alert-warning');
+        }
       }
       this.enviando = false;
     });

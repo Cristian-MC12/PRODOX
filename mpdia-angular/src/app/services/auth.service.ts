@@ -7,9 +7,10 @@ import { Observable } from 'rxjs';
 import { environment } from '../../environments/environment';
 import { AuthRequest, AuthResponse } from '../models/auth.model';
 
-const TOKEN_KEY    = 'mpdia_token';
-const USER_KEY     = 'mpdia_user';
-const PROYECTO_KEY = 'mpdia_proyecto_activo';
+const TOKEN_KEY      = 'mpdia_token';
+const USER_KEY       = 'mpdia_user';
+const PROYECTO_KEY   = 'mpdia_proyecto_activo';
+const INVITACION_KEY = 'mpdia_invitacion_pendiente';
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {
@@ -31,6 +32,47 @@ export class AuthService {
     return this.http.post<AuthResponse>(`${this.base}/register`, request).pipe(
       tap(res => this.persist(res))
     );
+  }
+
+  /** Solicita la recuperación de contraseña. El backend siempre responde con
+   *  un mensaje genérico, exista o no el correo (no permite enumerar cuentas). */
+  forgotPassword(email: string): Observable<{ message: string }> {
+    return this.http.post<{ message: string }>(`${this.base}/forgot-password`, { email });
+  }
+
+  /** Establece una nueva contraseña a partir del token recibido por correo. */
+  resetPassword(token: string, newPassword: string): Observable<{ message: string }> {
+    return this.http.post<{ message: string }>(`${this.base}/reset-password`, { token, newPassword });
+  }
+
+  /**
+   * Preserva un código de invitación a proyecto mientras el usuario pasa por
+   * login/registro/Google OAuth (todos esos flujos navegan fuera de, o
+   * recargan, /invitacion). localStorage sobrevive tanto a la navegación
+   * interna de Angular como a la ida y vuelta completa a Google.
+   */
+  setInvitacionPendiente(codigo: string): void {
+    localStorage.setItem(INVITACION_KEY, codigo);
+  }
+
+  getInvitacionPendiente(): string | null {
+    return localStorage.getItem(INVITACION_KEY);
+  }
+
+  clearInvitacionPendiente(): void {
+    localStorage.removeItem(INVITACION_KEY);
+  }
+
+  /** Persiste la sesión a partir de un JWT recibido por el callback de OAuth2 (Google). */
+  persistFromToken(token: string): void {
+    const payload = this.decodeToken(token);
+    this.persist({
+      token,
+      userId: payload.sub,
+      email:  payload.email,
+      role:   payload.role,
+      nombre: payload.nombre
+    });
   }
 
   logout(): void {
@@ -61,5 +103,9 @@ export class AuthService {
   private loadUser(): AuthResponse | null {
     const raw = localStorage.getItem(USER_KEY);
     return raw ? JSON.parse(raw) : null;
+  }
+
+  private decodeToken(token: string): any {
+    return JSON.parse(atob(token.split('.')[1]));
   }
 }

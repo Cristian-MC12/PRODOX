@@ -214,6 +214,30 @@ describe('SidebarComponent', () => {
     expect(dashboardLink?.getAttribute('routerlinkactive')).toBe('active');
   });
 
+  // Corrección: el nombre y el rol en el pie del sidebar estaban hardcodeados
+  // como "Cristian Martinez" / "Scrum Master" para cualquier usuario.
+  it('debería mostrar el nombre real del usuario autenticado, no un nombre fijo', () => {
+    fixture.detectChanges();
+    const compiled = fixture.nativeElement;
+    expect(compiled.textContent).toContain('Test User');
+    expect(compiled.textContent).not.toContain('Cristian Martinez');
+  });
+
+  it('debería mostrar el rol real del usuario autenticado (Scrum Member), no asumir siempre Scrum Master', () => {
+    (mockAuthService.currentUser as jasmine.Spy).and.returnValue({ ...mockUser, role: 'scrum_member' });
+    fixture.detectChanges();
+
+    expect(component.nombreMostrado()).toBe('Test User');
+    expect(component.esScrumMaster()).toBeFalse();
+  });
+
+  it('nombreMostrado: usa el correo como último recurso si el usuario no tiene nombre guardado', () => {
+    (mockAuthService.currentUser as jasmine.Spy).and.returnValue({ ...mockUser, nombre: undefined, email: 'sinnombre@mpdia.com' });
+    fixture.detectChanges();
+
+    expect(component.nombreMostrado()).toBe('sinnombre');
+  });
+
   it('debería cerrar sidebar al hacer clic en Dashboard', () => {
     component.proyectoActivo.set({
       id: 'proyecto-123',

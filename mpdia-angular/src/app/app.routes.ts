@@ -9,6 +9,16 @@ export const routes: Routes = [
     title: 'Acceso — PRODOX AI'
   },
   {
+    path: 'reset-password',
+    loadComponent: () => import('./pages/reset-password/reset-password.component').then(m => m.ResetPasswordComponent),
+    title: 'Nueva contraseña — PRODOX AI'
+  },
+  {
+    path: 'invitacion',
+    loadComponent: () => import('./pages/invitacion/invitacion.component').then(m => m.InvitacionComponent),
+    title: 'Invitación a proyecto — PRODOX AI'
+  },
+  {
     path: 'proyectos',
     canActivate: [authGuard],
     loadComponent: () => import('./pages/proyectos/proyectos.component').then(m => m.ProyectosComponent),

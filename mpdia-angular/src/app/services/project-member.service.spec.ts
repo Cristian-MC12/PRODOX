@@ -54,18 +54,32 @@ describe('ProjectMemberService', () => {
 
   // ── invitar ───────────────────────────────────────────────────────────────
 
-  it('invitar: debe hacer POST con email y retornar código', () => {
+  it('invitar: debe hacer POST con email y retornar código y estado de envío de correo', () => {
     const proyectoId = 'uuid-proyecto-1';
     const email = 'nuevo@mpdia.com';
 
     service.invitar(proyectoId, email).subscribe(res => {
       expect(res.codigo).toBe('PRJ-ABC123');
+      expect(res.emailEnviado).toBeTrue();
     });
 
     const http = httpMock.expectOne(`${environment.apiBaseUrl}/project-members/${proyectoId}/invitar`);
     expect(http.request.method).toBe('POST');
     expect(http.request.body).toEqual({ email });
-    http.flush({ codigo: 'PRJ-ABC123' });
+    http.flush({ codigo: 'PRJ-ABC123', emailEnviado: true });
+  });
+
+  it('invitar: si el correo no pudo enviarse, igual retorna el código generado', () => {
+    const proyectoId = 'uuid-proyecto-1';
+    const email = 'nuevo@mpdia.com';
+
+    service.invitar(proyectoId, email).subscribe(res => {
+      expect(res.codigo).toBe('PRJ-ABC123');
+      expect(res.emailEnviado).toBeFalse();
+    });
+
+    const http = httpMock.expectOne(`${environment.apiBaseUrl}/project-members/${proyectoId}/invitar`);
+    http.flush({ codigo: 'PRJ-ABC123', emailEnviado: false });
   });
 
   // ── unirse ────────────────────────────────────────────────────────────────
@@ -82,5 +96,29 @@ describe('ProjectMemberService', () => {
     expect(http.request.method).toBe('POST');
     expect(http.request.body).toEqual({ codigo });
     http.flush(mockMiembro);
+  });
+
+  // ── consultarInvitacion (estado público, sin sesión) ───────────────────
+
+  it('consultarInvitacion: debe hacer GET a /project-members/invitacion/{codigo}', () => {
+    const codigo = 'PRJ-ABC123';
+
+    service.consultarInvitacion(codigo).subscribe(res => {
+      expect(res.estado).toBe('valida');
+      expect(res.proyectoNombre).toBe('Proyecto Demo');
+    });
+
+    const http = httpMock.expectOne(`${environment.apiBaseUrl}/project-members/invitacion/${codigo}`);
+    expect(http.request.method).toBe('GET');
+    http.flush({ proyectoId: 'uuid-proyecto-1', proyectoNombre: 'Proyecto Demo', estado: 'valida' });
+  });
+
+  it('consultarInvitacion: propaga estados expirada/usada/no_existe tal cual los devuelve el backend', () => {
+    service.consultarInvitacion('PRJ-VENCIDO').subscribe(res => {
+      expect(res.estado).toBe('expirada');
+    });
+
+    const http = httpMock.expectOne(`${environment.apiBaseUrl}/project-members/invitacion/PRJ-VENCIDO`);
+    http.flush({ proyectoId: 'uuid-proyecto-1', proyectoNombre: 'Proyecto Demo', estado: 'expirada' });
   });
 });

@@ -36,6 +36,7 @@ public class AuthService {
         user.setEmail(request.email());
         user.setPasswordHash(passwordEncoder.encode(request.password()));
         user.setRole(role);
+        user.setNombre(request.nombre());
         AppUser saved = userRepository.save(user);
 
         return buildResponse(saved);
@@ -53,7 +54,7 @@ public class AuthService {
     }
 
     private AuthResponse buildResponse(AppUser user) {
-        String token = jwtUtil.generateToken(user.getId().toString(), user.getEmail(), user.getRole());
-        return new AuthResponse(token, user.getId().toString(), user.getEmail(), user.getRole());
+        String token = jwtUtil.generateToken(user.getId().toString(), user.getEmail(), user.getRole(), user.getNombre());
+        return new AuthResponse(token, user.getId().toString(), user.getEmail(), user.getRole(), user.getNombre());
     }
 }

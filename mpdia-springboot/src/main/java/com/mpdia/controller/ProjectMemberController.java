@@ -1,7 +1,9 @@
 // Autor: Cristian Santiago Martinez Cordoba — MPDIA
 package com.mpdia.controller;
 
+import com.mpdia.dto.InvitacionEstadoDto;
 import com.mpdia.dto.InvitarProyectoRequest;
+import com.mpdia.dto.InvitarProyectoResponse;
 import com.mpdia.dto.ProjectMemberDto;
 import com.mpdia.dto.UnirseProyectoRequest;
 import com.mpdia.service.ProjectMemberService;
@@ -12,7 +14,6 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 
 @RestController
@@ -28,29 +29,30 @@ public class ProjectMemberController {
         return ResponseEntity.ok(service.listarMiembros(proyectoId, auth.getName()));
     }
 
-    /*
-     * ENDPOINTS COMENTADOS TEMPORALMENTE
-     * Razón: Dependen de funcionalidad ProjectInvitacion que NO existe
-     * Este es un PROBLEMA PREEXISTENTE, NO relacionado con AI Copilot (Fase 12)
+    /**
+     * GET /api/project-members/invitacion/{codigo} — estado público de una
+     * invitación (sin autenticación), para que /invitacion en Angular pueda
+     * mostrar "válida/expirada/usada/inexistente" antes de forzar login.
      */
+    @GetMapping("/invitacion/{codigo}")
+    public ResponseEntity<InvitacionEstadoDto> consultarInvitacion(@PathVariable String codigo) {
+        return ResponseEntity.ok(service.consultarInvitacion(codigo));
+    }
 
-    /*
-    // POST /api/project-members/{proyectoId}/invitar — invitar por email
+    /** POST /api/project-members/{proyectoId}/invitar — invitar por email (solo Scrum Master del proyecto) */
     @PostMapping("/{proyectoId}/invitar")
-    public ResponseEntity<Map<String, String>> invitar(
+    public ResponseEntity<InvitarProyectoResponse> invitar(
             @PathVariable UUID proyectoId,
             @Valid @RequestBody InvitarProyectoRequest request,
             Authentication auth) {
-        String codigo = service.invitar(proyectoId, auth.getName(), request);
-        return ResponseEntity.ok(Map.of("codigo", codigo));
+        return ResponseEntity.ok(service.invitar(proyectoId, auth.getName(), request));
     }
 
-    // POST /api/project-members/unirse — unirse con código
+    /** POST /api/project-members/unirse — unirse con código de invitación */
     @PostMapping("/unirse")
     public ResponseEntity<ProjectMemberDto> unirse(
             @Valid @RequestBody UnirseProyectoRequest request,
             Authentication auth) {
         return ResponseEntity.ok(service.unirse(auth.getName(), request));
     }
-    */
 }

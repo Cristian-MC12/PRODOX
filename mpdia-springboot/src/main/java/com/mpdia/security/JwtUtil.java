@@ -22,10 +22,15 @@ public class JwtUtil {
     }
 
     public String generateToken(String userId, String email, String role) {
+        return generateToken(userId, email, role, null);
+    }
+
+    public String generateToken(String userId, String email, String role, String nombre) {
         return Jwts.builder()
                 .setSubject(userId)
                 .claim("email", email)
                 .claim("role", role)
+                .claim("nombre", nombre)
                 .setIssuedAt(new Date())
                 .setExpiration(new Date(System.currentTimeMillis() + expirationMs))
                 .signWith(getKey(), SignatureAlgorithm.HS256)
@@ -59,5 +64,9 @@ public class JwtUtil {
 
     public String getRole(String token) {
         return parseToken(token).get("role", String.class);
+    }
+
+    public String getNombre(String token) {
+        return parseToken(token).get("nombre", String.class);
     }
 }
