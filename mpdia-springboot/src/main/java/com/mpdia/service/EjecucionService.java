@@ -12,8 +12,11 @@ import com.mpdia.repository.RegistroValorRepository;
 import com.mpdia.repository.SprintRepository;
 import com.mpdia.repository.VariableRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -24,6 +27,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class EjecucionService {
@@ -32,6 +36,7 @@ public class EjecucionService {
     private final VariableRepository      variableRepo;
     private final SprintRepository        sprintRepo;
     private final ProjectMemberRepository projectMemberRepo;
+    private final CalculoMetricaService   calculoMetricaService;
 
     /**
      * Revisión de seguridad: ninguno de estos endpoints validaba pertenencia al
@@ -71,10 +76,11 @@ public class EjecucionService {
         Sprint sprint = sprintRepo.findById(req.sprintId())
                 .orElseThrow(() -> new IllegalArgumentException("Sprint no encontrado."));
         validarMismoProyecto(sprint, v);
-        // Registrar un valor es una acción restringida al Scrum Master del proyecto
-        // (mismo diseño ya reflejado en EjecucionComponent: solo el SM ve el
-        // formulario de captura; un miembro normal solo consulta resultados).
-        validarScrumMaster(userId, v.getProyectoId());
+        // Revisión de captura individual: cada miembro del proyecto puede
+        // registrar su propio dato cuando la variable es 'individual'; las
+        // variables 'grupal' conservan la restricción original (solo el
+        // Scrum Master registra el valor colectivo del equipo).
+        validarPuedeRegistrar(userId, v);
 
         if (!v.getActiva()) {
             throw new IllegalArgumentException("La variable está inactiva.");
@@ -114,6 +120,35 @@ public class EjecucionService {
     }
 
     /**
+     * Revisión de autorización condicional por parametrización: quién puede
+     * registrar un valor depende del alcance/responsable definido en la
+     * parametrización aprobada de la métrica, reflejado en
+     * Variable.tipoAlcance (fuente de verdad ya existente — no se inventa un
+     * campo nuevo):
+     * - 'individual' (alcance "EQUIPO" en la parametrización): cada
+     *   integrante del proyecto —Scrum Member o Scrum Master por igual,
+     *   porque el Scrum Master también es parte del equipo— registra SU
+     *   PROPIO valor. Basta con membresía (mismo criterio que validarAcceso).
+     * - cualquier otro tipoAlcance (hoy solo 'grupal', alcance "SCRUM MASTER"
+     *   en la parametrización): únicamente el Scrum Master del proyecto
+     *   puede registrar el valor — un Scrum Member se rechaza aunque llame
+     *   directamente al endpoint.
+     *
+     * Esto es intencional y NO es lo mismo que decidir CÓMO se calcula el
+     * resultado (eso lo decide tipoOperacion/fórmula/agregación en
+     * CalculoMetricaService, sin relación con este método). El userId con el
+     * que se guarda el registro sigue siendo SIEMPRE el del JWT autenticado
+     * (nunca uno enviado por el cliente).
+     */
+    public void validarPuedeRegistrar(String userId, Variable variable) {
+        if ("individual".equals(variable.getTipoAlcance())) {
+            validarAcceso(userId, variable.getProyectoId());
+        } else {
+            validarScrumMaster(userId, variable.getProyectoId());
+        }
+    }
+
+    /**
      * FASE 16.11: único punto de escritura de registro_valores para todo el
      * sistema (antes había tres caminos independientes — este servicio, el
      * upsert embebido en MetricaAcademicaService.ejecutarMetricaAcademica(),
@@ -121,22 +156,26 @@ public class EjecucionService {
      * criterio de inserción/actualización, lo que permitía duplicados como
      * el encontrado en producción para "Cambios de alcance por sprint").
      *
-     * Para una variable+sprint dados:
-     * - variable 'individual': la clave de "registro vigente" incluye al
-     *   usuario (findFirstBySprintIdAndVariable_IdAndUserId...), igual que
-     *   ya asumía EjecucionComponent al filtrar el "último valor" por
-     *   userId para variables individuales.
-     * - cualquier otro tipoAlcance (hoy solo 'grupal'): la clave es
-     *   variable+sprint sin usuario — un único valor vigente compartido,
-     *   igual que ya asumía EjecucionComponent (no filtra por userId al
-     *   calcular el "último valor" grupal) y que ya usaba, de hecho,
-     *   MetricaAcademicaService antes de esta unificación.
+     * Revisión de captura universal: la clave de "registro vigente" para
+     * CUALQUIER variable —sin importar su tipoAlcance— incluye SIEMPRE al
+     * usuario (findFirstBySprintIdAndVariable_IdAndUserId...): cada miembro
+     * tiene su propio registro vigente por variable+sprint, nunca comparte
+     * fila con otro miembro. Antes, las variables con tipoAlcance distinto de
+     * 'individual' (hoy solo 'grupal') usaban una clave sin usuario — un
+     * único valor vigente "compartido" — lo que hacía que el registro de un
+     * segundo miembro SOBRESCRIBIERA el del primero en vez de coexistir. Esa
+     * era precisamente la causa por la que solo tenía sentido permitir que el
+     * Scrum Master capturara esas variables: al abrir la captura a cualquier
+     * miembro sin corregir esta clave, se habría perdido el dato de quien
+     * hubiera registrado antes.
      *
-     * Si ya existe un registro vigente se actualiza (UPDATE); si no, se crea
-     * uno nuevo (INSERT). Nunca se borra ni se toca ningún otro registro:
-     * si para esa misma combinación ya había más de una fila por un
-     * duplicado histórico previo, solo la más reciente pasa a ser la
-     * vigente hacia adelante — las demás quedan intactas.
+     * Si ya existe un registro vigente de ESTE usuario se actualiza (UPDATE);
+     * si no, se crea uno nuevo (INSERT). Nunca se borra ni se toca el
+     * registro de otro usuario: si varios miembros registran su propio valor
+     * para la misma variable+sprint, cada uno conserva su propia fila — es
+     * precisamente esa lista de registros por-miembro la que
+     * CalculoMetricaService combina según la operación/fórmula aprobada para
+     * la métrica (ver CalculoMetricaService.resolverValorPorVariable()).
      */
     @Transactional
     public RegistroValor guardarOActualizarValor(
@@ -150,11 +189,8 @@ public class EjecucionService {
 
         validarRangoValor(variable, valorNum);
 
-        Optional<RegistroValor> vigente = "individual".equals(variable.getTipoAlcance())
-                ? registroRepo.findFirstBySprintIdAndVariable_IdAndUserIdOrderByRegistradoAtDesc(
-                        sprintId, variable.getId(), userId)
-                : registroRepo.findFirstBySprintIdAndVariable_IdOrderByRegistradoAtDesc(
-                        sprintId, variable.getId());
+        Optional<RegistroValor> vigente = registroRepo.findFirstBySprintIdAndVariable_IdAndUserIdOrderByRegistradoAtDesc(
+                sprintId, variable.getId(), userId);
 
         RegistroValor r = vigente.orElseGet(RegistroValor::new);
         r.setVariable(variable);
@@ -166,7 +202,9 @@ public class EjecucionService {
         r.setObservacion(observacion);
         r.setRegistradoAt(Instant.now());
 
-        return registroRepo.save(r);
+        RegistroValor guardado = registroRepo.save(r);
+        recalcularMetricaAsociada(variable, sprintId, userId);
+        return guardado;
     }
 
     /**
@@ -242,11 +280,16 @@ public class EjecucionService {
             registroAEditar = registroRepo.findById(registroId)
                     .orElseThrow(() -> new IllegalArgumentException(
                             "El registro que intentás editar ya no existe."));
+            // Revisión de captura universal: un usuario NUNCA puede editar el
+            // registro de otro, sin importar el tipoAlcance de la variable —
+            // antes esta comprobación se saltaba para variables no
+            // individuales (hoy solo 'grupal'), lo que habría permitido que
+            // cualquier miembro sobrescribiera el registro de otro apenas se
+            // le permitiera capturar esas variables.
             boolean perteneceAEstaCombinacion =
                     sprintId.equals(registroAEditar.getSprintId())
                     && variable.getId().equals(registroAEditar.getVariable().getId())
-                    && (!"individual".equals(variable.getTipoAlcance())
-                            || userId.equals(registroAEditar.getUserId()));
+                    && userId.equals(registroAEditar.getUserId());
             if (!perteneceAEstaCombinacion) {
                 throw new IllegalArgumentException(
                         "El registro que intentás editar no corresponde a esta variable/sprint.");
@@ -259,11 +302,11 @@ public class EjecucionService {
         if (registroAEditar != null) {
             r = registroAEditar;
         } else {
-            Optional<RegistroValor> existente = "individual".equals(variable.getTipoAlcance())
-                    ? registroRepo.findFirstBySprintIdAndVariable_IdAndUserIdAndRegistradoAt(
-                            sprintId, variable.getId(), userId, fechaCaptura)
-                    : registroRepo.findFirstBySprintIdAndVariable_IdAndRegistradoAt(
-                            sprintId, variable.getId(), fechaCaptura);
+            // Siempre scopeado por usuario: cada miembro tiene su propia fila
+            // para esta variable+sprint+fecha, nunca comparte una con otro
+            // miembro (ver guardarOActualizarValor() de 7 argumentos, arriba).
+            Optional<RegistroValor> existente = registroRepo.findFirstBySprintIdAndVariable_IdAndUserIdAndRegistradoAt(
+                    sprintId, variable.getId(), userId, fechaCaptura);
             r = existente.orElseGet(RegistroValor::new);
         }
 
@@ -276,7 +319,85 @@ public class EjecucionService {
         r.setObservacion(observacion);
         r.setRegistradoAt(fechaCaptura);
 
-        return registroRepo.save(r);
+        RegistroValor guardado = registroRepo.save(r);
+        recalcularMetricaAsociada(variable, sprintId, userId);
+        return guardado;
+    }
+
+    /**
+     * Dispara el recálculo automático del resultado de la métrica dueña de esta
+     * variable para el sprint recién capturado (ver
+     * CalculoMetricaService.recalcularSilenciosamente): así Evaluación puede
+     * mostrar el resultado calculado del equipo sin depender exclusivamente del
+     * botón manual "Calcular".
+     *
+     * Corrección del bug de visibilidad transaccional (métricas EQUIPO con 2+
+     * capturas, ej. SUMA de A=22+B=12+C=25 terminaba en 34, no 59): antes este
+     * método llamaba a calculoMetricaService.recalcularSilenciosamente() de
+     * forma inmediata, todavía DENTRO de la transacción de guardarOActualizarValor()
+     * (que a su vez sigue abierta dentro de la de VariableDinamicaService.
+     * guardarValores()). Como recalcularSilenciosamente() está anotado
+     * @Transactional(REQUIRES_NEW), Spring suspendía esa transacción externa
+     * —todavía sin COMMIT— y abría una transacción nueva e independiente para
+     * el recálculo. Bajo READ COMMITTED (Postgres), esa transacción nueva podía
+     * ver todo lo ya confirmado de peticiones anteriores, pero NUNCA el propio
+     * registro que la transacción externa (la de ESTA misma captura) todavía no
+     * había confirmado — así que cada recálculo automático excluía sistemáticamente
+     * el valor de quien lo acababa de disparar, sin importar su rol.
+     *
+     * La corrección NO toca REQUIRES_NEW (sigue siendo necesario para que un
+     * fallo del recálculo nunca revierta la captura) ni ninguna fórmula/
+     * agregación: solo difiere CUÁNDO se dispara. Si hay una transacción activa
+     * (el caso real siempre, vía @Transactional de guardarOActualizarValor()),
+     * se registra un TransactionSynchronization cuyo afterCommit() dispara el
+     * recálculo — es decir, después de que la fila recién guardada ya sea
+     * visible para cualquier otra transacción, incluida la REQUIRES_NEW del
+     * propio recálculo. afterCommit() se ejecuta de forma síncrona en el mismo
+     * hilo, como parte del propio proceso de commit de Spring, así que el
+     * llamador (guardarOActualizarValor/guardarValores) no retorna hasta que el
+     * recálculo ya terminó — sin cambios de comportamiento observable para quien
+     * llama, solo se corrige qué datos ve el recálculo. Se prefiere este
+     * mecanismo sobre @TransactionalEventListener(AFTER_COMMIT) por ser más
+     * acotado: no requiere introducir un ApplicationEvent ni un listener nuevo,
+     * mantiene el disparo confinado exactamente a esta clase (la misma que ya
+     * lo hacía), y preserva intacta la firma/API de recalcularSilenciosamente().
+     * Si no hay transacción activa (ej. una llamada directa fuera de un
+     * @Transactional real, como en pruebas unitarias sin contexto Spring), se
+     * conserva el comportamiento previo exacto: disparo inmediato.
+     *
+     * Nunca falla ni revierte la captura del valor: ahora es imposible que lo
+     * haga, porque para cuando el recálculo corre, la transacción de la
+     * captura ya hizo COMMIT.
+     */
+    private void recalcularMetricaAsociada(Variable variable, UUID sprintId, String userId) {
+        try {
+            UUID metricaId = variable.getMetrica().getId();
+            UUID proyectoId = variable.getProyectoId();
+
+            if (TransactionSynchronizationManager.isSynchronizationActive()) {
+                TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
+                        dispararRecalculoSilencioso(metricaId, proyectoId, sprintId, userId);
+                    }
+                });
+            } else {
+                dispararRecalculoSilencioso(metricaId, proyectoId, sprintId, userId);
+            }
+        } catch (Exception e) {
+            // Mismo contrato previo: cualquier fallo al preparar el recálculo
+            // (incluida una Variable de prueba sin Metrica asociada) nunca debe
+            // afectar la captura ya guardada.
+            log.debug("No se pudo preparar el recálculo automático tras la captura: {}", e.getMessage());
+        }
+    }
+
+    private void dispararRecalculoSilencioso(UUID metricaId, UUID proyectoId, UUID sprintId, String userId) {
+        try {
+            calculoMetricaService.recalcularSilenciosamente(metricaId, proyectoId, sprintId, userId);
+        } catch (Exception e) {
+            log.debug("No se pudo disparar el recálculo automático tras la captura: {}", e.getMessage());
+        }
     }
 
     /** Tolerancia para comparar restos de división decimal (error de representación en punto flotante/BigDecimal). */
@@ -376,6 +497,14 @@ public class EjecucionService {
      *   siga en conflicto es SIEMPRE un registro distinto y se rechaza, sin
      *   el atajo de "misma fecha" (que aquí ya no aplica: la fila se
      *   localiza y actualiza por ID, no por fecha).
+     *
+     * Revisión de captura universal: la ventana de frecuencia se evalúa
+     * SIEMPRE contra los registros del propio usuario, sin importar el
+     * tipoAlcance de la variable — antes, las variables no individuales (hoy
+     * solo 'grupal') comparaban contra los registros de TODOS los usuarios,
+     * lo que habría impedido que un segundo miembro registrara su propio
+     * valor "por_sprint" solo porque otro miembro ya había registrado el
+     * suyo.
      */
     private void validarFrecuencia(Variable variable, UUID sprintId, String userId, Instant fechaCaptura, LocalDate dia, UUID registroId) {
         String frecuencia = variable.getFrecuenciaCaptura();
@@ -383,10 +512,8 @@ public class EjecucionService {
             return;
         }
 
-        List<RegistroValor> existentes = registroRepo.findBySprintIdAndVariable_Id(sprintId, variable.getId());
-        if ("individual".equals(variable.getTipoAlcance())) {
-            existentes = existentes.stream().filter(r -> userId.equals(r.getUserId())).toList();
-        }
+        List<RegistroValor> existentes = registroRepo.findBySprintIdAndVariable_Id(sprintId, variable.getId())
+                .stream().filter(r -> userId.equals(r.getUserId())).toList();
 
         if (registroId != null) {
             existentes = existentes.stream().filter(r -> !registroId.equals(r.getId())).toList();

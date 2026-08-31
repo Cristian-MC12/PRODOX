@@ -225,9 +225,33 @@ describe('SidebarComponent', () => {
 
   it('debería mostrar el rol real del usuario autenticado (Scrum Member), no asumir siempre Scrum Master', () => {
     (mockAuthService.currentUser as jasmine.Spy).and.returnValue({ ...mockUser, role: 'scrum_member' });
+    // Corrección: esScrumMaster ya no depende del rol global de cuenta —
+    // depende de si el email coincide con el scrumMasterEmail del proyecto
+    // activo (aquí sigue siendo 'test@test.com' para ambos, así que sigue
+    // reconocido como Scrum Master de ESTE proyecto aunque su rol de cuenta
+    // ahora sea "scrum_member"). El caso real de un no-dueño se cubre abajo.
+    component.proyectoActivo.set({
+      id: 'proyecto-123', nombre: 'Proyecto Test', descripcion: 'Test', metodo: 'scrum',
+      timeBoxSemanas: 2, numeroSprints: 5, fechaInicio: '2026-07-01', productGoal: 'Goal',
+      sprintGoal: 'Sprint', estado: 'activo', scrumMasterEmail: 'test@test.com',
+      totalMiembros: 3, createdAt: '2026-07-01T00:00:00Z'
+    });
     fixture.detectChanges();
 
     expect(component.nombreMostrado()).toBe('Test User');
+    expect(component.esScrumMaster()).toBeTrue();
+  });
+
+  it('un usuario cuyo email NO coincide con el scrumMasterEmail del proyecto activo no es reconocido como su Scrum Master, aunque su rol global de cuenta sea "scrum_master"', () => {
+    (mockAuthService.currentUser as jasmine.Spy).and.returnValue({ ...mockUser, email: 'no-es-el-creador@test.com', role: 'scrum_master' });
+    component.proyectoActivo.set({
+      id: 'proyecto-123', nombre: 'Proyecto Test', descripcion: 'Test', metodo: 'scrum',
+      timeBoxSemanas: 2, numeroSprints: 5, fechaInicio: '2026-07-01', productGoal: 'Goal',
+      sprintGoal: 'Sprint', estado: 'activo', scrumMasterEmail: 'test@test.com',
+      totalMiembros: 3, createdAt: '2026-07-01T00:00:00Z'
+    });
+    fixture.detectChanges();
+
     expect(component.esScrumMaster()).toBeFalse();
   });
 

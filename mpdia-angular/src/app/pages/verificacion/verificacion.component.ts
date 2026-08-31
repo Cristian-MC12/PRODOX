@@ -401,8 +401,23 @@ export class VerificacionComponent implements OnInit {
     private rankingService: MetricRankingService
   ) {}
 
+  /**
+   * Corrección: Scrum Master es siempre relativo al proyecto activo (su
+   * scrumMasterEmail, fijado por el backend al crearlo), nunca el rol
+   * global de cuenta — mismo patrón ya corregido en dashboard.component.ts
+   * (esScrumMasterDelProyecto). La autorización real ya la exige el backend
+   * (MetricRankingService.validarScrumMaster) — este getter solo decide qué
+   * mostrar en esta pantalla.
+   */
   get esScrumMaster(): boolean {
-    return this.auth.currentUser()?.role === 'scrum_master';
+    return this.leerScrumMasterEmailProyectoActivo() === this.auth.currentUser()?.email;
+  }
+
+  private leerScrumMasterEmailProyectoActivo(): string | null {
+    try {
+      const raw = localStorage.getItem('mpdia_proyecto_activo');
+      return raw ? (JSON.parse(raw)?.scrumMasterEmail ?? null) : null;
+    } catch { return null; }
   }
 
   irAEjecucion(): void {

@@ -9,6 +9,20 @@ export interface RegistroPuntoDto {
   userId:       string;
 }
 
+/**
+ * Revisión de Evaluación: un punto de la serie de resultados YA CALCULADOS del
+ * equipo (ResultadoMetrica vigente) por sprint — no un registro individual
+ * crudo. Solo se puebla para frecuenciaCaptura='por_sprint' (ver
+ * MetricaEvaluacionDetalleDto.resultadosCalculados / EvaluacionService).
+ */
+export interface ResultadoCalculadoPuntoDto {
+  resultadoId:  string;
+  resultado:    number;
+  sprintId:     string;
+  sprintNumero: number | null;
+  calculadoAt:  string;
+}
+
 export interface SprintStatsDto {
   sprintId:       string;
   sprintNumero:   number;
@@ -51,4 +65,9 @@ export interface MetricaEvaluacionDetalleDto {
   registros:         RegistroPuntoDto[];
   estadisticas:      VariableEstadisticasDto;
   porSprint:         SprintStatsDto[];
+  /** Resultado calculado del equipo por sprint (preferido sobre 'registros' cuando
+   *  no está vacío — ver evaluacion.component.ts:registrosParaVista). Opcional:
+   *  el backend siempre lo envía, pero se mantiene opcional en el modelo para no
+   *  romper fixtures de tests existentes construidos antes de este campo. */
+  resultadosCalculados?: ResultadoCalculadoPuntoDto[];
 }

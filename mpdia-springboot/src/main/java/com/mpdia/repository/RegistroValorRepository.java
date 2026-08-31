@@ -16,6 +16,12 @@ public interface RegistroValorRepository extends JpaRepository<RegistroValor, UU
     // Fase 16.7: Búsqueda por sprint y variable
     List<RegistroValor> findBySprintIdAndVariable_Id(UUID sprintId, UUID variableId);
 
+    // Revisión de captura individual/agregación: findBySprintIdAndVariable_Id
+    // no garantiza ningún orden (sin ORDER BY explícito) — CalculoMetricaService
+    // necesita "el más reciente primero" de forma confiable para DIRECTO/grupal
+    // y para la reducción de variables individuales.
+    List<RegistroValor> findBySprintIdAndVariable_IdOrderByRegistradoAtDesc(UUID sprintId, UUID variableId);
+
     // Fase 16.11: localizar el registro vigente (más reciente) para upsert,
     // sin tocar los duplicados históricos que ya pudieran existir para esa
     // misma combinación — solo el más reciente se reutiliza hacia adelante.

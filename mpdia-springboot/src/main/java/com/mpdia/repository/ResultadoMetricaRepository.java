@@ -50,7 +50,24 @@ public interface ResultadoMetricaRepository extends JpaRepository<ResultadoMetri
      * Fase 16.9.1: Para métricas académicas.
      */
     List<ResultadoMetrica> findByMetrica_IdAndProyectoIdOrderByCalculadoAtDesc(
-        UUID metricaId, 
+        UUID metricaId,
         UUID proyectoId
     );
+
+    /**
+     * Resultado vigente (a lo sumo uno, por el índice único parcial de V37)
+     * para una combinación proyecto+métrica+sprint+versión de parametrización.
+     * Antes de guardar un nuevo cálculo se marca este como histórico
+     * (vigente=false) — ver CalculoMetricaService.
+     */
+    Optional<ResultadoMetrica> findByProyectoIdAndMetrica_IdAndSprintIdAndParametrizacionVersionAndVigenteTrue(
+        UUID proyectoId, UUID metricaId, UUID sprintId, Integer parametrizacionVersion
+    );
+
+    /**
+     * Histórico vigente de una métrica en un proyecto, uno por sprint, para
+     * alimentar Evaluación/gráficas con el resultado ya calculado en vez de
+     * RegistroValor crudo. Fuente del nuevo endpoint GET /api/metricas/{id}/resultados.
+     */
+    List<ResultadoMetrica> findByProyectoIdAndMetrica_IdAndVigenteTrue(UUID proyectoId, UUID metricaId);
 }

@@ -359,6 +359,11 @@ export class ResumenSeleccionComponent implements OnInit {
         // dejando la parametrización siempre en "por_sprint" al enviarla al
         // Scrum Master por este flujo (ver MetricRankingService.guardarPorMetrica()).
         frecuenciaCaptura: s.parametrizacion!.frecuenciaCaptura ?? 'por_sprint',
+        // Revisión de captura por parametrización: propaga el alcance/responsable
+        // ya elegido en Parametrización (independiente de tipoOperacion) — antes
+        // este payload no lo incluía y el envío en lote siempre quedaba
+        // "SCRUM_MASTER" sin importar lo elegido en el formulario.
+        responsableCaptura: s.parametrizacion!.responsableCaptura ?? 'SCRUM_MASTER',
         // Corrección de duplicados en Verificación: esta pantalla puede reenviar una
         // métrica que YA fue enviada individualmente desde Parametrización (el usuario
         // llega acá y vuelve a pulsar "Enviar al Scrum Master"). Antes este payload no

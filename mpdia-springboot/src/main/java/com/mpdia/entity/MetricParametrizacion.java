@@ -135,6 +135,19 @@ public class MetricParametrizacion {
     /** Tipo de operación: SUMA | PROMEDIO | DIRECTO | FORMULA (Fase 16.9.1) */
     @Column(name = "tipo_operacion", length = 20)
     private String tipoOperacion;
+
+    /**
+     * Revisión de captura por parametrización: alcance/responsable de captura
+     * definido explícitamente por el Scrum Master — EQUIPO (cada integrante
+     * registra su propio valor) o SCRUM_MASTER (solo el Scrum Master
+     * registra). Independiente de tipoOperacion: uno decide QUIÉN captura, el
+     * otro decide CÓMO se calcula el resultado. Se materializa en
+     * Variable.tipoAlcance al aprobar/materializar (ver
+     * ParametrizacionService/VariableDinamicaService.crearVariablesDesdeParametrizacion()):
+     * EQUIPO → 'individual', SCRUM_MASTER → 'grupal'.
+     */
+    @Column(name = "responsable_captura", length = 20, nullable = false)
+    private String responsableCaptura = "SCRUM_MASTER";
     
     /** Unidad del resultado: problemas, puntos, %, días (Fase 16.9.1) */
     @Column(name = "unidad_resultado", length = 50)

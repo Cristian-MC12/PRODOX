@@ -11,7 +11,15 @@ import { filter, Subscription } from 'rxjs';
   standalone: true,
   imports: [CommonModule, RouterLink, RouterLinkActive],
   template: `
-    <nav class="sidebar d-flex flex-column" [class.open]="open()">
+    <nav class="sidebar d-flex flex-column" [class.open]="open()" [class.collapsed]="collapsed()">
+
+      <!-- Botón de colapsar/expandir -->
+      <button class="btn-collapse" 
+              (click)="toggleCollapse()"
+              [title]="collapsed() ? 'Expandir sidebar' : 'Colapsar sidebar'"
+              type="button">
+        <i class="bi" [class.bi-chevron-left]="!collapsed()" [class.bi-chevron-right]="collapsed()"></i>
+      </button>
 
       <!-- Brand -->
       <a routerLink="/" class="sidebar-brand">
@@ -176,6 +184,7 @@ import { filter, Subscription } from 'rxjs';
 })
 export class SidebarComponent implements OnInit, OnDestroy {
   open = signal(false);
+  collapsed = signal(false);
   proyectoActivo = signal<ProyectoDto | null>(this.leerProyectoActivo());
 
   private routerSub?: Subscription;
@@ -202,8 +211,14 @@ export class SidebarComponent implements OnInit, OnDestroy {
     } catch { return null; }
   }
 
+  /**
+   * Corrección: Scrum Master es siempre relativo al proyecto activo (su
+   * scrumMasterEmail, fijado por el backend al crearlo), nunca el rol
+   * global de cuenta — mismo patrón ya corregido en dashboard.component.ts
+   * (esScrumMasterDelProyecto).
+   */
   esScrumMaster(): boolean {
-    return this.auth.currentUser()?.role === 'scrum_master';
+    return this.proyectoActivo()?.scrumMasterEmail === this.auth.currentUser()?.email;
   }
 
   // El backend solo garantiza `nombre` para usuarios creados después de V33
@@ -219,4 +234,5 @@ export class SidebarComponent implements OnInit, OnDestroy {
 
   toggle(): void { this.open.update(v => !v); }
   close(): void  { this.open.set(false); }
+  toggleCollapse(): void { this.collapsed.update(v => !v); }
 }

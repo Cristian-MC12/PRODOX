@@ -25,6 +25,14 @@ public record AprobarParametrizacionRequest(
     String tipoOperacion,
     String unidadResultado,
 
+    /**
+     * Revisión de captura por parametrización: "EQUIPO" | "SCRUM_MASTER".
+     * Opcional — si se omite, se conserva el valor ya guardado en la
+     * propuesta (o "SCRUM_MASTER" si nunca se definió). Independiente de
+     * tipoOperacion: decide QUIÉN captura, no CÓMO se calcula.
+     */
+    String responsableCaptura,
+
     /** Identificador técnico snake_case de la variable principal (Fase 16.10-E) */
     String nombreVariable,
 
@@ -35,4 +43,23 @@ public record AprobarParametrizacionRequest(
     BigDecimal escalaPaso,
     Boolean escalaSinLimite,
     String escalaDescripcion
-) {}
+) {
+    /**
+     * Constructor de compatibilidad: firma previa a la incorporación de
+     * responsableCaptura (Revisión de captura por parametrización). Delega en
+     * el constructor canónico con responsableCaptura=null (ParametrizacionService
+     * conserva el valor ya guardado en la propuesta, o "SCRUM_MASTER" si nunca
+     * se definió — mismo comportamiento que antes de este campo).
+     */
+    public AprobarParametrizacionRequest(
+        String objetivo, String procedimiento, String indicadorVariable, String escala,
+        String frecuenciaCaptura, String fuenteAcademica, String formulaAcademica,
+        String tipoOperacion, String unidadResultado, String nombreVariable,
+        String escalaTipo, BigDecimal escalaMin, BigDecimal escalaMax, BigDecimal escalaPaso,
+        Boolean escalaSinLimite, String escalaDescripcion
+    ) {
+        this(objetivo, procedimiento, indicadorVariable, escala, frecuenciaCaptura,
+            fuenteAcademica, formulaAcademica, tipoOperacion, unidadResultado, null, nombreVariable,
+            escalaTipo, escalaMin, escalaMax, escalaPaso, escalaSinLimite, escalaDescripcion);
+    }
+}

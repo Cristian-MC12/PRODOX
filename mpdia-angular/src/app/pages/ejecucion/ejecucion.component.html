@@ -1,0 +1,468 @@
+<app-shell title="Ejecución — Captura de valores">
+
+  @if (!proyecto) {
+    <div class="prox-empty-state">
+      <i class="bi bi-folder-x"></i>
+      <p>Seleccioná un proyecto primero.</p>
+      <button class="btn btn-primary btn-sm mt-3" (click)="router.navigate(['/proyectos'])">
+        Ir a Proyectos
+      </button>
+    </div>
+  } @else {
+
+    <!-- Revisión de navegación: breadcrumb del flujo + acceso directo a Evaluación -->
+    <nav aria-label="breadcrumb" class="mb-2 d-flex justify-content-between align-items-center flex-wrap gap-2">
+      <ol class="breadcrumb small mb-0">
+        <li class="breadcrumb-item">
+          <a href="#" (click)="$event.preventDefault(); router.navigate(['/planeacion'])">
+            <i class="bi bi-layers me-1"></i>Planeación
+          </a>
+        </li>
+        <li class="breadcrumb-item active">Ejecución</li>
+      </ol>
+      <button class="btn btn-outline-primary btn-sm" (click)="router.navigate(['/evaluacion'])">
+        <i class="bi bi-bar-chart-line me-1"></i>Ver resultados
+      </button>
+    </nav>
+
+    <div class="card mb-3">
+      <div class="card-body py-2">
+        <div class="d-flex flex-wrap gap-3 align-items-center">
+          <div class="d-flex flex-wrap align-items-end gap-2">
+            <button type="button" class="btn btn-outline-secondary btn-sm text-nowrap"
+                    [disabled]="!haySprintAnterior"
+                    (click)="irASprintAnterior()"
+                    title="Ir al sprint anterior">
+              <i class="bi bi-chevron-left me-1"></i>Sprint anterior
+            </button>
+            <div style="min-width:260px" class="flex-grow-1 flex-sm-grow-0">
+              <label class="form-label small fw-semibold mb-1">Sprint</label>
+              <select class="form-select form-select-sm"
+                      [(ngModel)]="sprintSeleccionadoId"
+                      (ngModelChange)="onSprintChange()">
+                <option value="">Seleccionar sprint...</option>
+                @for (s of sprints; track s.id) {
+                  <option [value]="s.id">
+                    Sprint {{ s.numero }} — {{ s.fechaInicio | date:'dd/MM' }}
+                    al {{ s.fechaFin | date:'dd/MM/yyyy' }}
+                    ({{ labelEstado(s.estado) }})
+                  </option>
+                }
+              </select>
+            </div>
+            <button type="button" class="btn btn-outline-secondary btn-sm text-nowrap"
+                    [disabled]="!haySprintSiguiente"
+                    (click)="irASprintSiguiente()"
+                    title="Ir al sprint siguiente">
+              Sprint siguiente<i class="bi bi-chevron-right ms-1"></i>
+            </button>
+          </div>
+          @if (sprintActual) {
+            <span class="badge prox-badge-sm" [class]="badgeSprint(sprintActual.estado)">
+              {{ labelEstado(sprintActual.estado) }}
+            </span>
+          }
+        </div>
+      </div>
+    </div>
+
+    @if (!sprintActual) {
+      <div class="prox-empty-state">
+        <i class="bi bi-calendar-check"></i>
+        <p>Seleccioná un sprint para capturar valores.</p>
+      </div>
+    } @else if (cargandoMetricas) {
+      <div class="text-center py-4 text-muted small">
+        <span class="spinner-border spinner-border-sm me-2"></span>Cargando métricas aprobadas...
+      </div>
+    } @else if (metricas.length === 0) {
+      <div class="prox-empty-state">
+        <i class="bi bi-clipboard-x"></i>
+        <p>
+          Todavía no hay ninguna métrica aprobada en este proyecto.
+          Aprobá una parametrización en Verificación para que aparezca aquí.
+        </p>
+      </div>
+    } @else {
+
+      @if (sprintBloqueado) {
+        <div class="alert alert-warning small mb-3">
+          <i class="bi bi-lock me-1"></i>
+          Sprint {{ labelEstado(sprintActual.estado) }}. No se pueden registrar nuevos valores;
+          se muestran los resultados existentes.
+        </div>
+      } @else if (sprintActual.estado === 'pendiente') {
+        <div class="alert alert-info small mb-3">
+          <i class="bi bi-info-circle me-1"></i>
+          Sprint pendiente (todavía no arrancó). Podés capturar valores igual para probar la
+          aplicación — se validan contra el rango de fechas de este sprint
+          ({{ sprintActual.fechaInicio | date:'dd/MM/yyyy' }}
+          – {{ sprintActual.fechaFin ? (sprintActual.fechaFin | date:'dd/MM/yyyy') : 'sin definir' }}).
+        </div>
+      }
+
+      <!-- Layout de dos columnas -->
+      <div class="row g-3">
+        <!-- Columna izquierda: métricas -->
+        <div class="col-12 col-lg-7">
+          @for (m of metricas; track m.metricaId) {
+            <div class="metrica-card mb-3">
+              @if (m.cargando) {
+                <div class="text-center py-3 text-muted small">
+                  <span class="spinner-border spinner-border-sm me-2"></span>Cargando...
+                </div>
+              } @else if (m.sinParametrizacion) {
+                <div class="alert alert-warning small mb-0">
+                  Esta métrica no tiene una parametrización aprobada en este proyecto.
+                </div>
+              } @else if (m.variables.length === 0) {
+                <div class="text-muted small mb-0">Sin variables configuradas.</div>
+              } @else {
+                @for (v of m.variables; track v.variableId) {
+                  <div class="metrica-content">
+                    @if (v.capturasHistoricas.length > 0) {
+                      <button class="btn-historial" type="button" 
+                              (click)="toggleHistorial(v)"
+                              [title]="v.mostrarHistorial ? 'Ocultar historial' : 'Ver historial'">
+                        <i class="bi" [class.bi-clock-history]="!v.mostrarHistorial" 
+                                      [class.bi-x-lg]="v.mostrarHistorial"></i>
+                        <span>{{ v.mostrarHistorial ? 'Ocultar' : 'Ver historial' }}</span>
+                      </button>
+                    }
+                    
+                    <!-- Header con icono e información -->
+                    <div class="metrica-header">
+                      <div class="metrica-icon" [ngClass]="obtenerClaseIcono(m.nombre)">
+                        <i class="bi" [ngClass]="obtenerIcono(m.nombre)"></i>
+                      </div>
+                      <div class="metrica-info">
+                        <h3 class="metrica-title">{{ m.nombre.toUpperCase() }}</h3>
+                        <div class="metrica-details">
+                          <div class="detail-item">
+                            <i class="bi bi-question-circle"></i>
+                            <span><strong>¿Qué mide?</strong> {{ v.descripcion || 'Sumar los valores registrados de ' + v.nombre }}</span>
+                          </div>
+                          <div class="detail-item">
+                            <i class="bi bi-graph-up-arrow"></i>
+                            <span><strong>Valor esperado:</strong> 
+                              @if (v.tipoDato === 'numerico' && v.escalaMin != null) {
+                                Numérico, escala {{ v.escalaMin }}–{{ v.escalaMax ?? 'sin límite' }}
+                              } @else {
+                                {{ v.tipoDato }}{{ v.unidad ? ' (' + v.unidad + ')' : '' }}
+                              }
+                            </span>
+                          </div>
+                          <div class="detail-item">
+                            <i class="bi bi-calendar-range"></i>
+                            <span><strong>Frecuencia:</strong> {{ labelFrecuencia(v.frecuenciaCaptura) }}</span>
+                          </div>
+                          @if (sprintActual) {
+                            <div class="detail-item">
+                              <i class="bi bi-clock-history"></i>
+                              <span><strong>Sprint:</strong> Sprint {{ sprintActual.numero }} · {{ sprintActual.fechaInicio | date:'dd/MM/yyyy' }} - {{ sprintActual.fechaFin ? (sprintActual.fechaFin | date:'dd/MM/yyyy') : 'sin definir' }}</span>
+                            </div>
+                          }
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- Revisión de autorización condicional: el alcance/responsable
+                         aprobado en la parametrización (Variable.tipoAlcance) decide
+                         quién debe capturar esta métrica — el backend es la autoridad
+                         real (EjecucionService.validarPuedeRegistrar); este mensaje solo
+                         refleja esa decisión. -->
+                    @if (v.tipoAlcance === 'individual') {
+                      <div class="alert alert-info small mb-2 py-2">
+                        <i class="bi bi-people me-1"></i>
+                        Cada integrante del equipo debe registrar su propio valor.
+                        @if (totalIntegrantes > 0) {
+                          <strong>{{ integrantesRegistrados(v) }} de {{ totalIntegrantes }}</strong>
+                          integrante{{ totalIntegrantes !== 1 ? 's' : '' }} registrado{{ totalIntegrantes !== 1 ? 's' : '' }}.
+                        }
+                      </div>
+                    } @else if (!esScrumMaster) {
+                      <div class="alert alert-secondary small mb-2 py-2">
+                        <i class="bi bi-shield-lock me-1"></i>
+                        Esta métrica debe ser registrada por el Scrum Master.
+                      </div>
+                    }
+
+                    @if (v.mostrarHistorial && v.capturasHistoricas.length > 0) {
+                      <div class="historial-capturas">
+                        <div class="historial-header">
+                          <i class="bi bi-clock-history me-1"></i>
+                          <span>Historial por sprint ({{ v.capturasHistoricas.length }} sprint{{ v.capturasHistoricas.length !== 1 ? 's' : '' }})</span>
+                        </div>
+                        <div class="historial-lista">
+                          @for (captura of v.capturasHistoricas; track captura.id) {
+                            <div class="historial-item">
+                              <div class="historial-info">
+                                <div class="historial-sprint-badge">
+                                  <i class="bi bi-calendar-check me-1"></i>
+                                  Sprint {{ captura.sprintNumero }}
+                                </div>
+                                <span class="historial-fecha">
+                                  {{ captura.registradoAt | date:'dd/MM/yyyy HH:mm':'UTC' }}
+                                </span>
+                                <span class="historial-valor">Valor: <strong>{{ captura.valor }}</strong></span>
+                              </div>
+                              @if (!sprintBloqueado && sprintActual && captura.sprintNumero === sprintActual.numero && captura.userId === currentUserId) {
+                                <button type="button" class="btn-editar-historial"
+                                        (click)="editarValorExistente(v, captura)"
+                                        title="Editar este valor">
+                                  <i class="bi bi-pencil"></i>
+                                </button>
+                              }
+                            </div>
+                          }
+                        </div>
+                      </div>
+                    }
+
+                    @if (puedeCapturar(v) && !sprintBloqueado) {
+                      <!-- Formulario de captura -->
+                      <!-- Revisión de captura universal: el resumen de solo lectura solo se
+                           muestra cuando el registro más reciente es TUYO — si es de otro
+                           miembro (misma variable+sprint, ya no exclusiva del Scrum Master),
+                           se cae al formulario de abajo para que registres tu propio valor. -->
+                      @if (v.frecuenciaCaptura === 'por_sprint' && v.capturas.length > 0 && v.capturas[0].userId === currentUserId && !v.editando) {
+                        <div class="valor-registrado">
+                          <div>
+                            <div class="valor-label">Valor registrado</div>
+                            <div class="valor-dato">
+                              {{ v.capturas[0].valor }}
+                              <span class="valor-fecha">· Fecha: {{ v.capturas[0].registradoAt | date:'dd/MM/yyyy':'UTC' }}</span>
+                            </div>
+                          </div>
+                          <button type="button" class="btn btn-sm btn-outline-primary"
+                                  (click)="editarValorExistente(v, v.capturas[0])">
+                            <i class="bi bi-pencil me-1"></i>Editar valor
+                          </button>
+                        </div>
+                      } @else {
+                        @if (v.frecuenciaCaptura === 'por_sprint' && v.capturas.length === 0) {
+                          <div class="mb-2">
+                            <span class="badge badge-pendiente">
+                              <i class="bi bi-hourglass-split me-1"></i>Pendiente de captura
+                            </span>
+                          </div>
+                        }
+
+                        <div class="captura-form">
+                          <div class="form-row">
+                            <div class="form-field">
+                              <label class="form-label">Fecha de captura</label>
+                              <input type="date" class="form-control"
+                                     [(ngModel)]="v.fecha" [name]="'fecha-' + v.variableId"
+                                     [min]="sprintActual?.fechaInicio" [max]="sprintActual?.fechaFin ?? undefined">
+                              @if (sprintActual) {
+                                <div class="form-hint">
+                                  Permitido: {{ sprintActual.fechaInicio | date:'dd/MM/yyyy' }}
+                                  – {{ sprintActual.fechaFin ? (sprintActual.fechaFin | date:'dd/MM/yyyy') : 'hoy' }}. Debe estar entre 0 y 100.
+                                </div>
+                              }
+                            </div>
+                            <div class="form-field">
+                              <label class="form-label">Valor</label>
+                              @if (v.tipoDato === 'booleano') {
+                                <select class="form-control"
+                                        [(ngModel)]="v.valorBool" [name]="'valor-' + v.variableId">
+                                  <option [ngValue]="true">Sí</option>
+                                  <option [ngValue]="false">No</option>
+                                </select>
+                              } @else if (v.tipoDato === 'texto') {
+                                <input type="text" class="form-control"
+                                       [(ngModel)]="v.valorTexto" [name]="'valor-' + v.variableId"
+                                       placeholder="0 – 100">
+                              } @else if (esEscalaDiscretaPequena(v)) {
+                                <div class="btn-group" role="group" [attr.aria-label]="'Valor de ' + v.nombre">
+                                  @for (opcion of opcionesEscala(v); track opcion) {
+                                    <button type="button" class="btn btn-sm"
+                                            [class]="v.valorNum === opcion ? 'btn-primary' : 'btn-outline-primary'"
+                                            (click)="v.valorNum = opcion">
+                                      {{ opcion }}
+                                    </button>
+                                  }
+                                </div>
+                              } @else if (v.escalaMin != null) {
+                                <input type="number" class="form-control"
+                                       [step]="v.escalaPaso ?? 0.01"
+                                       [min]="v.escalaMin" [max]="v.escalaMax ?? null"
+                                       [(ngModel)]="v.valorNum" [name]="'valor-' + v.variableId"
+                                       placeholder="0 – 100">
+                              } @else {
+                                <input type="number" class="form-control" step="0.01"
+                                       [(ngModel)]="v.valorNum" [name]="'valor-' + v.variableId"
+                                       placeholder="0 – 100">
+                              }
+                            </div>
+                          </div>
+                          
+                          <div class="form-actions">
+                            <button type="button" class="btn-registrar" [disabled]="v.registrando"
+                                    (click)="registrarValor(m, v)">
+                              @if (v.registrando) {
+                                <span class="spinner-border spinner-border-sm me-1"></span>
+                              } @else {
+                                <i class="bi bi-check-circle me-1"></i>
+                              }
+                              {{ v.registroEditandoId ? 'Guardar cambios' : 'Registrar valor' }}
+                            </button>
+                            @if (v.registroEditandoId) {
+                              <button type="button" class="btn btn-outline-secondary btn-sm"
+                                      [disabled]="v.registrando" (click)="cancelarEdicion(v)">
+                                Cancelar
+                              </button>
+                            }
+                          </div>
+                          
+                          @if (v.error) {
+                            <div class="error-message">{{ v.error }}</div>
+                          }
+                          @if (v.ultimoMensaje) {
+                            <div class="success-message">{{ v.ultimoMensaje }}</div>
+                          }
+                        </div>
+                      }
+
+                      @if (v.frecuenciaCaptura !== 'por_sprint' && v.capturas.length > 0) {
+                        <div class="capturas-historial">
+                          <div class="small fw-semibold text-muted mb-1">Capturas de este sprint</div>
+                          <div class="d-flex flex-wrap gap-2">
+                            @for (c of v.capturas; track c.id) {
+                              <!-- Revisión de captura universal: cada quien edita únicamente
+                                   su propio registro, sin importar el tipoAlcance de la variable. -->
+                              @if (c.userId === currentUserId) {
+                                <button type="button" class="btn btn-sm btn-outline-secondary py-0"
+                                        (click)="editarValorExistente(v, c)"
+                                        title="Editar este valor">
+                                  {{ c.registradoAt | date:'dd/MM/yyyy':'UTC' }}: {{ c.valor }}
+                                  <i class="bi bi-pencil ms-1"></i>
+                                </button>
+                              } @else {
+                                <span class="btn btn-sm btn-outline-secondary py-0 disabled">
+                                  {{ c.registradoAt | date:'dd/MM/yyyy':'UTC' }}: {{ c.valor }}
+                                </span>
+                              }
+                            }
+                          </div>
+                        </div>
+                      }
+                    }
+                  </div>
+                }
+              }
+            </div>
+          }
+        </div>
+
+        <!-- Columna derecha: resumen del sprint -->
+        <div class="col-12 col-lg-5">
+          @if (sprintActual) {
+            <div class="resumen-card">
+              <h3 class="resumen-title">Resumen del sprint</h3>
+              
+              <!-- Gráfica circular -->
+              <div class="grafica-resumen">
+                <div class="grafica-container">
+                  <svg class="grafica-circular" viewBox="0 0 100 100">
+                    <!-- Fondo del círculo -->
+                    <circle cx="50" cy="50" r="40" fill="none" stroke="#e9ecef" stroke-width="8"></circle>
+                    
+                    @if (obtenerMetricasCapturadas() > 0) {
+                      <!-- Progreso capturadas (verde) -->
+                      <circle cx="50" cy="50" r="40" fill="none" 
+                              [attr.stroke]="'#10b981'" 
+                              stroke-width="8"
+                              [attr.stroke-dasharray]="calcularDashArray(obtenerMetricasCapturadas(), obtenerTotalMetricas())"
+                              stroke-dashoffset="0"
+                              transform="rotate(-90 50 50)"></circle>
+                    }
+                    
+                    @if (obtenerMetricasPendientes() > 0) {
+                      <!-- Progreso pendientes (morado) -->
+                      <circle cx="50" cy="50" r="40" fill="none" 
+                              [attr.stroke]="'#8b5cf6'" 
+                              stroke-width="8"
+                              [attr.stroke-dasharray]="calcularDashArray(obtenerMetricasPendientes(), obtenerTotalMetricas())"
+                              [attr.stroke-dashoffset]="-calcularOffset(obtenerMetricasCapturadas(), obtenerTotalMetricas())"
+                              transform="rotate(-90 50 50)"></circle>
+                    }
+                    
+                    <!-- Texto central -->
+                    <text x="50" y="48" text-anchor="middle" class="grafica-numero">{{ obtenerMetricasCapturadas() + obtenerMetricasPendientes() }}</text>
+                    <text x="50" y="56" text-anchor="middle" class="grafica-texto">de {{ obtenerTotalMetricas() }}</text>
+                    <text x="50" y="62" text-anchor="middle" class="grafica-subtexto">métricas</text>
+                  </svg>
+                  
+                  <div class="leyenda-grafica">
+                    <div class="leyenda-item">
+                      <span class="leyenda-dot" style="background-color: #10b981;"></span>
+                      <span class="leyenda-numero">{{ obtenerMetricasCapturadas() }}</span>
+                      <span class="leyenda-texto">Capturadas</span>
+                    </div>
+                    <div class="leyenda-item">
+                      <span class="leyenda-dot" style="background-color: #8b5cf6;"></span>
+                      <span class="leyenda-numero">{{ obtenerMetricasPendientes() }}</span>
+                      <span class="leyenda-texto">Pendientes</span>
+                    </div>
+                    <div class="leyenda-item">
+                      <span class="leyenda-dot" style="background-color: #e9ecef;"></span>
+                      <span class="leyenda-numero">{{ obtenerMetricasSinRegistros() }}</span>
+                      <span class="leyenda-texto">Sin registros</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Estado de métricas -->
+              <div class="estado-metricas">
+                <h4 class="estado-title">Estado de métricas</h4>
+                
+                <div class="estado-lista">
+                  <div class="estado-item">
+                    <span class="estado-label">Total métricas</span>
+                    <span class="estado-valor">{{ obtenerTotalMetricas() }}</span>
+                  </div>
+                  <div class="estado-item">
+                    <span class="estado-label">Capturadas</span>
+                    <span class="estado-valor">{{ obtenerMetricasCapturadas() }}</span>
+                  </div>
+                  <div class="estado-item">
+                    <span class="estado-label">Pendientes</span>
+                    <span class="estado-valor">{{ obtenerMetricasPendientes() }}</span>
+                  </div>
+                  <div class="estado-item">
+                    <span class="estado-label">Sin registros</span>
+                    <span class="estado-valor">{{ obtenerMetricasSinRegistros() }}</span>
+                  </div>
+                </div>
+
+                <div class="progreso-sprint">
+                  <span class="progreso-label">Progreso del sprint</span>
+                  <span class="progreso-porcentaje">{{ calcularPorcentajeProgreso() }}%</span>
+                </div>
+              </div>
+
+              <!-- Consejo -->
+              <div class="consejo-card">
+                <div class="consejo-content">
+                  <div class="consejo-header">
+                    <i class="bi bi-lightbulb"></i>
+                    <span>Consejo</span>
+                  </div>
+                  <p class="consejo-texto">
+                    Registra los valores de tus métricas de forma constante para obtener análisis más precisos.
+                  </p>
+                </div>
+                <div class="consejo-ilustracion">
+                  <i class="bi bi-clipboard-check"></i>
+                </div>
+              </div>
+            </div>
+          }
+        </div>
+      </div>
+    }
+  }
+</app-shell>

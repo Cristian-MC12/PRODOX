@@ -588,13 +588,31 @@ describe('ParametrizacionComponent - Fase 16.6: Aprobación y Versionado', () =>
       schemas: [NO_ERRORS_SCHEMA]  // Ignorar componentes hijo como ShellComponent
     }).compileComponents();
 
+    // Mock localStorage ANTES de crear el componente: AuthService (providedIn:'root')
+    // lee 'mpdia_user' en su inicializador de signal en cuanto se construye, que
+    // ocurre al inyectarse en el constructor de ParametrizacionComponent más abajo.
+    // Corrección: esScrumMaster ya NO depende del rol global de cuenta —
+    // depende de si el email de 'mpdia_user' coincide con scrumMasterEmail del
+    // proyecto activo (mismo patrón que dashboard.component.ts). Ambos deben
+    // coincidir aquí ('sm@test.com') para que el botón "Aprobar parametrización"
+    // se muestre, igual que en la app real cuando el usuario autenticado ES el
+    // creador de este proyecto.
+    spyOn(localStorage, 'getItem').and.callFake((key: string) => {
+      if (key === 'mpdia_user') {
+        return JSON.stringify({ token: 'test-token', userId: 'u1', email: 'sm@test.com', role: 'scrum_master', nombre: 'SM Test' });
+      }
+      if (key === 'mpdia_proyecto_activo') {
+        return JSON.stringify({ id: '123', scrumMasterEmail: 'sm@test.com' });
+      }
+      // Cualquier otra clave (p. ej. 'mpdia_selecciones' de SeleccionService) se
+      // comporta como localStorage real vacío, igual que antes de este mock.
+      return null;
+    });
+
     fixture = TestBed.createComponent(ParametrizacionComponent);
     component = fixture.componentInstance;
     httpMock = TestBed.inject(HttpTestingController);
-    
-    // Mock localStorage
-    spyOn(localStorage, 'getItem').and.returnValue(JSON.stringify({ id: '123' }));
-    
+
     // NO llamar fixture.detectChanges() aquí para evitar ejecutar ngOnInit automáticamente
   });
 
@@ -773,6 +791,31 @@ describe('ParametrizacionComponent - Fase 16.6: Aprobación y Versionado', () =>
     const buttons: HTMLElement[] = Array.from(fixture.nativeElement.querySelectorAll('button'));
     expect(buttons.some(b => b.textContent?.includes('Aprobar parametrización'))).toBe(false);
     expect(fixture.nativeElement.textContent).toContain('Parametrización lista para uso');
+  });
+
+  // Corrección: Scrum Master único por proyecto (el creador), no por rol
+  // global de cuenta. auth.currentUser() ya quedó fijado en la construcción
+  // del componente (signal inicializado una sola vez desde 'mpdia_user' en
+  // el beforeEach: email 'sm@test.com', rol global 'scrum_master') — lo que
+  // cambia aquí es el proyecto activo: su scrumMasterEmail ya NO coincide con
+  // el usuario autenticado, simulando que este usuario es scrum_master de
+  // OTRO proyecto pero no de este. leerScrumMasterEmailProyectoActivo() relee
+  // localStorage en cada evaluación, así que este cambio sí tiene efecto.
+  it('NO debe mostrar botón "Aprobar" si el usuario autenticado no es el creador de este proyecto, aunque su rol global sea scrum_master', () => {
+    (localStorage.getItem as jasmine.Spy).and.callFake((key: string) => {
+      if (key === 'mpdia_user') {
+        return JSON.stringify({ token: 'test-token', userId: 'u1', email: 'sm@test.com', role: 'scrum_master', nombre: 'SM Test' });
+      }
+      if (key === 'mpdia_proyecto_activo') {
+        return JSON.stringify({ id: '123', scrumMasterEmail: 'otro-creador@test.com' });
+      }
+      return null;
+    });
+
+    renderConEstado({ estadoActual: 'propuesta', versionActual: 2 });
+
+    const buttons: HTMLElement[] = Array.from(fixture.nativeElement.querySelectorAll('button'));
+    expect(buttons.some(b => b.textContent?.includes('Aprobar parametrización'))).toBe(false);
   });
 
   it('debe cargar estado desde backend cuando existe parametrización aprobada', (done) => {

@@ -4,12 +4,15 @@ package com.mpdia.service;
 import com.mpdia.dto.EvaluacionSprintDto;
 import com.mpdia.dto.MetricaEvaluacionDetalleDto;
 import com.mpdia.dto.RegistroPuntoDto;
+import com.mpdia.dto.ResultadoCalculadoPuntoDto;
 import com.mpdia.dto.SprintStatsDto;
 import com.mpdia.dto.VariableEstadisticasDto;
 import com.mpdia.entity.RegistroValor;
+import com.mpdia.entity.ResultadoMetrica;
 import com.mpdia.entity.Sprint;
 import com.mpdia.entity.Variable;
 import com.mpdia.repository.RegistroValorRepository;
+import com.mpdia.repository.ResultadoMetricaRepository;
 import com.mpdia.repository.SprintRepository;
 import com.mpdia.repository.VariableRepository;
 import lombok.RequiredArgsConstructor;
@@ -31,6 +34,7 @@ public class EvaluacionService {
     private final SprintRepository        sprintRepo;
     private final VariableRepository      variableRepo;
     private final RegistroValorRepository registroRepo;
+    private final ResultadoMetricaRepository resultadoMetricaRepo;
 
     /**
      * Evaluación completa de todos los sprints de un proyecto.
@@ -143,7 +147,8 @@ public class EvaluacionService {
                     variable.getFormulaTexto(),
                     puntos,
                     calcularEstadisticas(agruparPorPeriodo(puntos, variable.getFrecuenciaCaptura())),
-                    calcularPorSprint(puntos)
+                    calcularPorSprint(puntos),
+                    resultadosCalculadosDeLaMetrica(variable, proyectoId, sprintsPorId)
             ));
         }
         return resultado;
@@ -151,6 +156,33 @@ public class EvaluacionService {
 
     /** Frecuencias con un período bien definido, sobre las que tiene sentido agrupar. */
     private static final Set<String> FRECUENCIAS_CON_PERIODO = Set.of("por_sprint", "semanal", "diaria");
+
+    /**
+     * Revisión de Evaluación: resultado YA CALCULADO del equipo (ResultadoMetrica
+     * vigente) por sprint, para que la gráfica pueda preferirlo sobre el registro
+     * crudo más reciente. Solo aplica a frecuenciaCaptura='por_sprint' — es la
+     * única granularidad que ResultadoMetrica modela hoy (sprintId, sin semana/día).
+     * Vacía si la frecuencia es otra, o si todavía no se calculó nada para esta
+     * métrica en este proyecto (ej. parametrización recién aprobada, sin sprints
+     * cerrados aún) — en ambos casos el frontend cae de vuelta a 'registros'.
+     */
+    private List<ResultadoCalculadoPuntoDto> resultadosCalculadosDeLaMetrica(
+            Variable variable, UUID proyectoId, Map<UUID, Sprint> sprintsPorId) {
+        if (!"por_sprint".equals(variable.getFrecuenciaCaptura())) {
+            return List.of();
+        }
+        List<ResultadoMetrica> resultados = resultadoMetricaRepo
+                .findByProyectoIdAndMetrica_IdAndVigenteTrue(proyectoId, variable.getMetrica().getId());
+
+        return resultados.stream()
+                .filter(r -> sprintsPorId.containsKey(r.getSprintId()))
+                .sorted(Comparator.comparing(ResultadoMetrica::getCalculadoAt))
+                .map(r -> new ResultadoCalculadoPuntoDto(
+                        r.getId(), r.getResultado(), r.getSprintId(),
+                        Optional.ofNullable(sprintsPorId.get(r.getSprintId())).map(Sprint::getNumero).orElse(null),
+                        r.getCalculadoAt()))
+                .toList();
+    }
 
     /**
      * Corrección solicitada (Ejecución/Tendencias): agrupa los puntos por período según la

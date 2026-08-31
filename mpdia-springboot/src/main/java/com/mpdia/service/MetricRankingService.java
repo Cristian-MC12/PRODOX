@@ -397,6 +397,7 @@ public class MetricRankingService {
         }
         ParametrizacionService.validarEscalaEstructurada(req.escalaTipo(), req.escalaMin(), req.escalaMax(),
             req.escalaPaso(), req.escalaSinLimite());
+        ParametrizacionService.validarResponsableCaptura(req.responsableCaptura());
         if (req.metricaId() != null) {
             return guardarPorMetrica(req, userId, userEmail);
         } else if (req.factorId() != null) {
@@ -475,6 +476,11 @@ public class MetricRankingService {
         // entidad quedaba siempre en su default "por_sprint" sin importar lo que
         // el usuario eligiera en el formulario de Planeación (ver GuardarParametrizacionRequest).
         p.setFrecuenciaCaptura(req.frecuenciaCaptura() != null ? req.frecuenciaCaptura() : "por_sprint");
+        // Revisión de captura por parametrización: independiente de tipoOperacion —
+        // decide QUIÉN captura (EQUIPO/SCRUM_MASTER), no CÓMO se calcula.
+        p.setResponsableCaptura(req.responsableCaptura() != null
+            ? req.responsableCaptura()
+            : ParametrizacionService.RESPONSABLE_CAPTURA_DEFAULT);
         p.setStatus("pendiente");
 
         MetricParametrizacion saved = parametrizacionRepo.save(p);
@@ -507,6 +513,8 @@ public class MetricRankingService {
      */
     private boolean esMismoContenido(MetricParametrizacion existente, GuardarParametrizacionRequest req) {
         String frecuenciaReq = req.frecuenciaCaptura() != null ? req.frecuenciaCaptura() : "por_sprint";
+        String responsableReq = req.responsableCaptura() != null
+            ? req.responsableCaptura() : ParametrizacionService.RESPONSABLE_CAPTURA_DEFAULT;
         return java.util.Objects.equals(existente.getObjetivo(), req.objetivo())
             && java.util.Objects.equals(existente.getProcedimiento(), req.procedimiento())
             && java.util.Objects.equals(existente.getIndicadorVariable(), req.indicadorVariable())
@@ -520,6 +528,10 @@ public class MetricRankingService {
             // esta comparación no incluía frecuenciaCaptura y el reenvío se
             // descartaba silenciosamente devolviendo la versión vieja sin el cambio.
             && java.util.Objects.equals(existente.getFrecuenciaCaptura(), frecuenciaReq)
+            // Revisión de captura por parametrización: si el usuario solo cambió el
+            // alcance/responsable (todo lo demás igual), es una edición real que
+            // cambia quién puede capturar — no un reenvío duplicado.
+            && java.util.Objects.equals(existente.getResponsableCaptura(), responsableReq)
             // Corrección del manejo de escalas: si el usuario solo cambió la escala
             // estructurada (todo lo demás igual), es una edición real, no un reenvío
             // duplicado — debe crear una versión nueva.
@@ -569,6 +581,9 @@ public class MetricRankingService {
         p.setEscalaSinLimite(req.escalaSinLimite());
         p.setEscalaDescripcion(req.escalaDescripcion());
         p.setMetricaBaseId(req.metricaBaseId());
+        p.setResponsableCaptura(req.responsableCaptura() != null
+            ? req.responsableCaptura()
+            : ParametrizacionService.RESPONSABLE_CAPTURA_DEFAULT);
         p.setStatus("pendiente");
         p.setRevisadoPor(null);
         p.setRevisadoAt(null);
@@ -765,6 +780,7 @@ public class MetricRankingService {
                 p.getFormulaAcademica(),
                 p.getTipoOperacion(),
                 p.getUnidadResultado(),
+                p.getResponsableCaptura(),
                 p.getEscalaTipo(),
                 p.getEscalaMin(),
                 p.getEscalaMax(),

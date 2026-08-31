@@ -6,6 +6,7 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
 import { catchError, of } from 'rxjs';
 import { ShellComponent } from '../../layout/shell/shell.component';
+import { AuthService } from '../../services/auth.service';
 import { SeleccionService } from '../../services/seleccion.service';
 import { MetricRankingService } from '../../services/metric-ranking.service';
 import { MetricaSeleccionada, Parametrizacion, PropuestaGenAI } from '../../models/seleccion.model';
@@ -86,16 +87,22 @@ import { environment } from '../../../environments/environment';
                 </div>
                 <div>
                   @if (estadoActual === 'propuesta') {
-                    <button class="btn btn-success btn-sm text-nowrap"
-                            [disabled]="aprobando"
-                            (click)="aprobarParametrizacion()">
-                      @if (aprobando) {
-                        <span class="spinner-border spinner-border-sm me-1"></span>
-                        Aprobando...
-                      } @else {
-                        <i class="bi bi-check-lg me-1"></i>Aprobar parametrización
-                      }
-                    </button>
+                    @if (esScrumMaster) {
+                      <button class="btn btn-success btn-sm text-nowrap"
+                              [disabled]="aprobando"
+                              (click)="aprobarParametrizacion()">
+                        @if (aprobando) {
+                          <span class="spinner-border spinner-border-sm me-1"></span>
+                          Aprobando...
+                        } @else {
+                          <i class="bi bi-check-lg me-1"></i>Aprobar parametrización
+                        }
+                      </button>
+                    } @else {
+                      <span class="text-muted small">
+                        <i class="bi bi-hourglass-split me-1"></i>Pendiente de aprobación por el Scrum Master
+                      </span>
+                    }
                   } @else {
                     <span class="text-success small">
                       <i class="bi bi-check-circle-fill me-1"></i>Parametrización lista para uso
@@ -446,7 +453,28 @@ import { environment } from '../../../environments/environment';
                   <option value="ilimitada">Cuando ocurra el evento</option>
                 </select>
               </div>
-              
+
+              <!-- Revisión de captura por parametrización: alcance/responsable de
+                   captura, independiente de la fórmula/operación de arriba. El
+                   backend es la autoridad real (EjecucionService.validarPuedeRegistrar);
+                   esta selección solo decide qué queda guardado en la parametrización. -->
+              <div class="col-md-6">
+                <label class="form-label small fw-semibold">
+                  👥 Responsable de captura
+                </label>
+                <select class="form-select form-select-sm" [(ngModel)]="form.responsableCaptura">
+                  <option value="EQUIPO">Equipo</option>
+                  <option value="SCRUM_MASTER">Scrum Master</option>
+                </select>
+                <div class="form-hint text-muted small mt-1">
+                  @if (form.responsableCaptura === 'EQUIPO') {
+                    Cada integrante registra su propio valor.
+                  } @else {
+                    Solo el Scrum Master registra el valor.
+                  }
+                </div>
+              </div>
+
               <!-- Campos académicos: información PROPUESTA/GENERADA por IA, nunca
                    editable manualmente acá — se completan solo copiando una propuesta
                    de IA ("Copiar al formulario"), una entrada del ranking ("Usar") o
@@ -562,7 +590,11 @@ export class ParametrizacionComponent implements OnInit {
   ultimaVersionAprobadaInfo: { version: number } | null = null;
 
   form: Parametrizacion = {
-    objetivo: '', procedimiento: '', indicadorVariable: '', escala: '', frecuenciaCaptura: 'por_sprint'
+    objetivo: '', procedimiento: '', indicadorVariable: '', escala: '', frecuenciaCaptura: 'por_sprint',
+    // Valor por defecto conservador: preserva el comportamiento previo a esta
+    // revisión (todas las métricas quedaban "grupal"/solo Scrum Master) para
+    // quien no cambie explícitamente la selección.
+    responsableCaptura: 'SCRUM_MASTER'
   };
 
   private readonly apiBase = environment.apiBaseUrl;
@@ -570,10 +602,33 @@ export class ParametrizacionComponent implements OnInit {
   constructor(
     private route: ActivatedRoute,
     public  router: Router,
+    private auth: AuthService,
     private seleccionService: SeleccionService,
     private rankingService: MetricRankingService,
     private http: HttpClient
   ) {}
+
+  /**
+   * Revisión de navegación (rol): la aprobación real ya está protegida en el
+   * backend (ParametrizacionController exige Scrum Master del proyecto). Este
+   * getter solo decide qué botón mostrar — nunca es la autorización real.
+   *
+   * Corrección: Scrum Master es siempre relativo al proyecto activo (su
+   * scrumMasterEmail, fijado por el backend al crearlo), nunca el rol
+   * global de cuenta (auth.currentUser()?.role, usado solo para decidir
+   * quién puede CREAR un proyecto nuevo) — mismo patrón ya corregido en
+   * dashboard.component.ts (esScrumMasterDelProyecto).
+   */
+  get esScrumMaster(): boolean {
+    return this.leerScrumMasterEmailProyectoActivo() === this.auth.currentUser()?.email;
+  }
+
+  private leerScrumMasterEmailProyectoActivo(): string | null {
+    try {
+      const raw = localStorage.getItem('mpdia_proyecto_activo');
+      return raw ? (JSON.parse(raw)?.scrumMasterEmail ?? null) : null;
+    } catch { return null; }
+  }
 
   ngOnInit(): void {
     const id = this.route.snapshot.paramMap.get('id');
@@ -638,7 +693,11 @@ export class ParametrizacionComponent implements OnInit {
       escalaMax:         t.escalaMax,
       escalaPaso:        t.escalaPaso,
       escalaSinLimite:   t.escalaSinLimite,
-      escalaDescripcion: t.escalaDescripcion
+      escalaDescripcion: t.escalaDescripcion,
+      // El Top 3 no transporta responsableCaptura (es una elección del Scrum
+      // Master de ESTA parametrización, no algo que otro usuario haya
+      // propuesto) — se conserva la selección que ya tenía el formulario.
+      responsableCaptura: this.form.responsableCaptura || 'SCRUM_MASTER'
     };
     this.errorEscala = '';
     this.propuestaElegida = null;
@@ -685,7 +744,11 @@ export class ParametrizacionComponent implements OnInit {
           escalaMax: parametrizacion.escalaMax ?? undefined,
           escalaPaso: parametrizacion.escalaPaso ?? undefined,
           escalaSinLimite: parametrizacion.escalaSinLimite ?? undefined,
-          escalaDescripcion: parametrizacion.escalaDescripcion ?? undefined
+          escalaDescripcion: parametrizacion.escalaDescripcion ?? undefined,
+          // Precarga el alcance/responsable REAL de la última versión aprobada
+          // de esta métrica — a diferencia del Top 3/base, esta sí es la
+          // parametrización vigente de la MISMA métrica+proyecto.
+          responsableCaptura: parametrizacion.responsableCaptura || 'SCRUM_MASTER'
         };
       } else {
         // No existe parametrización aprobada aún
@@ -719,7 +782,10 @@ export class ParametrizacionComponent implements OnInit {
       escalaMax:         b.escalaMax,
       escalaPaso:        b.escalaPaso,
       escalaSinLimite:   b.escalaSinLimite,
-      escalaDescripcion: b.escalaDescripcion
+      escalaDescripcion: b.escalaDescripcion,
+      // La base no transporta responsableCaptura — se conserva la selección
+      // que ya tenía el formulario (misma razón que usarDelTop()).
+      responsableCaptura: this.form.responsableCaptura || 'SCRUM_MASTER'
     };
     this.propuestaElegida = null;
     this.errorEscala = '';
@@ -771,7 +837,11 @@ export class ParametrizacionComponent implements OnInit {
       escalaMax:         p.escalaMax,
       escalaPaso:        p.escalaPaso,
       escalaSinLimite:   p.escalaSinLimite,
-      escalaDescripcion: p.escalaDescripcion
+      escalaDescripcion: p.escalaDescripcion,
+      // GenAI no propone responsableCaptura (es una decisión organizacional
+      // del Scrum Master, no algo que la IA deba inferir) — se conserva la
+      // selección que ya tenía el formulario.
+      responsableCaptura: this.form.responsableCaptura || 'SCRUM_MASTER'
     };
     this.errorEscala = '';
     // Scroll al formulario para que el usuario vea los cambios
@@ -925,6 +995,9 @@ export class ParametrizacionComponent implements OnInit {
       // backend la persistía siempre como "por_sprint" sin importar lo elegido
       // en el selector de arriba (ver MetricRankingService.guardarPorMetrica()).
       frecuenciaCaptura: this.form.frecuenciaCaptura || 'por_sprint',
+      // Revisión de captura por parametrización: independiente de
+      // tipoOperacion — decide QUIÉN captura, no CÓMO se calcula.
+      responsableCaptura: this.form.responsableCaptura || 'SCRUM_MASTER',
       // Corrección del manejo de escalas: fuente de verdad estructurada que
       // Ejecución usará para mostrar y validar los valores.
       escalaTipo:        this.form.escalaTipo,
@@ -997,6 +1070,9 @@ export class ParametrizacionComponent implements OnInit {
       formulaAcademica: this.form.formulaAcademica || null,
       tipoOperacion: this.form.tipoOperacion || null,
       unidadResultado: this.form.unidadResultado || null,
+      // Revisión de captura por parametrización: independiente de
+      // tipoOperacion — decide QUIÉN captura, no CÓMO se calcula.
+      responsableCaptura: this.form.responsableCaptura || 'SCRUM_MASTER',
       nombreVariable: this.form.nombreVariable || null,
       propuestaIAJson: JSON.stringify(this.propuestas[0]),
       escalaTipo: this.form.escalaTipo ?? null,
@@ -1062,6 +1138,11 @@ export class ParametrizacionComponent implements OnInit {
       formulaAcademica: fuente.formulaAcademica || null,
       tipoOperacion: fuente.tipoOperacion || null,
       unidadResultado: fuente.unidadResultado || null,
+      // Revisión de captura por parametrización: prioriza lo que el Scrum
+      // Master tiene seleccionado en el formulario ahora mismo (puede haber
+      // cambiado el alcance antes de aprobar) sobre lo ya guardado como
+      // propuesta — mismo criterio que la escala, justo abajo.
+      responsableCaptura: this.form.responsableCaptura || fuente.responsableCaptura || 'SCRUM_MASTER',
       nombreVariable: fuente.nombreVariable || null,
       // Corrección del manejo de escalas: prioriza lo que el Scrum Master tiene
       // en el formulario ahora mismo (puede haber ajustado la escala propuesta

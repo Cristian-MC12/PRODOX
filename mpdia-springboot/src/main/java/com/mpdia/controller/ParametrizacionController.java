@@ -8,6 +8,7 @@ import com.mpdia.dto.GuardarPropuestaRequest;
 import com.mpdia.dto.ParametrizacionRequest;
 import com.mpdia.dto.PropuestaParametrizacionDto;
 import com.mpdia.entity.MetricParametrizacion;
+import com.mpdia.entity.ProjectMember;
 import com.mpdia.repository.MetricParametrizacionRepository;
 import com.mpdia.repository.ProjectMemberRepository;
 import com.mpdia.service.NombreVariableInvalidoException;
@@ -156,8 +157,30 @@ public class ParametrizacionController {
     @PreAuthorize("hasRole('USER')")
     public ResponseEntity<MetricParametrizacion> aprobarParametrizacion(
             @PathVariable("id") UUID parametrizacionId,
-            @RequestBody @Valid AprobarParametrizacionRequest request) {
-        
+            @RequestBody @Valid AprobarParametrizacionRequest request,
+            Authentication auth) {
+
+        // Revisión de aprobación: aprobar determina la fórmula OFICIAL que usará
+        // el motor de cálculo — debe quedar restringida al Scrum Master real del
+        // proyecto, no a cualquier miembro autenticado (@PreAuthorize solo exige
+        // rol de aplicación 'USER', el mismo para todos). Se valida aquí, en el
+        // controller, para no alterar la autorización (solo membresía) que ya
+        // usan y prueban ParametrizacionService.guardarPropuesta()/generarPropuestas()
+        // y todos los tests existentes de ParametrizacionServiceTest que llaman al
+        // service directamente.
+        MetricParametrizacion existente = parametrizacionRepository.findById(parametrizacionId)
+                .orElse(null);
+        if (existente != null) {
+            ProjectMember member = projectMemberRepository
+                    .findByProyectoIdAndUserId(existente.getProyectoId(), auth.getName())
+                    .orElse(null);
+            if (member == null || !"scrum_master".equals(member.getRol())) {
+                log.warn("Aprobación rechazada: {} no es Scrum Master del proyecto {}",
+                        auth.getName(), existente.getProyectoId());
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+            }
+        }
+
         try {
             log.info("Aprobando parametrización {}", parametrizacionId);
             MetricParametrizacion parametrizacion = parametrizacionService.aprobarParametrizacion(

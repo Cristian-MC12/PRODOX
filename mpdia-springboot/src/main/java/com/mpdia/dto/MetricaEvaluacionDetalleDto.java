@@ -24,5 +24,15 @@ public record MetricaEvaluacionDetalleDto(
     List<RegistroPuntoDto> registros,
     VariableEstadisticasDto estadisticas,
     /** estadísticas agregadas por sprint, ordenadas por número de sprint ascendente */
-    List<SprintStatsDto> porSprint
+    List<SprintStatsDto> porSprint,
+    /**
+     * Revisión de Evaluación: resultado YA CALCULADO del equipo (ResultadoMetrica
+     * vigente) por sprint, ordenado ascendente — fuente preferida para la gráfica
+     * cuando frecuenciaCaptura='por_sprint' y existe al menos un cálculo. Viene
+     * vacía si aún no se calculó nada o si la frecuencia es semanal/diaria (sin
+     * granularidad equivalente en ResultadoMetrica hoy). El frontend cae de vuelta
+     * a 'registros' cuando esta lista está vacía — comportamiento preexistente
+     * sin cambios.
+     */
+    List<ResultadoCalculadoPuntoDto> resultadosCalculados
 ) {}

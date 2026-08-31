@@ -30,6 +30,8 @@ public record MetricParametrizacionDto(
     String  formulaAcademica,
     String  tipoOperacion,
     String  unidadResultado,
+    /** Revisión de captura por parametrización: "EQUIPO" | "SCRUM_MASTER". */
+    String  responsableCaptura,
     /** Escala estructurada — ver ParametrizacionService.validarEscalaEstructurada(). */
     String     escalaTipo,
     BigDecimal escalaMin,

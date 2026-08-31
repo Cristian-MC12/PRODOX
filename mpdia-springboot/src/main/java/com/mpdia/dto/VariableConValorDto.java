@@ -26,5 +26,9 @@ public record VariableConValorDto(
     /** Escala estructurada — NUMERICA_ENTERA | NUMERICA_DECIMAL, NULL = sin estructura. */
     String escalaTipo,
     BigDecimal escalaPaso,
-    Boolean escalaSinLimite
+    Boolean escalaSinLimite,
+    /** Revisión de captura individual: grupal | individual (Variable.tipoAlcance).
+     *  El frontend usa este campo para decidir si un scrum_member (no solo el
+     *  Scrum Master) puede ver/usar el formulario de captura de esta variable. */
+    String tipoAlcance
 ) {}

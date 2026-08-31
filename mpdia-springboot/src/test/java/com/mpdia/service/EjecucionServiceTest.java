@@ -3,6 +3,7 @@ package com.mpdia.service;
 
 import com.mpdia.dto.RegistrarValorRequest;
 import com.mpdia.dto.RegistroValorDto;
+import com.mpdia.entity.Metrica;
 import com.mpdia.entity.ProjectMember;
 import com.mpdia.entity.RegistroValor;
 import com.mpdia.entity.Sprint;
@@ -11,12 +12,15 @@ import com.mpdia.repository.ProjectMemberRepository;
 import com.mpdia.repository.RegistroValorRepository;
 import com.mpdia.repository.SprintRepository;
 import com.mpdia.repository.VariableRepository;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -26,6 +30,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
@@ -47,6 +52,7 @@ class EjecucionServiceTest {
     @Mock private VariableRepository variableRepo;
     @Mock private SprintRepository sprintRepo;
     @Mock private ProjectMemberRepository projectMemberRepo;
+    @Mock private CalculoMetricaService calculoMetricaService;
 
     private EjecucionService service;
 
@@ -56,10 +62,45 @@ class EjecucionServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new EjecucionService(registroRepo, variableRepo, sprintRepo, projectMemberRepo);
+        service = new EjecucionService(registroRepo, variableRepo, sprintRepo, projectMemberRepo, calculoMetricaService);
         sprintId = UUID.randomUUID();
         variableId = UUID.randomUUID();
         proyectoId = UUID.randomUUID();
+    }
+
+    // ════════════════════════════════════════════════════════════════════
+    // Corrección: "un proyecto tiene un único Scrum Master, el creador". La
+    // autoridad real ya era, y sigue siendo, ProjectMember.rol POR PROYECTO
+    // (nunca AppUser.role, el rol global de cuenta elegido al registrarse) —
+    // estos tests demuestran que un usuario cuya cuenta es globalmente
+    // "scrum_master" (porque creó OTRO proyecto propio) sigue siendo
+    // rechazado como Scrum Master en un proyecto donde solo es scrum_member.
+    // ════════════════════════════════════════════════════════════════════
+
+    @Test
+    void validarScrumMaster_miembroConRolGlobalScrumMasterPeroScrumMemberEnEsteProyecto_esRechazado() {
+        ProjectMember miembro = new ProjectMember();
+        miembro.setProyectoId(proyectoId);
+        miembro.setUserId("csmartinez222");
+        miembro.setRol("scrum_member"); // scrum_member EN ESTE proyecto, aunque su cuenta sea scrum_master
+        when(projectMemberRepo.findByProyectoIdAndUserId(proyectoId, "csmartinez222"))
+            .thenReturn(Optional.of(miembro));
+
+        assertThatThrownBy(() -> service.validarScrumMaster("csmartinez222", proyectoId))
+            .isInstanceOf(SecurityException.class)
+            .hasMessageContaining("Solo el Scrum Master del proyecto");
+    }
+
+    @Test
+    void validarScrumMaster_creadorDelProyecto_esAceptado() {
+        ProjectMember creador = new ProjectMember();
+        creador.setProyectoId(proyectoId);
+        creador.setUserId("creador");
+        creador.setRol("scrum_master");
+        when(projectMemberRepo.findByProyectoIdAndUserId(proyectoId, "creador"))
+            .thenReturn(Optional.of(creador));
+
+        assertThatCode(() -> service.validarScrumMaster("creador", proyectoId)).doesNotThrowAnyException();
     }
 
     /** Sprint sintético que abarca todo agosto de 2026, usado por los tests de fechaCaptura explícita. */
@@ -80,6 +121,7 @@ class EjecucionServiceTest {
         return sprint;
     }
 
+    /** Métrica con alcance "SCRUM MASTER" en la parametrización → Variable.tipoAlcance='grupal'. */
     private ProjectMember scrumMaster() {
         ProjectMember m = new ProjectMember();
         m.setProyectoId(proyectoId);
@@ -116,13 +158,28 @@ class EjecucionServiceTest {
         return v;
     }
 
+    /**
+     * variableIndividual() no fija Metrica (el resto de este archivo confía en
+     * que recalcularMetricaAsociada() atrapa ese NPE y nunca afecta la
+     * captura). Los tests de la corrección de visibilidad transaccional
+     * necesitan una Variable con Metrica real para poder verificar que SÍ se
+     * registra el TransactionSynchronization esperado.
+     */
+    private Variable variableIndividualConMetrica() {
+        Variable v = variableIndividual();
+        Metrica m = new Metrica();
+        m.setId(UUID.randomUUID());
+        v.setMetrica(m);
+        return v;
+    }
+
     // ========================================
     // A. Primera captura → INSERT
     // ========================================
     @Test
     void guardarOActualizarValor_sinRegistroPrevio_creaUnoNuevo() {
         Variable variable = variableGrupal();
-        when(registroRepo.findFirstBySprintIdAndVariable_IdOrderByRegistradoAtDesc(sprintId, variableId))
+        when(registroRepo.findFirstBySprintIdAndVariable_IdAndUserIdOrderByRegistradoAtDesc(sprintId, variableId, "user-a"))
             .thenReturn(Optional.empty());
         when(registroRepo.save(any(RegistroValor.class))).thenAnswer(inv -> inv.getArgument(0));
 
@@ -137,7 +194,7 @@ class EjecucionServiceTest {
     }
 
     // ========================================
-    // B. Segunda captura misma variable/sprint → UPDATE, no INSERT
+    // B. Segunda captura misma variable/sprint/usuario → UPDATE, no INSERT
     // C. el valor final queda actualizado
     // ========================================
     @Test
@@ -151,7 +208,7 @@ class EjecucionServiceTest {
         existente.setUserId("user-a");
         existente.setValorNum(new BigDecimal("5"));
 
-        when(registroRepo.findFirstBySprintIdAndVariable_IdOrderByRegistradoAtDesc(sprintId, variableId))
+        when(registroRepo.findFirstBySprintIdAndVariable_IdAndUserIdOrderByRegistradoAtDesc(sprintId, variableId, "user-a"))
             .thenReturn(Optional.of(existente));
         when(registroRepo.save(any(RegistroValor.class))).thenAnswer(inv -> inv.getArgument(0));
 
@@ -167,7 +224,7 @@ class EjecucionServiceTest {
     }
 
     // ========================================
-    // D. Dos llamadas seguidas nunca producen dos filas
+    // D. Dos llamadas seguidas del mismo usuario nunca producen dos filas
     // ========================================
     @Test
     void guardarOActualizarValor_dosLlamadasSeguidas_nuncaProduceDosFilas() {
@@ -180,12 +237,12 @@ class EjecucionServiceTest {
             return r;
         });
 
-        when(registroRepo.findFirstBySprintIdAndVariable_IdOrderByRegistradoAtDesc(sprintId, variableId))
+        when(registroRepo.findFirstBySprintIdAndVariable_IdAndUserIdOrderByRegistradoAtDesc(sprintId, variableId, "user-a"))
             .thenReturn(Optional.empty());
         RegistroValor primero = service.guardarOActualizarValor(
             variable, sprintId, "user-a", new BigDecimal("1"), null, null, null);
 
-        when(registroRepo.findFirstBySprintIdAndVariable_IdOrderByRegistradoAtDesc(sprintId, variableId))
+        when(registroRepo.findFirstBySprintIdAndVariable_IdAndUserIdOrderByRegistradoAtDesc(sprintId, variableId, "user-a"))
             .thenReturn(Optional.of(primero));
         RegistroValor segundo = service.guardarOActualizarValor(
             variable, sprintId, "user-a", new BigDecimal("2"), null, null, null);
@@ -195,9 +252,9 @@ class EjecucionServiceTest {
     }
 
     // ========================================
-    // Semántica grupal vs. individual (conservada del comportamiento previo
-    // de EjecucionComponent: "último valor" grupal no filtra por usuario;
-    // "último valor" individual sí)
+    // Revisión de captura universal: la clave de "registro vigente" es
+    // SIEMPRE por usuario, sin importar tipoAlcance — grupal e individual se
+    // comportan exactamente igual en cuanto a almacenamiento.
     // ========================================
     @Test
     void guardarOActualizarValor_variableIndividual_usaClaveConUsuario() {
@@ -212,8 +269,6 @@ class EjecucionServiceTest {
 
         verify(registroRepo, times(1))
             .findFirstBySprintIdAndVariable_IdAndUserIdOrderByRegistradoAtDesc(sprintId, variableId, "user-a");
-        verify(registroRepo, never())
-            .findFirstBySprintIdAndVariable_IdOrderByRegistradoAtDesc(any(), any());
     }
 
     @Test
@@ -234,20 +289,35 @@ class EjecucionServiceTest {
         verify(registroRepo, times(2)).save(any(RegistroValor.class));
     }
 
+    // Defensa en profundidad a nivel de almacenamiento: aunque
+    // validarPuedeRegistrar() ya restringe una variable 'grupal' (alcance
+    // "SCRUM MASTER") a un único capturador en la práctica, la clave de
+    // guardarOActualizarValor() sigue siendo por usuario para CUALQUIER
+    // tipoAlcance — así, si dos identidades distintas llegaran a escribir
+    // sobre la misma variable+sprint (ej. cambio de Scrum Master a mitad de
+    // sprint), ninguna sobrescribe a la otra.
     @Test
-    void guardarOActualizarValor_variableGrupal_usaClaveSinUsuario() {
+    void guardarOActualizarValor_variableGrupal_usaClaveConUsuario_dosMiembrosNoColisionan() {
         Variable variable = variableGrupal();
-        when(registroRepo.findFirstBySprintIdAndVariable_IdOrderByRegistradoAtDesc(sprintId, variableId))
+        when(registroRepo.findFirstBySprintIdAndVariable_IdAndUserIdOrderByRegistradoAtDesc(
+                eq(sprintId), eq(variableId), anyString()))
             .thenReturn(Optional.empty());
         when(registroRepo.save(any(RegistroValor.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        service.guardarOActualizarValor(variable, sprintId, "user-a",
-            new BigDecimal("3"), null, null, null);
+        RegistroValor deA = service.guardarOActualizarValor(
+            variable, sprintId, "user-a", new BigDecimal("2"), null, null, null);
+        RegistroValor deB = service.guardarOActualizarValor(
+            variable, sprintId, "user-b", new BigDecimal("5"), null, null, null);
 
         verify(registroRepo, times(1))
-            .findFirstBySprintIdAndVariable_IdOrderByRegistradoAtDesc(sprintId, variableId);
-        verify(registroRepo, never())
-            .findFirstBySprintIdAndVariable_IdAndUserIdOrderByRegistradoAtDesc(any(), any(), any());
+            .findFirstBySprintIdAndVariable_IdAndUserIdOrderByRegistradoAtDesc(sprintId, variableId, "user-a");
+        verify(registroRepo, times(1))
+            .findFirstBySprintIdAndVariable_IdAndUserIdOrderByRegistradoAtDesc(sprintId, variableId, "user-b");
+        verify(registroRepo, times(2)).save(any(RegistroValor.class));
+        assertThat(deA.getUserId()).isEqualTo("user-a");
+        assertThat(deB.getUserId()).isEqualTo("user-b");
+        assertThat(deA.getValorNum()).isEqualByComparingTo("2"); // el de user-a nunca se sobrescribió
+        assertThat(deB.getValorNum()).isEqualByComparingTo("5");
     }
 
     // ========================================
@@ -296,7 +366,7 @@ class EjecucionServiceTest {
         when(variableRepo.findById(variableId)).thenReturn(Optional.of(variable));
         when(sprintRepo.findById(sprintId)).thenReturn(Optional.of(sprintDelProyecto()));
         when(projectMemberRepo.findByProyectoIdAndUserId(proyectoId, "user-a")).thenReturn(Optional.of(scrumMaster()));
-        when(registroRepo.findFirstBySprintIdAndVariable_IdOrderByRegistradoAtDesc(sprintId, variableId))
+        when(registroRepo.findFirstBySprintIdAndVariable_IdAndUserIdOrderByRegistradoAtDesc(sprintId, variableId, "user-a"))
             .thenReturn(Optional.empty());
         when(registroRepo.save(any(RegistroValor.class))).thenAnswer(inv -> inv.getArgument(0));
 
@@ -319,12 +389,13 @@ class EjecucionServiceTest {
         existente.setId(idExistente);
         existente.setVariable(variable);
         existente.setSprintId(sprintId);
+        existente.setUserId("user-a");
         existente.setValorNum(new BigDecimal("7"));
 
         when(variableRepo.findById(variableId)).thenReturn(Optional.of(variable));
         when(sprintRepo.findById(sprintId)).thenReturn(Optional.of(sprintDelProyecto()));
         when(projectMemberRepo.findByProyectoIdAndUserId(proyectoId, "user-a")).thenReturn(Optional.of(scrumMaster()));
-        when(registroRepo.findFirstBySprintIdAndVariable_IdOrderByRegistradoAtDesc(sprintId, variableId))
+        when(registroRepo.findFirstBySprintIdAndVariable_IdAndUserIdOrderByRegistradoAtDesc(sprintId, variableId, "user-a"))
             .thenReturn(Optional.of(existente));
         when(registroRepo.save(any(RegistroValor.class))).thenAnswer(inv -> inv.getArgument(0));
 
@@ -378,8 +449,14 @@ class EjecucionServiceTest {
         verify(registroRepo, never()).save(any());
     }
 
+    // ========================================================================
+    // Autorización condicional por parametrización: una métrica con alcance
+    // "SCRUM MASTER" (Variable.tipoAlcance='grupal') rechaza a un Scrum
+    // Member aunque sea miembro del proyecto — solo el Scrum Master puede
+    // registrar su valor.
+    // ========================================================================
     @Test
-    void registrar_miembroNormalDelProyecto_lanzaSecurityException403() {
+    void registrar_miembroNormalDelProyecto_variableGrupal_lanzaSecurityException403() {
         Variable variable = variableGrupal();
         when(variableRepo.findById(variableId)).thenReturn(Optional.of(variable));
         when(sprintRepo.findById(sprintId)).thenReturn(Optional.of(sprintDelProyecto()));
@@ -392,6 +469,101 @@ class EjecucionServiceTest {
             .hasMessageContaining("Solo el Scrum Master");
 
         verify(registroRepo, never()).save(any());
+    }
+
+    @Test
+    void registrar_scrumMaster_variableGrupal_esPermitido() {
+        Variable variable = variableGrupal();
+        when(variableRepo.findById(variableId)).thenReturn(Optional.of(variable));
+        when(sprintRepo.findById(sprintId)).thenReturn(Optional.of(sprintDelProyecto()));
+        when(projectMemberRepo.findByProyectoIdAndUserId(proyectoId, "user-a")).thenReturn(Optional.of(scrumMaster()));
+        when(registroRepo.findFirstBySprintIdAndVariable_IdAndUserIdOrderByRegistradoAtDesc(sprintId, variableId, "user-a"))
+            .thenReturn(Optional.empty());
+        when(registroRepo.save(any(RegistroValor.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        RegistrarValorRequest req = new RegistrarValorRequest(variableId, sprintId, new BigDecimal("1"), null, null, null);
+
+        RegistroValorDto dto = service.registrar("user-a", req);
+
+        assertThat(dto.valorNum()).isEqualByComparingTo("1");
+    }
+
+    // ========================================================================
+    // Revisión de captura individual/universal: cualquier miembro puede
+    // registrar su propio valor cuando la variable es 'individual' (mismo
+    // criterio que ahora aplica también a 'grupal', arriba).
+    // ========================================================================
+    @Test
+    void registrar_miembroNormalDelProyecto_variableIndividual_esPermitido() {
+        Variable variable = variableIndividual();
+        when(variableRepo.findById(variableId)).thenReturn(Optional.of(variable));
+        when(sprintRepo.findById(sprintId)).thenReturn(Optional.of(sprintDelProyecto()));
+        when(projectMemberRepo.existsByProyectoIdAndUserId(proyectoId, "user-a")).thenReturn(true);
+        when(registroRepo.findFirstBySprintIdAndVariable_IdAndUserIdOrderByRegistradoAtDesc(
+                sprintId, variableId, "user-a")).thenReturn(Optional.empty());
+        when(registroRepo.save(any(RegistroValor.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        RegistrarValorRequest req = new RegistrarValorRequest(variableId, sprintId, new BigDecimal("80"), null, null, null);
+
+        RegistroValorDto dto = service.registrar("user-a", req);
+
+        assertThat(dto.valorNum()).isEqualByComparingTo("80");
+        // Individual: se valida membresía (existsBy...), NUNCA se exige rol scrum_master.
+        verify(projectMemberRepo, never()).findByProyectoIdAndUserId(any(), any());
+    }
+
+    @Test
+    void registrar_usuarioExternoAlProyecto_variableIndividual_lanzaSecurityException403() {
+        Variable variable = variableIndividual();
+        when(variableRepo.findById(variableId)).thenReturn(Optional.of(variable));
+        when(sprintRepo.findById(sprintId)).thenReturn(Optional.of(sprintDelProyecto()));
+        when(projectMemberRepo.existsByProyectoIdAndUserId(proyectoId, "externo")).thenReturn(false);
+
+        RegistrarValorRequest req = new RegistrarValorRequest(variableId, sprintId, new BigDecimal("1"), null, null, null);
+
+        assertThatThrownBy(() -> service.registrar("externo", req))
+            .isInstanceOf(SecurityException.class)
+            .hasMessageContaining("No tienes acceso a este proyecto");
+
+        verify(registroRepo, never()).save(any());
+    }
+
+    @Test
+    void validarPuedeRegistrar_variableIndividual_soloExigeMembresia() {
+        when(projectMemberRepo.existsByProyectoIdAndUserId(proyectoId, "cualquiera")).thenReturn(true);
+        service.validarPuedeRegistrar("cualquiera", variableIndividual());
+        verify(projectMemberRepo, times(1)).existsByProyectoIdAndUserId(proyectoId, "cualquiera");
+        verify(projectMemberRepo, never()).findByProyectoIdAndUserId(any(), any());
+    }
+
+    // Requisito explícito: el Scrum Master también es parte del equipo — en
+    // una métrica de alcance EQUIPO (tipoAlcance='individual') puede
+    // registrar su propio valor exactamente igual que cualquier otro
+    // integrante, sin que se le exija ni se le niegue nada por su rol.
+    @Test
+    void validarPuedeRegistrar_variableIndividual_scrumMasterRegistraComoIntegranteDelEquipo() {
+        when(projectMemberRepo.existsByProyectoIdAndUserId(proyectoId, "sm-user")).thenReturn(true);
+        service.validarPuedeRegistrar("sm-user", variableIndividual());
+        verify(projectMemberRepo, times(1)).existsByProyectoIdAndUserId(proyectoId, "sm-user");
+        verify(projectMemberRepo, never()).findByProyectoIdAndUserId(any(), any());
+    }
+
+    // Autorización condicional por parametrización: alcance "SCRUM MASTER"
+    // (Variable.tipoAlcance='grupal') exige rol de Scrum Master — un Scrum
+    // Member se rechaza aunque sea miembro del proyecto.
+    @Test
+    void validarPuedeRegistrar_variableGrupal_exigeScrumMaster() {
+        when(projectMemberRepo.findByProyectoIdAndUserId(proyectoId, "user-a")).thenReturn(Optional.of(miembroNormal()));
+        assertThatThrownBy(() -> service.validarPuedeRegistrar("user-a", variableGrupal()))
+            .isInstanceOf(SecurityException.class)
+            .hasMessageContaining("Solo el Scrum Master");
+    }
+
+    @Test
+    void validarPuedeRegistrar_variableGrupal_scrumMasterPermitido() {
+        when(projectMemberRepo.findByProyectoIdAndUserId(proyectoId, "user-a")).thenReturn(Optional.of(scrumMaster()));
+        service.validarPuedeRegistrar("user-a", variableGrupal());
+        verify(projectMemberRepo, times(1)).findByProyectoIdAndUserId(proyectoId, "user-a");
     }
 
     @Test
@@ -468,7 +640,7 @@ class EjecucionServiceTest {
     @Test
     void guardarOActualizarValor_conFechaNull_delegaEnElComportamientoExistente() {
         Variable variable = variableGrupal();
-        when(registroRepo.findFirstBySprintIdAndVariable_IdOrderByRegistradoAtDesc(sprintId, variableId))
+        when(registroRepo.findFirstBySprintIdAndVariable_IdAndUserIdOrderByRegistradoAtDesc(sprintId, variableId, "user-a"))
             .thenReturn(Optional.empty());
         when(registroRepo.save(any(RegistroValor.class))).thenAnswer(inv -> inv.getArgument(0));
 
@@ -477,9 +649,9 @@ class EjecucionServiceTest {
 
         assertThat(resultado.getValorNum()).isEqualByComparingTo("5");
         verify(registroRepo, times(1))
-            .findFirstBySprintIdAndVariable_IdOrderByRegistradoAtDesc(sprintId, variableId);
+            .findFirstBySprintIdAndVariable_IdAndUserIdOrderByRegistradoAtDesc(sprintId, variableId, "user-a");
         verify(registroRepo, never())
-            .findFirstBySprintIdAndVariable_IdAndRegistradoAt(any(), any(), any());
+            .findFirstBySprintIdAndVariable_IdAndUserIdAndRegistradoAt(any(), any(), any(), any());
     }
 
     // B. Misma variable + sprint + MISMA fecha → actualiza el registro existente.
@@ -492,13 +664,14 @@ class EjecucionServiceTest {
         existente.setId(idExistente);
         existente.setVariable(variable);
         existente.setSprintId(sprintId);
+        existente.setUserId("user-a");
         existente.setValorNum(new BigDecimal("7"));
         existente.setRegistradoAt(fecha);
 
         when(sprintRepo.findById(sprintId)).thenReturn(Optional.of(sprintQueAbarcaAgosto2026()));
         when(registroRepo.findBySprintIdAndVariable_Id(sprintId, variableId))
             .thenReturn(List.of(existente));
-        when(registroRepo.findFirstBySprintIdAndVariable_IdAndRegistradoAt(sprintId, variableId, fecha))
+        when(registroRepo.findFirstBySprintIdAndVariable_IdAndUserIdAndRegistradoAt(sprintId, variableId, "user-a", fecha))
             .thenReturn(Optional.of(existente));
         when(registroRepo.save(any(RegistroValor.class))).thenAnswer(inv -> inv.getArgument(0));
 
@@ -526,13 +699,14 @@ class EjecucionServiceTest {
         RegistroValor registroA = new RegistroValor();
         registroA.setVariable(variable);
         registroA.setSprintId(sprintId);
+        registroA.setUserId("user-a");
         registroA.setValorNum(new BigDecimal("7"));
         registroA.setRegistradoAt(fechaA);
 
         when(sprintRepo.findById(sprintId)).thenReturn(Optional.of(sprintQueAbarcaAgosto2026()));
         when(registroRepo.findBySprintIdAndVariable_Id(sprintId, variableId))
             .thenReturn(List.of(registroA));
-        when(registroRepo.findFirstBySprintIdAndVariable_IdAndRegistradoAt(sprintId, variableId, fechaB))
+        when(registroRepo.findFirstBySprintIdAndVariable_IdAndUserIdAndRegistradoAt(sprintId, variableId, "user-a", fechaB))
             .thenReturn(Optional.empty());
         when(registroRepo.save(any(RegistroValor.class))).thenAnswer(inv -> inv.getArgument(0));
 
@@ -546,7 +720,7 @@ class EjecucionServiceTest {
         assertThat(captor.getValue().getRegistradoAt()).isEqualTo(fechaB);
         // Nunca se buscó/sobrescribió la fila de fechaA en esta llamada.
         verify(registroRepo, never())
-            .findFirstBySprintIdAndVariable_IdAndRegistradoAt(sprintId, variableId, fechaA);
+            .findFirstBySprintIdAndVariable_IdAndUserIdAndRegistradoAt(sprintId, variableId, "user-a", fechaA);
     }
 
     // C2. Frecuencia 'por_sprint' (valor por defecto de Variable) + fecha
@@ -561,6 +735,7 @@ class EjecucionServiceTest {
         RegistroValor registroA = new RegistroValor();
         registroA.setVariable(variable);
         registroA.setSprintId(sprintId);
+        registroA.setUserId("user-a");
         registroA.setValorNum(new BigDecimal("7"));
         registroA.setRegistradoAt(fechaA);
 
@@ -574,6 +749,39 @@ class EjecucionServiceTest {
             .hasMessageContaining("Ya existe un valor registrado");
 
         verify(registroRepo, never()).save(any(RegistroValor.class));
+    }
+
+    // Requisito explícito de la revisión de captura universal: la ventana
+    // 'por_sprint' ya registrada por user-a NUNCA bloquea a user-b — cada
+    // miembro tiene su propia ventana de frecuencia, aunque ambos capturen la
+    // MISMA variable grupal en el MISMO sprint.
+    @Test
+    void guardarOActualizarValor_conFechaExplicita_frecuenciaPorSprint_otroUsuario_noColisionaConElPrimero() {
+        Variable variable = variableGrupal(); // frecuenciaCaptura por defecto = "por_sprint"
+        Instant fechaA = Instant.parse("2026-08-21T00:00:00Z");
+        Instant fechaB = Instant.parse("2026-08-22T00:00:00Z");
+
+        RegistroValor registroDeUserA = new RegistroValor();
+        registroDeUserA.setVariable(variable);
+        registroDeUserA.setSprintId(sprintId);
+        registroDeUserA.setUserId("user-a");
+        registroDeUserA.setValorNum(new BigDecimal("7"));
+        registroDeUserA.setRegistradoAt(fechaA);
+
+        when(sprintRepo.findById(sprintId)).thenReturn(Optional.of(sprintQueAbarcaAgosto2026()));
+        // findBySprintIdAndVariable_Id devuelve TODOS los registros (de todos los
+        // usuarios) — el filtro por usuario ocurre dentro de validarFrecuencia().
+        when(registroRepo.findBySprintIdAndVariable_Id(sprintId, variableId))
+            .thenReturn(List.of(registroDeUserA));
+        when(registroRepo.findFirstBySprintIdAndVariable_IdAndUserIdAndRegistradoAt(sprintId, variableId, "user-b", fechaB))
+            .thenReturn(Optional.empty());
+        when(registroRepo.save(any(RegistroValor.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        RegistroValor resultado = service.guardarOActualizarValor(
+            variable, sprintId, "user-b", new BigDecimal("2"), null, null, null, fechaB);
+
+        assertThat(resultado.getValorNum()).isEqualByComparingTo("2");
+        assertThat(resultado.getUserId()).isEqualTo("user-b");
     }
 
     // C3. Frecuencia 'semanal' + fecha dentro de la MISMA semana ISO pero en
@@ -591,6 +799,7 @@ class EjecucionServiceTest {
         RegistroValor registroExistente = new RegistroValor();
         registroExistente.setVariable(variable);
         registroExistente.setSprintId(sprintId);
+        registroExistente.setUserId("user-a");
         registroExistente.setValorNum(new BigDecimal("3"));
         registroExistente.setRegistradoAt(fechaLunes);
 
@@ -603,7 +812,7 @@ class EjecucionServiceTest {
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("esta semana");
 
-        when(registroRepo.findFirstBySprintIdAndVariable_IdAndRegistradoAt(sprintId, variableId, fechaSemanaSiguiente))
+        when(registroRepo.findFirstBySprintIdAndVariable_IdAndUserIdAndRegistradoAt(sprintId, variableId, "user-a", fechaSemanaSiguiente))
             .thenReturn(Optional.empty());
         when(registroRepo.save(any(RegistroValor.class))).thenAnswer(inv -> inv.getArgument(0));
 
@@ -628,19 +837,21 @@ class EjecucionServiceTest {
         RegistroValor filaVieja = new RegistroValor();
         filaVieja.setVariable(variable);
         filaVieja.setSprintId(sprintId);
+        filaVieja.setUserId("user-a");
         filaVieja.setValorNum(new BigDecimal("99"));
         filaVieja.setRegistradoAt(fechaVieja);
 
         RegistroValor filaAEditar = new RegistroValor();
         filaAEditar.setVariable(variable);
         filaAEditar.setSprintId(sprintId);
+        filaAEditar.setUserId("user-a");
         filaAEditar.setValorNum(new BigDecimal("42"));
         filaAEditar.setRegistradoAt(fechaAEditar);
 
         when(sprintRepo.findById(sprintId)).thenReturn(Optional.of(sprintQueAbarcaAgosto2026()));
         when(registroRepo.findBySprintIdAndVariable_Id(sprintId, variableId))
             .thenReturn(List.of(filaVieja, filaAEditar));
-        when(registroRepo.findFirstBySprintIdAndVariable_IdAndRegistradoAt(sprintId, variableId, fechaAEditar))
+        when(registroRepo.findFirstBySprintIdAndVariable_IdAndUserIdAndRegistradoAt(sprintId, variableId, "user-a", fechaAEditar))
             .thenReturn(Optional.of(filaAEditar));
         when(registroRepo.save(any(RegistroValor.class))).thenAnswer(inv -> inv.getArgument(0));
 
@@ -685,10 +896,11 @@ class EjecucionServiceTest {
                 RegistroValor rA = new RegistroValor();
                 rA.setVariable(variable);
                 rA.setSprintId(sprintId);
+                rA.setUserId("user-a");
                 rA.setRegistradoAt(fechaA);
                 return List.of(rA);
             });
-        when(registroRepo.findFirstBySprintIdAndVariable_IdAndRegistradoAt(eq(sprintId), eq(variableId), any()))
+        when(registroRepo.findFirstBySprintIdAndVariable_IdAndUserIdAndRegistradoAt(eq(sprintId), eq(variableId), eq("user-a"), any()))
             .thenReturn(Optional.empty());
         when(registroRepo.save(any(RegistroValor.class))).thenAnswer(inv -> inv.getArgument(0));
 
@@ -714,7 +926,7 @@ class EjecucionServiceTest {
         when(sprintRepo.findById(sprintId)).thenReturn(Optional.of(sprintQueAbarcaAgosto2026()));
         when(registroRepo.findBySprintIdAndVariable_Id(sprintId, variableId))
             .thenReturn(List.of());
-        when(registroRepo.findFirstBySprintIdAndVariable_IdAndRegistradoAt(sprintId, variableId, fecha))
+        when(registroRepo.findFirstBySprintIdAndVariable_IdAndUserIdAndRegistradoAt(sprintId, variableId, "user-a", fecha))
             .thenReturn(Optional.empty());
         when(registroRepo.save(any(RegistroValor.class))).thenAnswer(inv -> inv.getArgument(0));
 
@@ -722,9 +934,9 @@ class EjecucionServiceTest {
             variable, sprintId, "user-a", new BigDecimal("1"), null, null, null, fecha);
 
         verify(registroRepo, times(1))
-            .findFirstBySprintIdAndVariable_IdAndRegistradoAt(sprintId, variableId, fecha);
+            .findFirstBySprintIdAndVariable_IdAndUserIdAndRegistradoAt(sprintId, variableId, "user-a", fecha);
         verify(registroRepo, never())
-            .findFirstBySprintIdAndVariable_IdAndRegistradoAt(otroSprintId, variableId, fecha);
+            .findFirstBySprintIdAndVariable_IdAndUserIdAndRegistradoAt(otroSprintId, variableId, "user-a", fecha);
     }
 
     // Variante individual: la clave por fecha también respeta userId.
@@ -799,7 +1011,7 @@ class EjecucionServiceTest {
 
         when(sprintRepo.findById(sprintId)).thenReturn(Optional.of(sprintQueAbarcaAgosto2026()));
         when(registroRepo.findBySprintIdAndVariable_Id(sprintId, variableId)).thenReturn(List.of());
-        when(registroRepo.findFirstBySprintIdAndVariable_IdAndRegistradoAt(sprintId, variableId, fecha))
+        when(registroRepo.findFirstBySprintIdAndVariable_IdAndUserIdAndRegistradoAt(sprintId, variableId, "user-a", fecha))
             .thenReturn(Optional.empty());
         when(registroRepo.save(any(RegistroValor.class))).thenAnswer(inv -> inv.getArgument(0));
 
@@ -816,7 +1028,7 @@ class EjecucionServiceTest {
 
         when(sprintRepo.findById(sprintId)).thenReturn(Optional.of(sprintQueAbarcaAgosto2026()));
         when(registroRepo.findBySprintIdAndVariable_Id(sprintId, variableId)).thenReturn(List.of());
-        when(registroRepo.findFirstBySprintIdAndVariable_IdAndRegistradoAt(sprintId, variableId, fecha))
+        when(registroRepo.findFirstBySprintIdAndVariable_IdAndUserIdAndRegistradoAt(sprintId, variableId, "user-a", fecha))
             .thenReturn(Optional.empty());
         when(registroRepo.save(any(RegistroValor.class))).thenAnswer(inv -> inv.getArgument(0));
 
@@ -864,7 +1076,7 @@ class EjecucionServiceTest {
         Instant fecha = Instant.parse("2026-08-21T00:00:00Z");
         when(sprintRepo.findById(sprintId)).thenReturn(Optional.of(sprintQueAbarcaAgosto2026()));
         when(registroRepo.findBySprintIdAndVariable_Id(sprintId, variableId)).thenReturn(List.of());
-        when(registroRepo.findFirstBySprintIdAndVariable_IdAndRegistradoAt(sprintId, variableId, fecha))
+        when(registroRepo.findFirstBySprintIdAndVariable_IdAndUserIdAndRegistradoAt(sprintId, variableId, "user-a", fecha))
             .thenReturn(Optional.empty());
         when(registroRepo.save(any(RegistroValor.class))).thenAnswer(inv -> inv.getArgument(0));
         return service.guardarOActualizarValor(variable, sprintId, "user-a", valor, null, null, null, fecha);
@@ -1031,7 +1243,7 @@ class EjecucionServiceTest {
 
         when(sprintRepo.findById(sprintId)).thenReturn(Optional.of(sprintQueAbarcaAgosto2026()));
         when(registroRepo.findBySprintIdAndVariable_Id(sprintId, variableId)).thenReturn(List.of());
-        when(registroRepo.findFirstBySprintIdAndVariable_IdAndRegistradoAt(sprintId, variableId, fecha))
+        when(registroRepo.findFirstBySprintIdAndVariable_IdAndUserIdAndRegistradoAt(sprintId, variableId, "user-a", fecha))
             .thenReturn(Optional.empty());
         when(registroRepo.save(any(RegistroValor.class))).thenAnswer(inv -> inv.getArgument(0));
 
@@ -1052,6 +1264,7 @@ class EjecucionServiceTest {
         primera.setId(UUID.randomUUID());
         primera.setVariable(variable);
         primera.setSprintId(sprintId);
+        primera.setUserId("user-a");
         primera.setValorNum(new BigDecimal("5"));
         primera.setRegistradoAt(fechaExistente);
 
@@ -1077,6 +1290,7 @@ class EjecucionServiceTest {
         existente.setId(idExistente);
         existente.setVariable(variable);
         existente.setSprintId(sprintId);
+        existente.setUserId("user-a");
         existente.setValorNum(new BigDecimal("5"));
         existente.setRegistradoAt(fecha);
 
@@ -1106,6 +1320,7 @@ class EjecucionServiceTest {
         existente.setId(idExistente);
         existente.setVariable(variable);
         existente.setSprintId(sprintId);
+        existente.setUserId("user-a");
         existente.setValorNum(new BigDecimal("5"));
         existente.setRegistradoAt(fechaVieja);
 
@@ -1127,7 +1342,7 @@ class EjecucionServiceTest {
         assertThat(resultado.getValorNum()).isEqualByComparingTo("9");
         // Nunca se buscó "el registro por fecha" — el camino de edición localiza siempre por ID.
         verify(registroRepo, never())
-            .findFirstBySprintIdAndVariable_IdAndRegistradoAt(any(), any(), any());
+            .findFirstBySprintIdAndVariable_IdAndUserIdAndRegistradoAt(any(), any(), any(), any());
     }
 
     @Test
@@ -1141,6 +1356,7 @@ class EjecucionServiceTest {
         existente.setId(idExistente);
         existente.setVariable(variable);
         existente.setSprintId(sprintId);
+        existente.setUserId("user-a");
         existente.setValorNum(new BigDecimal("5"));
         existente.setRegistradoAt(fechaVieja);
 
@@ -1170,6 +1386,7 @@ class EjecucionServiceTest {
         existente.setId(idExistente);
         existente.setVariable(variable);
         existente.setSprintId(sprintId);
+        existente.setUserId("user-a");
         existente.setValorNum(new BigDecimal("5"));
         existente.setRegistradoAt(fechaVieja);
 
@@ -1206,6 +1423,7 @@ class EjecucionServiceTest {
         registroA.setId(idA);
         registroA.setVariable(variable);
         registroA.setSprintId(sprintId);
+        registroA.setUserId("user-a");
         registroA.setValorNum(new BigDecimal("1"));
         registroA.setRegistradoAt(fechaA);
 
@@ -1213,6 +1431,7 @@ class EjecucionServiceTest {
         registroB.setId(idB);
         registroB.setVariable(variable);
         registroB.setSprintId(sprintId);
+        registroB.setUserId("user-a"); // mismo usuario: dos capturas propias en conflicto de frecuencia
         registroB.setValorNum(new BigDecimal("2"));
         registroB.setRegistradoAt(fechaB);
 
@@ -1260,6 +1479,35 @@ class EjecucionServiceTest {
         verify(sprintRepo, never()).findById(any());
     }
 
+    // Requisito explícito: en una métrica de alcance EQUIPO (tipoAlcance=
+    // 'individual'), un integrante NUNCA puede editar el registro de otro
+    // integrante, aunque sea la misma variable+sprint — la propiedad se
+    // valida en el backend, no solo en Angular.
+    @Test
+    void guardarOActualizarValor_registroId_variableIndividual_otroUsuario_rechazado() {
+        Variable variable = variableIndividual();
+        UUID idDeUserA = UUID.randomUUID();
+        Instant fecha = Instant.parse("2026-08-23T00:00:00Z");
+
+        RegistroValor registroDeUserA = new RegistroValor();
+        registroDeUserA.setId(idDeUserA);
+        registroDeUserA.setVariable(variable);
+        registroDeUserA.setSprintId(sprintId);
+        registroDeUserA.setUserId("user-a");
+        registroDeUserA.setValorNum(new BigDecimal("80"));
+        registroDeUserA.setRegistradoAt(fecha);
+
+        when(registroRepo.findById(idDeUserA)).thenReturn(Optional.of(registroDeUserA));
+
+        assertThatThrownBy(() -> service.guardarOActualizarValor(
+                variable, sprintId, "user-b", new BigDecimal("99"), null, null, null, fecha, idDeUserA))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("no corresponde a esta variable/sprint");
+
+        verify(registroRepo, never()).save(any(RegistroValor.class));
+        assertThat(registroDeUserA.getValorNum()).isEqualByComparingTo("80"); // intacto
+    }
+
     @Test
     void guardarOActualizarValor_registroId_inexistente_rechazado() {
         Variable variable = variableGrupal();
@@ -1274,5 +1522,148 @@ class EjecucionServiceTest {
             .hasMessageContaining("ya no existe");
 
         verify(registroRepo, never()).save(any(RegistroValor.class));
+    }
+
+    // ════════════════════════════════════════════════════════════════════
+    // Corrección del bug de visibilidad transaccional en el recálculo
+    // automático (métricas EQUIPO con 2+ capturas, ej. SUMA de A=22+B=12+C=25
+    // terminaba en 34 en vez de 59): recalcularSilenciosamente() está anotado
+    // @Transactional(REQUIRES_NEW), así que si se dispara mientras la
+    // transacción de la propia captura sigue abierta (sin COMMIT), esa
+    // transacción nueva nunca puede ver el registro recién guardado por la
+    // transacción externa. La corrección difiere el disparo a
+    // TransactionSynchronization.afterCommit() cuando hay una transacción
+    // activa — estos tests verifican exactamente ESE diferimiento a nivel de
+    // unidad (sin base de datos real); la prueba con COMMITs reales de
+    // verdad, con tres usuarios y SUMA=59, vive en el test de integración
+    // RecalculoAutomaticoAfterCommitTest.
+    // ════════════════════════════════════════════════════════════════════
+
+    @AfterEach
+    void limpiarSincronizacionDeTransaccion() {
+        // Nunca debe quedar sincronización activa entre tests — cada test que
+        // la activa la limpia también, pero esto es una red de seguridad.
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
+    }
+
+    @Test
+    void guardarOActualizarValor_conTransaccionActiva_NODisparaElRecalculoDeInmediato() {
+        // Simula el contexto real: guardarOActualizarValor() se invoca siempre
+        // dentro de un @Transactional real (el suyo propio o el de
+        // VariableDinamicaService.guardarValores()) — TransactionSynchronizationManager.
+        // initSynchronization() activa ese mismo estado sin necesitar un
+        // PlatformTransactionManager ni una base de datos real.
+        TransactionSynchronizationManager.initSynchronization();
+        try {
+            Variable variable = variableIndividualConMetrica();
+
+            service.guardarOActualizarValor(
+                    variable, sprintId, "user-a", new BigDecimal("22"), null, null, null);
+
+            // Mientras la transacción "externa" (simulada) no haga commit, el
+            // recálculo NUNCA debe dispararse todavía — es exactamente el
+            // punto de la corrección: diferirlo hasta después del commit.
+            verifyNoInteractions(calculoMetricaService);
+
+            // Debe haber quedado registrada exactamente una sincronización
+            // pendiente de ejecutar en el commit.
+            List<TransactionSynchronization> pendientes = TransactionSynchronizationManager.getSynchronizations();
+            assertThat(pendientes).hasSize(1);
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
+    }
+
+    @Test
+    void guardarOActualizarValor_trasAfterCommit_disparaElRecalculoConLosDatosYaVisibles() {
+        TransactionSynchronizationManager.initSynchronization();
+        try {
+            Variable variable = variableIndividualConMetrica();
+
+            service.guardarOActualizarValor(
+                    variable, sprintId, "user-a", new BigDecimal("22"), null, null, null);
+
+            verifyNoInteractions(calculoMetricaService);
+
+            // Simula el COMMIT real de la transacción externa: Spring invoca
+            // afterCommit() en cada sincronización registrada, en el mismo hilo,
+            // como parte del propio proceso de commit.
+            for (TransactionSynchronization sync : TransactionSynchronizationManager.getSynchronizations()) {
+                sync.afterCommit();
+            }
+
+            // Solo AHORA, después del "commit", se dispara el recálculo — con
+            // los mismos IDs de la captura recién guardada.
+            verify(calculoMetricaService).recalcularSilenciosamente(
+                    variable.getMetrica().getId(), variable.getProyectoId(), sprintId, "user-a");
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
+    }
+
+    @Test
+    void guardarOActualizarValor_sinTransaccionActiva_disparaElRecalculoDeInmediato_comportamientoPrevio() {
+        // Sin TransactionSynchronizationManager.initSynchronization(): mismo
+        // comportamiento que existía antes de esta corrección (llamada directa,
+        // sin diferir) — cubre invocaciones fuera de un @Transactional real.
+        Variable variable = variableIndividualConMetrica();
+
+        service.guardarOActualizarValor(
+                variable, sprintId, "user-a", new BigDecimal("22"), null, null, null);
+
+        verify(calculoMetricaService).recalcularSilenciosamente(
+                variable.getMetrica().getId(), variable.getProyectoId(), sprintId, "user-a");
+    }
+
+    @Test
+    void guardarOActualizarValor_siElRecalculoAfterCommitFalla_noAfectaLaCapturaYaConfirmada() {
+        // TEST 9 (revisión del bug de visibilidad transaccional): un fallo del
+        // recálculo automático nunca debe afectar la captura. Con la
+        // corrección esto es incluso más fuerte que antes: para cuando el
+        // recálculo corre (en afterCommit()), la captura YA hizo commit — un
+        // fallo ahí no puede revertirla ni borrarla aunque quisiera.
+        TransactionSynchronizationManager.initSynchronization();
+        try {
+            Variable variable = variableIndividualConMetrica();
+            when(registroRepo.save(any(RegistroValor.class))).thenAnswer(inv -> inv.getArgument(0));
+            doThrow(new RuntimeException("fallo simulado del motor de cálculo"))
+                    .when(calculoMetricaService).recalcularSilenciosamente(any(), any(), any(), any());
+
+            RegistroValor guardado = service.guardarOActualizarValor(
+                    variable, sprintId, "user-a", new BigDecimal("22"), null, null, null);
+
+            assertThat(guardado).isNotNull();
+            assertThat(guardado.getValorNum()).isEqualByComparingTo("22");
+            verify(registroRepo).save(any(RegistroValor.class));
+
+            // Ejecutar afterCommit() con el mock configurado para lanzar no debe
+            // propagar la excepción hacia quien dispara el commit.
+            assertThatCode(() -> {
+                for (TransactionSynchronization sync : TransactionSynchronizationManager.getSynchronizations()) {
+                    sync.afterCommit();
+                }
+            }).doesNotThrowAnyException();
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
+    }
+
+    @Test
+    void guardarOActualizarValor_variableSinMetricaAsociada_nuncaAfectaLaCaptura() {
+        // Red de seguridad: si por algún motivo variable.getMetrica() es null
+        // (nunca debería serlo en producción — Variable.metrica es @ManyToOne
+        // optional=false — pero si ocurriera), preparar el recálculo no debe
+        // impedir que la captura se guarde y se retorne con normalidad.
+        Variable variable = variableIndividual(); // sin Metrica
+        when(registroRepo.save(any(RegistroValor.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        RegistroValor guardado = service.guardarOActualizarValor(
+                variable, sprintId, "user-a", new BigDecimal("22"), null, null, null);
+
+        assertThat(guardado).isNotNull();
+        verify(registroRepo).save(any(RegistroValor.class));
+        verifyNoInteractions(calculoMetricaService);
     }
 }

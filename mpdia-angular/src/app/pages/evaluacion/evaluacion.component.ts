@@ -40,6 +40,23 @@ const FRECUENCIA_LABEL: Record<string, string> = {
         </div>
       } @else {
 
+        <!-- Revisión de navegación: breadcrumb del flujo completo -->
+        <nav aria-label="breadcrumb" class="mb-2">
+          <ol class="breadcrumb small mb-0">
+            <li class="breadcrumb-item">
+              <a href="#" (click)="$event.preventDefault(); router.navigate(['/planeacion'])">
+                <i class="bi bi-layers me-1"></i>Planeación
+              </a>
+            </li>
+            <li class="breadcrumb-item">
+              <a href="#" (click)="$event.preventDefault(); router.navigate(['/ejecucion'])">
+                <i class="bi bi-pencil-square me-1"></i>Ejecución
+              </a>
+            </li>
+            <li class="breadcrumb-item active">Evaluación</li>
+          </ol>
+        </nav>
+
         <!-- Info del proyecto -->
         <div class="d-flex align-items-center gap-3 mb-3 flex-wrap">
           <div class="fw-semibold">{{ proyecto.nombre }}</div>
@@ -581,7 +598,29 @@ export class EvaluacionComponent implements OnInit {
 
   // ── datos filtrados por sprint (solo afecta a la vista de Tendencias) ─
 
+  /**
+   * Revisión de Evaluación: si ya existe al menos un resultado calculado del
+   * equipo para esta métrica (ResultadoMetrica vigente, ver
+   * resultadosCalculados), la gráfica usa ESE valor por sprint en vez del
+   * último RegistroValor individual crudo — así "Sprint 1 → 72, Sprint 2 → 81"
+   * representa el resultado real del equipo, no el dato de un solo miembro.
+   * Sin resultados calculados todavía (métrica recién parametrizada, o
+   * frecuencia semanal/diaria sin granularidad equivalente en ResultadoMetrica),
+   * cae de vuelta al comportamiento preexistente sobre 'registros'.
+   */
   registrosParaVista(m: MetricaEvaluacionDetalleDto): RegistroPuntoDto[] {
+    if (m.resultadosCalculados && m.resultadosCalculados.length > 0) {
+      const puntos: RegistroPuntoDto[] = m.resultadosCalculados.map(r => ({
+        id: r.resultadoId,
+        valor: r.resultado,
+        registradoAt: r.calculadoAt,
+        sprintId: r.sprintId,
+        sprintNumero: r.sprintNumero,
+        userId: '' // resultado del equipo, no de un miembro individual
+      }));
+      if (this.sprintFiltro === null) return puntos;
+      return puntos.filter(r => r.sprintNumero === this.sprintFiltro);
+    }
     if (this.sprintFiltro === null) return m.registros;
     return m.registros.filter(r => r.sprintNumero === this.sprintFiltro);
   }

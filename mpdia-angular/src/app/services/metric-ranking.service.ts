@@ -7,7 +7,8 @@ import {
   RankingMetrica,
   MetricParametrizacionBase,
   GuardarParametrizacionRequest,
-  TopParametrizacion
+  TopParametrizacion,
+  PendienteNotificacion
 } from '../models/metric-ranking.model';
 
 @Injectable({ providedIn: 'root' })
@@ -42,6 +43,17 @@ export class MetricRankingService {
     return this.http.get<{ pendientes: number; aprobadas: number; rechazadas: number }>(
       `${this.base}/resumen?proyectoId=${proyectoId}`
     );
+  }
+
+  /**
+   * Revisión de navegación: parametrizaciones pendientes de revisión de un proyecto.
+   * Mismo endpoint que ya consumían (por HttpClient crudo, cada uno por su lado)
+   * planeacion/resumen-seleccion/verificacion — se centraliza acá para que la
+   * campanita de notificaciones (y cualquier otro consumidor futuro) no duplique
+   * la llamada cruda. No es un endpoint nuevo.
+   */
+  getPendientes(proyectoId: string): Observable<PendienteNotificacion[]> {
+    return this.http.get<PendienteNotificacion[]>(`${this.base}/pendientes?proyectoId=${proyectoId}`);
   }
 
   /** Top 3 parametrizaciones más usadas de un factor */

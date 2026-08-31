@@ -40,6 +40,7 @@ class EvaluacionServiceTest {
     @Mock SprintRepository sprintRepo;
     @Mock VariableRepository variableRepo;
     @Mock RegistroValorRepository registroRepo;
+    @Mock com.mpdia.repository.ResultadoMetricaRepository resultadoMetricaRepo;
 
     @InjectMocks EvaluacionService service;
 
@@ -410,5 +411,75 @@ class EvaluacionServiceTest {
 
         assertThat(estadisticas.totalRegistros()).isEqualTo(2);
         assertThat(estadisticas.tendencia()).isEqualTo("ascendente");
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // Revisión de Evaluación: resultadosCalculados (ResultadoMetrica vigente)
+    // como fuente preferida por la gráfica, aditiva sobre 'registros'.
+    // ══════════════════════════════════════════════════════════════════════
+
+    @Test
+    @DisplayName("por_sprint con ResultadoMetrica vigente: resultadosCalculados se puebla con el resultado del equipo, no con RegistroValor crudo")
+    void evaluarDetalle_porSprintConResultadoVigente_pueblaResultadosCalculados() {
+        Variable variable = crearVariable("estado_animo", "Estado de ánimo del equipo");
+        Sprint sprint = crearSprint(1);
+        RegistroValor r1 = crearRegistro(variable, new BigDecimal("80"), Instant.now());
+
+        com.mpdia.entity.ResultadoMetrica resultado = new com.mpdia.entity.ResultadoMetrica();
+        resultado.setId(UUID.randomUUID());
+        resultado.setSprintId(sprintId);
+        resultado.setResultado(new BigDecimal("72.0000"));
+        resultado.setCalculadoAt(Instant.now());
+        resultado.setVigente(true);
+
+        when(variableRepo.findByProyectoIdAndActivaTrue(proyectoId)).thenReturn(List.of(variable));
+        when(sprintRepo.findByProyectoIdOrderByNumeroDesc(proyectoId)).thenReturn(List.of(sprint));
+        when(registroRepo.findByVariable_IdOrderByRegistradoAtAsc(variable.getId())).thenReturn(List.of(r1));
+        when(resultadoMetricaRepo.findByProyectoIdAndMetrica_IdAndVigenteTrue(proyectoId, variable.getMetrica().getId()))
+                .thenReturn(List.of(resultado));
+
+        MetricaEvaluacionDetalleDto dto = service.evaluarDetalle(proyectoId).get(0);
+
+        assertThat(dto.resultadosCalculados()).hasSize(1);
+        assertThat(dto.resultadosCalculados().get(0).resultado()).isEqualByComparingTo("72.0000");
+        assertThat(dto.resultadosCalculados().get(0).sprintNumero()).isEqualTo(1);
+        // 'registros' (trazabilidad cruda) se conserva intacto, sin cambios.
+        assertThat(dto.registros()).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("Sin ResultadoMetrica calculado todavía: resultadosCalculados viene vacía (cae a 'registros' en el frontend)")
+    void evaluarDetalle_sinResultadoCalculado_resultadosCalculadosVacia() {
+        Variable variable = crearVariable("estado_animo", "Estado de ánimo del equipo");
+        Sprint sprint = crearSprint(1);
+        RegistroValor r1 = crearRegistro(variable, new BigDecimal("80"), Instant.now());
+
+        when(variableRepo.findByProyectoIdAndActivaTrue(proyectoId)).thenReturn(List.of(variable));
+        when(sprintRepo.findByProyectoIdOrderByNumeroDesc(proyectoId)).thenReturn(List.of(sprint));
+        when(registroRepo.findByVariable_IdOrderByRegistradoAtAsc(variable.getId())).thenReturn(List.of(r1));
+        when(resultadoMetricaRepo.findByProyectoIdAndMetrica_IdAndVigenteTrue(proyectoId, variable.getMetrica().getId()))
+                .thenReturn(List.of());
+
+        MetricaEvaluacionDetalleDto dto = service.evaluarDetalle(proyectoId).get(0);
+
+        assertThat(dto.resultadosCalculados()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("Frecuencia semanal: resultadosCalculados siempre vacía (ResultadoMetrica no tiene granularidad semanal hoy)")
+    void evaluarDetalle_frecuenciaSemanal_resultadosCalculadosSiempreVacia() {
+        Variable variable = crearVariable("impedimentos", "Impedimentos reportados");
+        variable.setFrecuenciaCaptura("semanal");
+        Sprint sprint = crearSprint(1);
+        RegistroValor r1 = crearRegistro(variable, new BigDecimal("3"), Instant.parse("2026-08-03T00:00:00Z"));
+
+        when(variableRepo.findByProyectoIdAndActivaTrue(proyectoId)).thenReturn(List.of(variable));
+        when(sprintRepo.findByProyectoIdOrderByNumeroDesc(proyectoId)).thenReturn(List.of(sprint));
+        when(registroRepo.findByVariable_IdOrderByRegistradoAtAsc(variable.getId())).thenReturn(List.of(r1));
+
+        MetricaEvaluacionDetalleDto dto = service.evaluarDetalle(proyectoId).get(0);
+
+        assertThat(dto.resultadosCalculados()).isEmpty();
+        org.mockito.Mockito.verifyNoInteractions(resultadoMetricaRepo);
     }
 }

@@ -276,7 +276,8 @@ class ParametrizacionControllerTest {
     void aprobarParametrizacion_exitoso_retorna200() throws Exception {
         // Given
         UUID parametrizacionId = UUID.randomUUID();
-        
+        UUID proyectoId = UUID.randomUUID();
+
         AprobarParametrizacionRequest request = new AprobarParametrizacionRequest(
                 "Objetivo aprobado",
                 "Procedimiento aprobado",
@@ -289,17 +290,33 @@ class ParametrizacionControllerTest {
                 "unidades",
                 "indicador_aprobado"
         , null, null, null, null, null, null);
-        
+
+        MetricParametrizacion existente = new MetricParametrizacion();
+        existente.setId(parametrizacionId);
+        existente.setProyectoId(proyectoId);
+        existente.setStatus("propuesta");
+        when(parametrizacionRepository.findById(parametrizacionId)).thenReturn(Optional.of(existente));
+
+        // Revisión de aprobación: el controller ahora exige Scrum Master del
+        // proyecto antes de llamar al service — @WithMockUser(roles="USER")
+        // usa "user" como username por defecto.
+        com.mpdia.entity.ProjectMember scrumMaster = new com.mpdia.entity.ProjectMember();
+        scrumMaster.setProyectoId(proyectoId);
+        scrumMaster.setUserId("user");
+        scrumMaster.setRol("scrum_master");
+        when(projectMemberRepository.findByProyectoIdAndUserId(proyectoId, "user"))
+                .thenReturn(Optional.of(scrumMaster));
+
         MetricParametrizacion parametrizacion = new MetricParametrizacion();
         parametrizacion.setId(parametrizacionId);
         parametrizacion.setStatus("aprobada");
         parametrizacion.setVersion(1);
         parametrizacion.setObjetivo("Objetivo aprobado");
         parametrizacion.setRevisadoAt(Instant.now());
-        
+
         when(parametrizacionService.aprobarParametrizacion(any(UUID.class), any(AprobarParametrizacionRequest.class)))
                 .thenReturn(parametrizacion);
-        
+
         // When & Then
         mockMvc.perform(post("/api/parametrizacion/" + parametrizacionId + "/aprobar")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -307,6 +324,39 @@ class ParametrizacionControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("aprobada"))
                 .andExpect(jsonPath("$.version").value(1));
+    }
+
+    @Test
+    @WithMockUser(roles = "USER", username = "miembro-normal")
+    @org.junit.jupiter.api.DisplayName("aprobarParametrizacion: scrum_member (no SM) del proyecto recibe 403")
+    void aprobarParametrizacion_scrumMemberNoSM_retorna403() throws Exception {
+        UUID parametrizacionId = UUID.randomUUID();
+        UUID proyectoId = UUID.randomUUID();
+
+        AprobarParametrizacionRequest request = new AprobarParametrizacionRequest(
+                "Objetivo", "Procedimiento", "Indicador", "Escala", "por_sprint",
+                "Fuente", "Formula", "SUMA", "unidad", "indicador_test"
+        , null, null, null, null, null, null);
+
+        MetricParametrizacion existente = new MetricParametrizacion();
+        existente.setId(parametrizacionId);
+        existente.setProyectoId(proyectoId);
+        existente.setStatus("propuesta");
+        when(parametrizacionRepository.findById(parametrizacionId)).thenReturn(Optional.of(existente));
+
+        com.mpdia.entity.ProjectMember miembroNormal = new com.mpdia.entity.ProjectMember();
+        miembroNormal.setProyectoId(proyectoId);
+        miembroNormal.setUserId("miembro-normal");
+        miembroNormal.setRol("scrum_member");
+        when(projectMemberRepository.findByProyectoIdAndUserId(proyectoId, "miembro-normal"))
+                .thenReturn(Optional.of(miembroNormal));
+
+        mockMvc.perform(post("/api/parametrizacion/" + parametrizacionId + "/aprobar")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isForbidden());
+
+        verifyNoInteractions(parametrizacionService);
     }
     
     @Test

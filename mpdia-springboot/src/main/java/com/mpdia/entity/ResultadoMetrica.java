@@ -108,4 +108,15 @@ public class ResultadoMetrica {
      */
     @Column(name = "calculado_at", nullable = false)
     private Instant calculadoAt = Instant.now();
+
+    /**
+     * true = este es el resultado vigente para (proyecto, métrica, sprint,
+     * parametrizacion_version); false = histórico, reemplazado por un
+     * recálculo posterior. Nunca se borra una fila al recalcular — la
+     * anterior pasa a vigente=false y se inserta una nueva vigente=true
+     * (ver V37__resultado_metrica_vigente.sql y
+     * CalculoMetricaService.marcarResultadoAnteriorComoHistorico).
+     */
+    @Column(nullable = false)
+    private Boolean vigente = true;
 }

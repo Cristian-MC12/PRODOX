@@ -101,4 +101,16 @@ public class Variable {
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
+
+    /**
+     * Regla para reducir a un único valor los múltiples registros de distintos
+     * miembros de una variable 'individual' antes de usarla en DIRECTO/FORMULA.
+     * SUMA | PROMEDIO | CONTEO | MIN | MAX. Nullable — solo se exige cuando de
+     * verdad hay más de un registro individual para el período (ver
+     * CalculoMetricaService.resolverValorPorVariable). No aplica a SUMA/PROMEDIO
+     * a nivel de métrica (esos ya agregan todos los registros directamente) ni
+     * a variables 'grupal' (conservan su semántica de valor único existente).
+     */
+    @Column(name = "agregacion_miembros", length = 20)
+    private String agregacionMiembros;
 }

@@ -54,6 +54,19 @@ public class ParametrizacionService {
     static final Set<String> TIPOS_OPERACION_SOPORTADOS = Set.of("SUMA", "PROMEDIO", "DIRECTO", "FORMULA");
 
     /**
+     * Revisión de captura por parametrización: catálogo de valores permitidos
+     * para el alcance/responsable de captura. Independiente de
+     * TIPOS_OPERACION_SOPORTADOS — uno decide QUIÉN captura, el otro decide
+     * CÓMO se calcula el resultado; ambas combinaciones son válidas entre sí
+     * (ej. EQUIPO+SUMA, SCRUM_MASTER+DIRECTO, EQUIPO+FORMULA, etc.).
+     */
+    static final Set<String> RESPONSABLES_CAPTURA_SOPORTADOS = Set.of("EQUIPO", "SCRUM_MASTER");
+
+    /** Valor por defecto cuando el llamador no elige explícitamente — conserva el
+     *  comportamiento previo a esta revisión (todas las variables quedaban 'grupal'). */
+    static final String RESPONSABLE_CAPTURA_DEFAULT = "SCRUM_MASTER";
+
+    /**
      * Catálogo de tipos de escala estructurada soportados (corrección del manejo
      * de escalas — ver diagnóstico "escala '(0 o más)' no tiene formato exacto").
      * NUMERICA_ENTERA exige que min/max/paso sean enteros; NUMERICA_DECIMAL admite
@@ -86,6 +99,34 @@ public class ParametrizacionService {
                 "Tipo de operación no soportado: " + tipoOperacion +
                 ". Valores permitidos: " + TIPOS_OPERACION_SOPORTADOS);
         }
+    }
+
+    /**
+     * responsableCaptura es opcional (null se resuelve a
+     * RESPONSABLE_CAPTURA_DEFAULT), pero si viene informado debe pertenecer
+     * al catálogo soportado — de lo contrario Variable.tipoAlcance quedaría
+     * materializado con un valor arbitrario que ninguna autorización de
+     * Ejecución sabría interpretar. Visibilidad de paquete: reutilizada por
+     * MetricRankingService.guardar(), sin duplicar el catálogo/la regla.
+     */
+    static void validarResponsableCaptura(String responsableCaptura) {
+        if (responsableCaptura != null && !RESPONSABLES_CAPTURA_SOPORTADOS.contains(responsableCaptura)) {
+            throw new ResponsableCapturaInvalidoException(
+                "Responsable de captura no soportado: " + responsableCaptura +
+                ". Valores permitidos: " + RESPONSABLES_CAPTURA_SOPORTADOS);
+        }
+    }
+
+    /**
+     * Traduce el alcance/responsable de captura elegido en la parametrización
+     * al valor que Variable.tipoAlcance ya entendía antes de esta revisión —
+     * la autorización de Ejecución (EjecucionService.validarPuedeRegistrar) y
+     * el cálculo (CalculoMetricaService) no cambian: siguen leyendo
+     * Variable.tipoAlcance exactamente igual. Visibilidad de paquete:
+     * reutilizada por VariableDinamicaService.crearVariablesDesdeParametrizacion().
+     */
+    static String tipoAlcanceDesdeResponsable(String responsableCaptura) {
+        return "EQUIPO".equals(responsableCaptura) ? "individual" : "grupal";
     }
 
     /**
@@ -392,6 +433,7 @@ public class ParametrizacionService {
         String userEmail = getUserEmail();
         validarMiembroProyecto(userId, request.proyectoId());
         validarTipoOperacion(request.tipoOperacion());
+        validarResponsableCaptura(request.responsableCaptura());
         validarNombreVariable(request.nombreVariable());
         validarEscalaEstructurada(request.escalaTipo(), request.escalaMin(), request.escalaMax(),
             request.escalaPaso(), request.escalaSinLimite());
@@ -429,6 +471,9 @@ public class ParametrizacionService {
         parametrizacion.setFrecuenciaCaptura(request.frecuenciaCaptura() != null
             ? request.frecuenciaCaptura()
             : "por_sprint");
+        parametrizacion.setResponsableCaptura(request.responsableCaptura() != null
+            ? request.responsableCaptura()
+            : RESPONSABLE_CAPTURA_DEFAULT);
 
         // Campos académicos
         parametrizacion.setFuenteAcademica(request.fuenteAcademica());
@@ -477,7 +522,7 @@ public class ParametrizacionService {
         String userId = getUserId();
         String userEmail = getUserEmail();
         validarMiembroProyecto(userId, parametrizacion.getProyectoId());
-        
+
         // Validar que esté en estado propuesta
         if (!"propuesta".equals(parametrizacion.getStatus())) {
             throw new IllegalStateException("Solo se pueden aprobar parametrizaciones en estado 'propuesta'");
@@ -490,6 +535,7 @@ public class ParametrizacionService {
                 "el motor de cálculo no podría ejecutar esta métrica. " +
                 "Valores permitidos: " + TIPOS_OPERACION_SOPORTADOS);
         }
+        validarResponsableCaptura(request.responsableCaptura());
         validarNombreVariable(request.nombreVariable());
         validarEscalaEstructurada(request.escalaTipo(), request.escalaMin(), request.escalaMax(),
             request.escalaPaso(), request.escalaSinLimite());
@@ -523,6 +569,9 @@ public class ParametrizacionService {
         parametrizacion.setFrecuenciaCaptura(request.frecuenciaCaptura() != null
             ? request.frecuenciaCaptura()
             : parametrizacion.getFrecuenciaCaptura());
+        parametrizacion.setResponsableCaptura(request.responsableCaptura() != null
+            ? request.responsableCaptura()
+            : parametrizacion.getResponsableCaptura());
 
         // Campos académicos
         parametrizacion.setFuenteAcademica(request.fuenteAcademica());
@@ -560,7 +609,8 @@ public class ParametrizacionService {
                 parametrizacion.getEscalaMax(),
                 parametrizacion.getEscalaPaso(),
                 parametrizacion.getEscalaSinLimite(),
-                parametrizacion.getEscalaDescripcion()
+                parametrizacion.getEscalaDescripcion(),
+                parametrizacion.getResponsableCaptura()
             ));
             parametrizacion.setConfiguracionAprobadaJson(snapshot);
         } catch (Exception e) {
@@ -617,11 +667,12 @@ public class ParametrizacionService {
     private void validarMiembroProyecto(String userId, UUID proyectoId) {
         boolean exists = projectMemberRepository
             .existsByProyectoIdAndUserId(proyectoId, userId);
-        
+
         if (!exists) {
             throw new IllegalStateException("Usuario no pertenece al proyecto");
         }
     }
+
     
     /**
      * Record interno para snapshot JSON
@@ -645,7 +696,8 @@ public class ParametrizacionService {
         java.math.BigDecimal escalaMax,
         java.math.BigDecimal escalaPaso,
         Boolean escalaSinLimite,
-        String escalaDescripcion
+        String escalaDescripcion,
+        String responsableCaptura
     ) {}
 
     /**
@@ -720,7 +772,10 @@ public class ParametrizacionService {
             variable.setMetrica(metrica);
             variable.setNombre(nombreVar);
             variable.setDescripcion(generarDescripcionVariable(nombreVar, metrica));
-            variable.setTipoAlcance("grupal");
+            // Revisión de captura por parametrización: el alcance/responsable
+            // elegido por el Scrum Master (EQUIPO/SCRUM_MASTER) decide QUIÉN
+            // captura — ya no está fijo en "grupal" para todas las variables.
+            variable.setTipoAlcance(tipoAlcanceDesdeResponsable(parametrizacion.getResponsableCaptura()));
             variable.setTipoIndicador(determinarTipoIndicador(metrica.getCategoria().getNombre()));
             variable.setFrecuencia("por_sprint");
             variable.setCardinalidad("unico");

@@ -70,7 +70,7 @@ public class VariableDinamicaService {
         
         // 5. Obtener valores actuales del sprint
         List<VariableConValorDto> variablesConValor = variables.stream()
-            .map(v -> construirVariableConValor(v, sprintId))
+            .map(v -> construirVariableConValor(v, sprintId, userId))
             .toList();
         
         return new VariablesMetricaResponse(
@@ -213,7 +213,12 @@ public class VariableDinamicaService {
                 variable.setMetrica(metrica);
                 variable.setNombre(nombreVar);
                 variable.setDescripcion(procedimiento);  // Usar procedimiento como descripción
-                variable.setTipoAlcance("grupal");
+                // Revisión de captura por parametrización: el alcance/responsable
+                // elegido por el Scrum Master (EQUIPO/SCRUM_MASTER, columna
+                // MetricParametrizacion.responsableCaptura) decide QUIÉN captura —
+                // ya no está fijo en "grupal" para todas las variables.
+                variable.setTipoAlcance(ParametrizacionService.tipoAlcanceDesdeResponsable(
+                    parametrizacion.getResponsableCaptura()));
                 variable.setTipoDato("numerico");  // Por defecto numérico
                 variable.setActiva(true);
                 variable.setFrecuenciaCaptura(frecuenciaCaptura);
@@ -250,14 +255,30 @@ public class VariableDinamicaService {
     }
 
     /**
-     * Construye DTO con valor actual del sprint (si existe).
+     * Construye DTO con el valor actual del sprint PARA EL USUARIO AUTENTICADO.
+     *
+     * Corrección de captura por usuario: antes esta consulta era
+     * findBySprintIdAndVariable_Id(sprintId, variableId) — sin userId y sin
+     * ORDER BY — así que devolvía el registro de CUALQUIER miembro (el que la
+     * base de datos devolviera primero), y ese valor precargaba el formulario
+     * de Ejecución de cualquier otro miembro que todavía no hubiera
+     * registrado el suyo, como si ya estuviera "registrado". La captura
+     * siempre se guardó correctamente por (sprint, variable, userId) — ver
+     * EjecucionService.guardarOActualizarValor() —, pero esta lectura nunca
+     * respetó esa misma clave. Ahora usa el mismo método ya existente y
+     * probado que usa la escritura para localizar "mi" registro vigente:
+     * findFirstBySprintIdAndVariable_IdAndUserIdOrderByRegistradoAtDesc.
+     *
+     * Esto es intencionalmente distinto de "todos los valores del equipo"
+     * (usado por CalculoMetricaService para la agregación EQUIPO), que sigue
+     * trayendo TODOS los registros sin filtrar por usuario — son dos
+     * necesidades distintas y no deben compartir la misma consulta.
      */
-    private VariableConValorDto construirVariableConValor(Variable variable, UUID sprintId) {
-        // Buscar valor existente en este sprint
-        List<RegistroValor> registros = registroRepo.findBySprintIdAndVariable_Id(sprintId, variable.getId());
-        
-        RegistroValor ultimoRegistro = registros.isEmpty() ? null : registros.get(0);
-        
+    private VariableConValorDto construirVariableConValor(Variable variable, UUID sprintId, String userId) {
+        RegistroValor miRegistroVigente = registroRepo
+            .findFirstBySprintIdAndVariable_IdAndUserIdOrderByRegistradoAtDesc(sprintId, variable.getId(), userId)
+            .orElse(null);
+
         return new VariableConValorDto(
             variable.getId(),
             variable.getNombre(),
@@ -267,13 +288,14 @@ public class VariableDinamicaService {
             null,  // Unidad no se extrae todavía
             variable.getEscalaMin(),
             variable.getEscalaMax(),
-            ultimoRegistro != null ? ultimoRegistro.getValorNum() : null,
-            ultimoRegistro != null ? ultimoRegistro.getValorTexto() : null,
-            ultimoRegistro != null ? ultimoRegistro.getValorBool() : null,
+            miRegistroVigente != null ? miRegistroVigente.getValorNum() : null,
+            miRegistroVigente != null ? miRegistroVigente.getValorTexto() : null,
+            miRegistroVigente != null ? miRegistroVigente.getValorBool() : null,
             variable.getFrecuenciaCaptura(),
             variable.getEscalaTipo(),
             variable.getEscalaPaso(),
-            variable.getEscalaSinLimite()
+            variable.getEscalaSinLimite(),
+            variable.getTipoAlcance()
         );
     }
 
@@ -294,11 +316,13 @@ public class VariableDinamicaService {
             throw new IllegalArgumentException("El sprint no pertenece al proyecto");
         }
 
-        // Revisión de seguridad: registrar valores es una acción restringida al Scrum
-        // Master del proyecto (mismo diseño ya reflejado en EjecucionComponent: solo
-        // el SM ve el formulario de captura), pero esta escritura no validaba
-        // membresía ni rol en absoluto.
-        ejecucionService.validarScrumMaster(userId, request.proyectoId());
+        // Revisión de seguridad: registrar valores no validaba membresía ni rol en
+        // absoluto. Revisión de captura individual: quién puede registrar depende
+        // del tipoAlcance de CADA variable (validarPuedeRegistrar), no de un único
+        // chequeo por request — un mismo guardado puede incluir variables
+        // individuales (cualquier miembro) y grupales (solo Scrum Master) a la
+        // vez, así que la validación se hace por variable dentro del bucle de
+        // abajo, no aquí.
 
         // 3. Validar parametrización aprobada
         MetricParametrizacion parametrizacion = parametrizacionRepo
@@ -309,7 +333,11 @@ public class VariableDinamicaService {
         for (GuardarValoresRequest.ValorVariable valorRequest : request.valores()) {
             Variable variable = variableRepo.findById(valorRequest.variableId())
                 .orElseThrow(() -> new IllegalArgumentException("Variable no encontrada"));
-            
+
+            // Individual: cualquier miembro puede registrar su propio dato.
+            // Grupal: se conserva la restricción original (solo Scrum Master).
+            ejecucionService.validarPuedeRegistrar(userId, variable);
+
             // Validar que la variable pertenece a la parametrización correcta
             if (!variable.getParametrizacionId().equals(parametrizacion.getId())) {
                 throw new IllegalArgumentException("Variable no pertenece a la parametrización aprobada");

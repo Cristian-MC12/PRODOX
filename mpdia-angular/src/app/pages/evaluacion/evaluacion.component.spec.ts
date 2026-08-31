@@ -115,6 +115,58 @@ describe('EvaluacionComponent', () => {
     expect(fixture.nativeElement.querySelector('canvas')).toBeTruthy();
   });
 
+  // ══════════════════════════════════════════════════════════════════════
+  // Revisión de Evaluación: la gráfica debe representar el RESULTADO
+  // CALCULADO del equipo por sprint (ResultadoMetrica vigente) cuando existe,
+  // no simplemente el último RegistroValor individual.
+  // ══════════════════════════════════════════════════════════════════════
+
+  it('con resultadosCalculados presente, la gráfica usa el resultado del equipo (no los registros individuales crudos)', () => {
+    const metrica = metricaDetalle({
+      resultadosCalculados: [
+        { resultadoId: 'res-1', resultado: 72, sprintId: 's1', sprintNumero: 1, calculadoAt: '2026-08-21T00:00:00Z' },
+        { resultadoId: 'res-2', resultado: 81, sprintId: 's2', sprintNumero: 2, calculadoAt: '2026-08-22T00:00:00Z' }
+      ]
+    });
+    evaluacionService.detalle.and.returnValue(of([metrica]));
+    fixture.detectChanges();
+    component.sprintFiltro = null;
+    fixture.detectChanges();
+
+    const puntos = component.registrosParaVista(component.datos[0]);
+
+    expect(puntos.map(p => p.valor)).toEqual([72, 81]);
+    expect(puntos).not.toEqual(component.datos[0].registros); // no son los registros crudos (7, 8)
+  });
+
+  it('sin resultadosCalculados (o vacía), cae de vuelta al comportamiento existente sobre registros crudos', () => {
+    const metrica = metricaDetalle({ resultadosCalculados: [] });
+    evaluacionService.detalle.and.returnValue(of([metrica]));
+    fixture.detectChanges();
+    component.sprintFiltro = null;
+    fixture.detectChanges();
+
+    expect(component.registrosParaVista(component.datos[0])).toEqual(component.datos[0].registros);
+  });
+
+  it('con resultadosCalculados y un filtro de sprint activo, filtra por sprintNumero igual que con registros crudos', () => {
+    const metrica = metricaDetalle({
+      resultadosCalculados: [
+        { resultadoId: 'res-1', resultado: 72, sprintId: 's1', sprintNumero: 1, calculadoAt: '2026-08-21T00:00:00Z' },
+        { resultadoId: 'res-2', resultado: 81, sprintId: 's2', sprintNumero: 2, calculadoAt: '2026-08-22T00:00:00Z' }
+      ]
+    });
+    evaluacionService.detalle.and.returnValue(of([metrica]));
+    fixture.detectChanges();
+    component.sprintFiltro = 2;
+    fixture.detectChanges();
+
+    const puntos = component.registrosParaVista(component.datos[0]);
+
+    expect(puntos.length).toBe(1);
+    expect(puntos[0].valor).toBe(81);
+  });
+
   it('sin datos, muestra el mensaje de "completá Ejecución primero" y ningún gráfico', () => {
     evaluacionService.detalle.and.returnValue(of([]));
     fixture.detectChanges();

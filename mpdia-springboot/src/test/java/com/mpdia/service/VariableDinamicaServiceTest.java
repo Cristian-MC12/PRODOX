@@ -109,12 +109,13 @@ class VariableDinamicaServiceTest {
         Variable variable = crearVariable();
         when(variableRepo.findByParametrizacionIdAndParametrizacionVersion(parametrizacionId, 1))
             .thenReturn(List.of(variable));
-        when(registroRepo.findBySprintIdAndVariable_Id(sprintId, variable.getId()))
-            .thenReturn(List.of());
-        
+        when(registroRepo.findFirstBySprintIdAndVariable_IdAndUserIdOrderByRegistradoAtDesc(
+                sprintId, variable.getId(), "test@example.com"))
+            .thenReturn(Optional.empty());
+
         // When
         VariablesMetricaResponse response = service.obtenerVariables(metricaId, proyectoId, sprintId, "test@example.com");
-        
+
         // Then
         assertThat(response.parametrizacionId()).isEqualTo(parametrizacionId);
         assertThat(response.version()).isEqualTo(1);
@@ -152,7 +153,8 @@ class VariableDinamicaServiceTest {
         
         Variable variableGuardada = crearVariable();
         when(variableRepo.save(any(Variable.class))).thenReturn(variableGuardada);
-        when(registroRepo.findBySprintIdAndVariable_Id(any(), any())).thenReturn(List.of());
+        when(registroRepo.findFirstBySprintIdAndVariable_IdAndUserIdOrderByRegistradoAtDesc(any(), any(), any()))
+            .thenReturn(Optional.empty());
         
         // When
         VariablesMetricaResponse response = service.obtenerVariables(metricaId, proyectoId, sprintId, "test@example.com");
@@ -358,7 +360,8 @@ class VariableDinamicaServiceTest {
             .thenReturn(List.of());
         when(metricaRepo.findById(metricaId)).thenReturn(Optional.of(metrica));
         when(variableRepo.save(any(Variable.class))).thenAnswer(inv -> inv.getArgument(0));
-        when(registroRepo.findBySprintIdAndVariable_Id(any(), any())).thenReturn(List.of());
+        when(registroRepo.findFirstBySprintIdAndVariable_IdAndUserIdOrderByRegistradoAtDesc(any(), any(), any()))
+            .thenReturn(Optional.empty());
 
         VariablesMetricaResponse response =
             service.obtenerVariables(metricaId, proyectoId, sprintId, "test@example.com");
@@ -430,7 +433,8 @@ class VariableDinamicaServiceTest {
             .thenReturn(List.of());
         when(metricaRepo.findById(metricaId)).thenReturn(Optional.of(metrica));
         when(variableRepo.save(any(Variable.class))).thenAnswer(inv -> inv.getArgument(0));
-        when(registroRepo.findBySprintIdAndVariable_Id(any(), any())).thenReturn(List.of());
+        when(registroRepo.findFirstBySprintIdAndVariable_IdAndUserIdOrderByRegistradoAtDesc(any(), any(), any()))
+            .thenReturn(Optional.empty());
 
         VariablesMetricaResponse response =
             service.obtenerVariables(metricaId, proyectoId, sprintId, "test@example.com");
@@ -462,7 +466,8 @@ class VariableDinamicaServiceTest {
             .thenReturn(List.of());
         when(metricaRepo.findById(metricaId)).thenReturn(Optional.of(metrica));
         when(variableRepo.save(any(Variable.class))).thenAnswer(inv -> inv.getArgument(0));
-        when(registroRepo.findBySprintIdAndVariable_Id(any(), any())).thenReturn(List.of());
+        when(registroRepo.findFirstBySprintIdAndVariable_IdAndUserIdOrderByRegistradoAtDesc(any(), any(), any()))
+            .thenReturn(Optional.empty());
 
         VariablesMetricaResponse response =
             service.obtenerVariables(metricaId, proyectoId, sprintId, "test@example.com");
@@ -500,7 +505,8 @@ class VariableDinamicaServiceTest {
             .thenReturn(List.of());
         when(metricaRepo.findById(metricaId)).thenReturn(Optional.of(metrica));
         when(variableRepo.save(any(Variable.class))).thenAnswer(inv -> inv.getArgument(0));
-        when(registroRepo.findBySprintIdAndVariable_Id(any(), any())).thenReturn(List.of());
+        when(registroRepo.findFirstBySprintIdAndVariable_IdAndUserIdOrderByRegistradoAtDesc(any(), any(), any()))
+            .thenReturn(Optional.empty());
 
         service.obtenerVariables(metricaId, proyectoId, sprintId, "test@example.com");
 
@@ -529,7 +535,8 @@ class VariableDinamicaServiceTest {
             .thenReturn(List.of());
         when(metricaRepo.findById(metricaId)).thenReturn(Optional.of(metrica));
         when(variableRepo.save(any(Variable.class))).thenAnswer(inv -> inv.getArgument(0));
-        when(registroRepo.findBySprintIdAndVariable_Id(any(), any())).thenReturn(List.of());
+        when(registroRepo.findFirstBySprintIdAndVariable_IdAndUserIdOrderByRegistradoAtDesc(any(), any(), any()))
+            .thenReturn(Optional.empty());
 
         service.obtenerVariables(metricaId, proyectoId, sprintId, "test@example.com");
 
@@ -562,7 +569,8 @@ class VariableDinamicaServiceTest {
             .thenReturn(List.of());
         when(metricaRepo.findById(metricaId)).thenReturn(Optional.of(metrica));
         when(variableRepo.save(any(Variable.class))).thenAnswer(inv -> inv.getArgument(0));
-        when(registroRepo.findBySprintIdAndVariable_Id(any(), any())).thenReturn(List.of());
+        when(registroRepo.findFirstBySprintIdAndVariable_IdAndUserIdOrderByRegistradoAtDesc(any(), any(), any()))
+            .thenReturn(Optional.empty());
 
         service.obtenerVariables(metricaId, proyectoId, sprintId, "test@example.com");
 
@@ -593,7 +601,8 @@ class VariableDinamicaServiceTest {
             .thenReturn(List.of());
         when(metricaRepo.findById(metricaId)).thenReturn(Optional.of(metrica));
         when(variableRepo.save(any(Variable.class))).thenAnswer(inv -> inv.getArgument(0));
-        when(registroRepo.findBySprintIdAndVariable_Id(any(), any())).thenReturn(List.of());
+        when(registroRepo.findFirstBySprintIdAndVariable_IdAndUserIdOrderByRegistradoAtDesc(any(), any(), any()))
+            .thenReturn(Optional.empty());
 
         service.obtenerVariables(metricaId, proyectoId, sprintId, "test@example.com");
 
@@ -625,7 +634,8 @@ class VariableDinamicaServiceTest {
             .thenReturn(List.of());
         when(metricaRepo.findById(metricaId)).thenReturn(Optional.of(metrica));
         when(variableRepo.save(any(Variable.class))).thenAnswer(inv -> inv.getArgument(0));
-        when(registroRepo.findBySprintIdAndVariable_Id(any(), any())).thenReturn(List.of());
+        when(registroRepo.findFirstBySprintIdAndVariable_IdAndUserIdOrderByRegistradoAtDesc(any(), any(), any()))
+            .thenReturn(Optional.empty());
 
         service.obtenerVariables(metricaId, proyectoId, sprintId, "test@example.com");
 
@@ -658,7 +668,8 @@ class VariableDinamicaServiceTest {
             .thenReturn(List.of());
         when(metricaRepo.findById(metricaId)).thenReturn(Optional.of(metrica));
         when(variableRepo.save(any(Variable.class))).thenAnswer(inv -> inv.getArgument(0));
-        when(registroRepo.findBySprintIdAndVariable_Id(any(), any())).thenReturn(List.of());
+        when(registroRepo.findFirstBySprintIdAndVariable_IdAndUserIdOrderByRegistradoAtDesc(any(), any(), any()))
+            .thenReturn(Optional.empty());
 
         service.obtenerVariables(metricaId, proyectoId, sprintId, "test@example.com");
 
@@ -691,7 +702,8 @@ class VariableDinamicaServiceTest {
             .thenReturn(List.of());
         when(metricaRepo.findById(metricaId)).thenReturn(Optional.of(metrica));
         when(variableRepo.save(any(Variable.class))).thenAnswer(inv -> inv.getArgument(0));
-        when(registroRepo.findBySprintIdAndVariable_Id(any(), any())).thenReturn(List.of());
+        when(registroRepo.findFirstBySprintIdAndVariable_IdAndUserIdOrderByRegistradoAtDesc(any(), any(), any()))
+            .thenReturn(Optional.empty());
 
         service.obtenerVariables(metricaId, proyectoId, sprintId, "test@example.com");
 
@@ -779,6 +791,51 @@ class VariableDinamicaServiceTest {
     }
 
     // ════════════════════════════════════════════════════════════════════
+    // Revisión de captura por parametrización — camino B (VariableDinamicaService,
+    // usado por MetricRankingService.verificar() sin snapshot JSON): antes,
+    // crearVariablesDesdeParametrizacion() fijaba tipoAlcance="grupal" para
+    // TODAS las variables, sin importar el alcance/responsable elegido en la
+    // parametrización. Ahora lee MetricParametrizacion.responsableCaptura
+    // (columna plana, no requiere snapshot) y lo traduce correctamente.
+    // ════════════════════════════════════════════════════════════════════
+
+    @Test
+    void materializarVariables_responsableCapturaEquipo_creaVariableConTipoAlcanceIndividual() {
+        parametrizacion.setConfiguracionAprobadaJson(null); // flujo de Verificación: sin snapshot
+        parametrizacion.setIndicadorVariable("estado_animo");
+        parametrizacion.setProcedimiento("Cada integrante registra su estado de ánimo");
+        parametrizacion.setResponsableCaptura("EQUIPO");
+
+        when(proyectoRepo.findById(proyectoId)).thenReturn(Optional.of(proyecto));
+        when(variableRepo.findByParametrizacionIdAndParametrizacionVersion(parametrizacionId, 1))
+            .thenReturn(List.of());
+        when(metricaRepo.findById(metricaId)).thenReturn(Optional.of(metrica));
+        when(variableRepo.save(any(Variable.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        Variable v = service.materializarVariables(parametrizacion).get(0);
+
+        assertThat(v.getTipoAlcance()).isEqualTo("individual");
+    }
+
+    @Test
+    void materializarVariables_responsableCapturaScrumMaster_creaVariableConTipoAlcanceGrupal() {
+        parametrizacion.setConfiguracionAprobadaJson(null);
+        parametrizacion.setIndicadorVariable("defectos_registrados");
+        parametrizacion.setProcedimiento("El Scrum Master registra los defectos");
+        parametrizacion.setResponsableCaptura("SCRUM_MASTER");
+
+        when(proyectoRepo.findById(proyectoId)).thenReturn(Optional.of(proyecto));
+        when(variableRepo.findByParametrizacionIdAndParametrizacionVersion(parametrizacionId, 1))
+            .thenReturn(List.of());
+        when(metricaRepo.findById(metricaId)).thenReturn(Optional.of(metrica));
+        when(variableRepo.save(any(Variable.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        Variable v = service.materializarVariables(parametrizacion).get(0);
+
+        assertThat(v.getTipoAlcance()).isEqualTo("grupal");
+    }
+
+    // ════════════════════════════════════════════════════════════════════
     // Revisión de seguridad — autorización delegada en EjecucionService
     // (obtenerVariables: solo membresía; guardarValores: solo Scrum Master).
     // ════════════════════════════════════════════════════════════════════
@@ -812,8 +869,9 @@ class VariableDinamicaServiceTest {
         Variable variable = crearVariable();
         when(variableRepo.findByParametrizacionIdAndParametrizacionVersion(parametrizacionId, 1))
             .thenReturn(List.of(variable));
-        when(registroRepo.findBySprintIdAndVariable_Id(sprintId, variable.getId()))
-            .thenReturn(List.of());
+        when(registroRepo.findFirstBySprintIdAndVariable_IdAndUserIdOrderByRegistradoAtDesc(
+                sprintId, variable.getId(), "user-miembro"))
+            .thenReturn(Optional.empty());
 
         VariablesMetricaResponse response =
             service.obtenerVariables(metricaId, proyectoId, sprintId, "user-miembro");
@@ -822,26 +880,158 @@ class VariableDinamicaServiceTest {
         verify(ejecucionService).validarAcceso("user-miembro", proyectoId);
     }
 
+    // ════════════════════════════════════════════════════════════════════
+    // Corrección de captura por usuario (bug reportado: el usuario B veía el
+    // valor "22" ya registrado por A, sin haber registrado nada él mismo).
+    // construirVariableConValor() usaba findBySprintIdAndVariable_Id(sprintId,
+    // variableId) — sin userId y sin ORDER BY — devolviendo el registro de
+    // CUALQUIER miembro. Ahora usa findFirstBySprintIdAndVariable_IdAndUserId
+    // OrderByRegistradoAtDesc(sprintId, variableId, userId), el mismo método
+    // que ya usa la escritura (EjecucionService.guardarOActualizarValor).
+    // ════════════════════════════════════════════════════════════════════
+
     @Test
-    void guardarValores_delegaLaValidacionDeScrumMasterEnEjecucionService() {
+    void obtenerVariables_usuarioSinRegistroPropio_noVeElValorDeOtroMiembro() {
+        // TEST 1 (adaptado a este nivel): A ya registró 22; B —que todavía no
+        // registró nada— NO debe ver ese 22 al pedir sus variables.
+        when(proyectoRepo.findById(proyectoId)).thenReturn(Optional.of(proyecto));
+        when(sprintRepo.findById(sprintId)).thenReturn(Optional.of(sprint));
+        when(parametrizacionRepo.findUltimaVersionAprobada(metricaId, proyectoId))
+            .thenReturn(Optional.of(parametrizacion));
         Variable variable = crearVariable();
+        when(variableRepo.findByParametrizacionIdAndParametrizacionVersion(parametrizacionId, 1))
+            .thenReturn(List.of(variable));
+        // A SÍ tiene un registro vigente (22) — pero esta consulta es por B.
+        when(registroRepo.findFirstBySprintIdAndVariable_IdAndUserIdOrderByRegistradoAtDesc(
+                sprintId, variable.getId(), "userB"))
+            .thenReturn(Optional.empty());
+
+        VariablesMetricaResponse response = service.obtenerVariables(metricaId, proyectoId, sprintId, "userB");
+
+        assertThat(response.variables().get(0).valorNum()).isNull();
+        // Nunca se consulta "cualquier registro de la variable+sprint" para decidir
+        // qué mostrarle a B — solo el suyo propio.
+        verify(registroRepo, never()).findBySprintIdAndVariable_Id(any(), any());
+    }
+
+    @Test
+    void obtenerVariables_usuarioConRegistroPropio_veSuPropioValor() {
+        // TEST 2/3 (adaptado): B ya registró 15 — debe ver 15, no el valor de A ni de nadie más.
+        when(proyectoRepo.findById(proyectoId)).thenReturn(Optional.of(proyecto));
+        when(sprintRepo.findById(sprintId)).thenReturn(Optional.of(sprint));
+        when(parametrizacionRepo.findUltimaVersionAprobada(metricaId, proyectoId))
+            .thenReturn(Optional.of(parametrizacion));
+        Variable variable = crearVariable();
+        when(variableRepo.findByParametrizacionIdAndParametrizacionVersion(parametrizacionId, 1))
+            .thenReturn(List.of(variable));
+
+        RegistroValor registroDeB = new RegistroValor();
+        registroDeB.setVariable(variable);
+        registroDeB.setSprintId(sprintId);
+        registroDeB.setUserId("userB");
+        registroDeB.setValorNum(new BigDecimal("15"));
+        registroDeB.setRegistradoAt(Instant.parse("2026-08-30T00:00:00Z"));
+
+        when(registroRepo.findFirstBySprintIdAndVariable_IdAndUserIdOrderByRegistradoAtDesc(
+                sprintId, variable.getId(), "userB"))
+            .thenReturn(Optional.of(registroDeB));
+
+        VariablesMetricaResponse response = service.obtenerVariables(metricaId, proyectoId, sprintId, "userB");
+
+        assertThat(response.variables().get(0).valorNum()).isEqualByComparingTo("15");
+    }
+
+    @Test
+    void obtenerVariables_dosUsuariosDistintos_cadaUnoVeSoloSuPropioRegistro() {
+        // Aislamiento explícito: la misma llamada a obtenerVariables(), para el
+        // MISMO variableId+sprintId, debe devolver un valor distinto según quién
+        // pregunta — nunca el mismo "último registro global" para ambos.
+        when(proyectoRepo.findById(proyectoId)).thenReturn(Optional.of(proyecto));
+        when(sprintRepo.findById(sprintId)).thenReturn(Optional.of(sprint));
+        when(parametrizacionRepo.findUltimaVersionAprobada(metricaId, proyectoId))
+            .thenReturn(Optional.of(parametrizacion));
+        Variable variable = crearVariable();
+        when(variableRepo.findByParametrizacionIdAndParametrizacionVersion(parametrizacionId, 1))
+            .thenReturn(List.of(variable));
+
+        RegistroValor registroDeA = new RegistroValor();
+        registroDeA.setVariable(variable);
+        registroDeA.setSprintId(sprintId);
+        registroDeA.setUserId("userA");
+        registroDeA.setValorNum(new BigDecimal("22"));
+        registroDeA.setRegistradoAt(Instant.parse("2026-08-29T00:00:00Z"));
+
+        RegistroValor registroDeSM = new RegistroValor();
+        registroDeSM.setVariable(variable);
+        registroDeSM.setSprintId(sprintId);
+        registroDeSM.setUserId("userSM");
+        registroDeSM.setValorNum(new BigDecimal("8"));
+        registroDeSM.setRegistradoAt(Instant.parse("2026-08-31T00:00:00Z")); // el más reciente de TODOS
+
+        when(registroRepo.findFirstBySprintIdAndVariable_IdAndUserIdOrderByRegistradoAtDesc(
+                sprintId, variable.getId(), "userA"))
+            .thenReturn(Optional.of(registroDeA));
+        when(registroRepo.findFirstBySprintIdAndVariable_IdAndUserIdOrderByRegistradoAtDesc(
+                sprintId, variable.getId(), "userSM"))
+            .thenReturn(Optional.of(registroDeSM));
+
+        VariablesMetricaResponse respuestaParaA = service.obtenerVariables(metricaId, proyectoId, sprintId, "userA");
+        VariablesMetricaResponse respuestaParaSM = service.obtenerVariables(metricaId, proyectoId, sprintId, "userSM");
+
+        // A ve 22 (el suyo) aunque el registro globalmente más reciente sea el de SM (8).
+        assertThat(respuestaParaA.variables().get(0).valorNum()).isEqualByComparingTo("22");
+        assertThat(respuestaParaSM.variables().get(0).valorNum()).isEqualByComparingTo("8");
+    }
+
+    @Test
+    void guardarValores_delegaLaValidacionDePermisoEnEjecucionServicePorVariable() {
+        // Revisión de captura individual: la validación de quién puede
+        // registrar ya no es un único chequeo por request (validarScrumMaster) —
+        // se delega a ejecucionService.validarPuedeRegistrar(userId, variable)
+        // POR CADA variable, porque un mismo guardado puede mezclar variables
+        // individuales (cualquier miembro) y grupales (solo Scrum Master).
+        Variable variable = crearVariable(); // tipoAlcance por defecto = 'grupal'
         GuardarValoresRequest.ValorVariable valor = new GuardarValoresRequest.ValorVariable(
             variable.getId(), new BigDecimal("42"), null, null, null, null, null);
         GuardarValoresRequest request = new GuardarValoresRequest(proyectoId, sprintId, List.of(valor));
 
         when(proyectoRepo.findById(proyectoId)).thenReturn(Optional.of(proyecto));
         when(sprintRepo.findById(sprintId)).thenReturn(Optional.of(sprint));
+        when(parametrizacionRepo.findUltimaVersionAprobada(metricaId, proyectoId))
+            .thenReturn(Optional.of(parametrizacion));
+        when(variableRepo.findById(variable.getId())).thenReturn(Optional.of(variable));
         doThrow(new SecurityException("Solo el Scrum Master del proyecto puede registrar valores"))
-            .when(ejecucionService).validarScrumMaster("user-miembro", proyectoId);
+            .when(ejecucionService).validarPuedeRegistrar("user-miembro", variable);
 
         assertThatThrownBy(() -> service.guardarValores(metricaId, request, "user-miembro"))
             .isInstanceOf(SecurityException.class)
             .hasMessageContaining("Solo el Scrum Master");
 
-        verify(ejecucionService).validarScrumMaster("user-miembro", proyectoId);
-        verifyNoInteractions(parametrizacionRepo);
+        verify(ejecucionService).validarPuedeRegistrar("user-miembro", variable);
         verify(ejecucionService, never()).guardarOActualizarValor(
             any(), any(), any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void guardarValores_variableIndividual_scrumMemberPuedeRegistrarSuPropioValor() {
+        Variable variable = crearVariable();
+        variable.setTipoAlcance("individual");
+        GuardarValoresRequest.ValorVariable valor = new GuardarValoresRequest.ValorVariable(
+            variable.getId(), new BigDecimal("80"), null, null, null, null, null);
+        GuardarValoresRequest request = new GuardarValoresRequest(proyectoId, sprintId, List.of(valor));
+
+        when(proyectoRepo.findById(proyectoId)).thenReturn(Optional.of(proyecto));
+        when(sprintRepo.findById(sprintId)).thenReturn(Optional.of(sprint));
+        when(parametrizacionRepo.findUltimaVersionAprobada(metricaId, proyectoId))
+            .thenReturn(Optional.of(parametrizacion));
+        when(variableRepo.findById(variable.getId())).thenReturn(Optional.of(variable));
+        // validarPuedeRegistrar no lanza nada para 'individual' — cualquier miembro puede.
+
+        service.guardarValores(metricaId, request, "user-miembro");
+
+        verify(ejecucionService).validarPuedeRegistrar("user-miembro", variable);
+        verify(ejecucionService).guardarOActualizarValor(
+            eq(variable), eq(sprintId), eq("user-miembro"), any(), any(), any(), any(), any(), any());
     }
 
     private Variable crearVariable() {

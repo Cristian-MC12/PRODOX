@@ -2,6 +2,7 @@
 import { Component, Input, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { SidebarComponent } from '../sidebar/sidebar.component';
+import { NotificacionesBellComponent } from '../notificaciones/notificaciones-bell.component';
 import { SprintService } from '../../services/sprint.service';
 import { ProyectoDto } from '../../models/proyecto.model';
 import { SprintDto } from '../../models/sprint.model';
@@ -10,7 +11,7 @@ import { catchError, of } from 'rxjs';
 @Component({
   selector: 'app-shell',
   standalone: true,
-  imports: [CommonModule, SidebarComponent],
+  imports: [CommonModule, SidebarComponent, NotificacionesBellComponent],
   template: `
     <div class="d-flex">
       <app-sidebar #sidebar></app-sidebar>
@@ -26,6 +27,7 @@ import { catchError, of } from 'rxjs';
             <h1>{{ title }}</h1>
           }
           <ng-content select="[slot='header']"></ng-content>
+          <app-notificaciones-bell class="ms-auto"></app-notificaciones-bell>
         </header>
 
         <!-- Banner contextual: proyecto + sprint activo -->

@@ -22,6 +22,10 @@ export interface VariableConValor {
   escalaTipo?: 'NUMERICA_ENTERA' | 'NUMERICA_DECIMAL';
   escalaPaso?: number;
   escalaSinLimite?: boolean;
+  /** Revisión de captura individual: grupal | individual (Variable.tipoAlcance).
+   *  'individual' habilita el formulario de captura para cualquier miembro del
+   *  proyecto, no solo el Scrum Master (ver ejecucion.component). */
+  tipoAlcance?: 'grupal' | 'individual';
 }
 
 export interface VariablesMetricaResponse {

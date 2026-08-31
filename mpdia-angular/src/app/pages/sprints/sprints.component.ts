@@ -215,8 +215,14 @@ export class SprintsComponent implements OnInit {
     private sprintService: SprintService
   ) {}
 
+  /**
+   * Corrección: Scrum Master es siempre relativo a ESTE proyecto (su
+   * scrumMasterEmail, fijado por el backend al crearlo), nunca el rol
+   * global de cuenta — mismo patrón ya corregido en dashboard.component.ts
+   * (esScrumMasterDelProyecto) y ejecucion.component.ts.
+   */
   get esScrumMaster(): boolean {
-    return this.auth.currentUser()?.role === 'scrum_master';
+    return this.proyecto?.scrumMasterEmail === this.auth.currentUser()?.email;
   }
 
   ngOnInit(): void {

@@ -41,6 +41,15 @@ export interface Parametrizacion extends EscalaEstructurada {
   indicadorVariable: string;   // indicador y variables involucradas
   escala: string;              // resumen legible de la escala (auto-generado desde los campos estructurados)
   frecuenciaCaptura?: string;  // por_sprint | semanal | diaria | ilimitada
+  /**
+   * Revisión de captura por parametrización: alcance/responsable de captura,
+   * elegido explícitamente por el Scrum Master — independiente de
+   * tipoOperacion (uno decide QUIÉN captura, el otro CÓMO se calcula).
+   * 'EQUIPO' = cada integrante registra su propio valor; 'SCRUM_MASTER' =
+   * solo el Scrum Master registra. El backend es la autoridad real; este
+   * campo solo viaja hasta la parametrización aprobada.
+   */
+  responsableCaptura?: 'EQUIPO' | 'SCRUM_MASTER';
   // Campos académicos
   fuenteAcademica?: string;    // Fuente académica de referencia
   formulaAcademica?: string;   // Fórmula matemática formal

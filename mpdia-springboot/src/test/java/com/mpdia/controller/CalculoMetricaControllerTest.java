@@ -2,6 +2,8 @@
 package com.mpdia.controller;
 
 import com.mpdia.dto.CalcularMetricaRequest;
+import com.mpdia.repository.ProjectMemberRepository;
+import com.mpdia.repository.ResultadoMetricaRepository;
 import com.mpdia.service.CalculoMetricaService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -32,13 +34,15 @@ import static org.mockito.Mockito.when;
 class CalculoMetricaControllerTest {
 
     @Mock private CalculoMetricaService calculoService;
+    @Mock private ResultadoMetricaRepository resultadoMetricaRepository;
+    @Mock private ProjectMemberRepository projectMemberRepository;
 
     private CalculoMetricaController controller;
     private Authentication auth;
 
     @BeforeEach
     void setUp() {
-        controller = new CalculoMetricaController(calculoService);
+        controller = new CalculoMetricaController(calculoService, resultadoMetricaRepository, projectMemberRepository);
         auth = new UsernamePasswordAuthenticationToken("user-externo", null, List.of());
     }
 

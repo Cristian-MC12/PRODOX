@@ -938,4 +938,197 @@ describe('EjecucionComponent (FASE 16 — métricas dinámicas)', () => {
       expect(fixture.nativeElement.textContent).toContain('Seleccioná un sprint');
     });
   });
+
+  // ══════════════════════════════════════════════════════════════════════
+  // Revisión de captura universal: cualquier miembro del proyecto —Scrum
+  // Member o Scrum Master por igual— puede registrar su propio valor cuando
+  // la parametrización aprobada define alcance EQUIPO (tipoAlcance=
+  // 'individual'); cuando define alcance SCRUM MASTER (tipoAlcance='grupal'),
+  // únicamente el Scrum Master puede capturar y el Scrum Member ve un
+  // mensaje en vez de un formulario habilitado.
+  // ══════════════════════════════════════════════════════════════════════
+  describe('Autorización condicional por parametrización (EQUIPO vs SCRUM MASTER)', () => {
+    function comoScrumMember(): void {
+      const authService = TestBed.inject(AuthService);
+      (authService.currentUser as any).set({ userId: 'u2', email: 'member@test.com', role: 'scrum_member', token: 't' });
+    }
+
+    function variablesConAlcance(metricaId: string, nombre: string, tipoAlcance: 'grupal' | 'individual') {
+      const base = variables(metricaId, [nombre]);
+      return { ...base, variables: base.variables.map(v => ({ ...v, tipoAlcance })) };
+    }
+
+    it('puedeCapturar() es false para un Scrum Member en una variable de alcance SCRUM MASTER (grupal)', () => {
+      // esScrumMaster ahora depende de component.proyecto (scrumMasterEmail),
+      // no solo del rol global — se fija explícitamente aquí, igual que
+      // ngOnInit() haría desde localStorage (mockProyecto ya está guardado
+      // en 'mpdia_proyecto_activo' por el beforeEach de este archivo).
+      component.proyecto = mockProyecto;
+      expect(component.puedeCapturar({ tipoAlcance: 'grupal' })).toBe(true); // SM (default del mock)
+      comoScrumMember();
+      expect(component.puedeCapturar({ tipoAlcance: 'grupal' })).toBe(false);
+    });
+
+    it('puedeCapturar() es true para cualquier rol en una variable de alcance EQUIPO (individual)', () => {
+      component.proyecto = mockProyecto;
+      expect(component.puedeCapturar({ tipoAlcance: 'individual' })).toBe(true);
+      comoScrumMember();
+      expect(component.puedeCapturar({ tipoAlcance: 'individual' })).toBe(true);
+    });
+
+    it('un Scrum Member NO ve el formulario de "Registrar valor" en una métrica de alcance SCRUM MASTER, y sí ve el mensaje correspondiente', () => {
+      comoScrumMember();
+      planeacionService.listarMetricas.and.returnValue(of([metrica(METRICA_DEFECTOS, 'Defectos', true)]));
+      variableService.obtenerVariables.and.returnValue(of(variablesConAlcance(METRICA_DEFECTOS, 'defectos_totales', 'grupal')));
+      evaluacionService.detalle.and.returnValue(of(detalleVacio()));
+
+      component.ngOnInit();
+      fixture.detectChanges();
+
+      const botones: HTMLButtonElement[] = Array.from(fixture.nativeElement.querySelectorAll('button'));
+      expect(botones.some(b => b.textContent?.includes('Registrar valor'))).toBe(false);
+      expect(fixture.nativeElement.textContent).toContain('Esta métrica debe ser registrada por el Scrum Master');
+    });
+
+    it('el Scrum Master SÍ ve el formulario de "Registrar valor" en una métrica de alcance SCRUM MASTER', () => {
+      planeacionService.listarMetricas.and.returnValue(of([metrica(METRICA_DEFECTOS, 'Defectos', true)]));
+      variableService.obtenerVariables.and.returnValue(of(variablesConAlcance(METRICA_DEFECTOS, 'defectos_totales', 'grupal')));
+      evaluacionService.detalle.and.returnValue(of(detalleVacio()));
+
+      component.ngOnInit();
+      fixture.detectChanges();
+
+      const botones: HTMLButtonElement[] = Array.from(fixture.nativeElement.querySelectorAll('button'));
+      expect(botones.some(b => b.textContent?.includes('Registrar valor'))).toBe(true);
+    });
+
+    it('un Scrum Member SÍ ve el formulario y el mensaje de EQUIPO en una métrica de alcance EQUIPO', () => {
+      comoScrumMember();
+      planeacionService.listarMetricas.and.returnValue(of([metrica(METRICA_DEFECTOS, 'Defectos', true)]));
+      variableService.obtenerVariables.and.returnValue(of(variablesConAlcance(METRICA_DEFECTOS, 'defectos_totales', 'individual')));
+      evaluacionService.detalle.and.returnValue(of(detalleVacio()));
+
+      component.ngOnInit();
+      fixture.detectChanges();
+
+      const botones: HTMLButtonElement[] = Array.from(fixture.nativeElement.querySelectorAll('button'));
+      expect(botones.some(b => b.textContent?.includes('Registrar valor'))).toBe(true);
+      expect(fixture.nativeElement.textContent).toContain('Cada integrante del equipo debe registrar su propio valor');
+    });
+
+    it('el resumen "Valor registrado" de otro integrante no se muestra como propio en una métrica EQUIPO: el miembro ve el formulario para registrar el suyo', () => {
+      comoScrumMember();
+      planeacionService.listarMetricas.and.returnValue(of([metrica(METRICA_DEFECTOS, 'Defectos', true)]));
+      variableService.obtenerVariables.and.returnValue(of(variablesConAlcance(METRICA_DEFECTOS, 'defectos_totales', 'individual')));
+      const variableId = 'v-' + METRICA_DEFECTOS + '-0';
+      evaluacionService.detalle.and.returnValue(of([{
+        variableId, variableNombre: 'defectos_totales', categoria: 'Significado', tipoAlcance: 'individual',
+        frecuenciaCaptura: 'por_sprint', formulaTexto: null,
+        registros: [
+          { id: 'r-otro', valor: 4, registradoAt: '2026-08-22T00:00:00Z', sprintId: 'sprint-1', sprintNumero: 1, userId: 'otro-user' }
+        ],
+        estadisticas: {} as any, porSprint: []
+      }]));
+
+      component.ngOnInit();
+      fixture.detectChanges();
+
+      const botones: HTMLButtonElement[] = Array.from(fixture.nativeElement.querySelectorAll('button'));
+      // No debe ofrecer "Editar valor" sobre el registro ajeno...
+      expect(botones.some(b => b.textContent?.includes('Editar valor'))).toBe(false);
+      // ...sino el formulario para registrar el propio.
+      expect(botones.some(b => b.textContent?.includes('Registrar valor'))).toBe(true);
+    });
+
+    it('muestra el progreso "X de N integrantes registrados" para una métrica EQUIPO', () => {
+      planeacionService.listarMetricas.and.returnValue(of([metrica(METRICA_DEFECTOS, 'Defectos', true)]));
+      variableService.obtenerVariables.and.returnValue(of(variablesConAlcance(METRICA_DEFECTOS, 'defectos_totales', 'individual')));
+      const variableId = 'v-' + METRICA_DEFECTOS + '-0';
+      evaluacionService.detalle.and.returnValue(of([{
+        variableId, variableNombre: 'defectos_totales', categoria: 'Significado', tipoAlcance: 'individual',
+        frecuenciaCaptura: 'por_sprint', formulaTexto: null,
+        registros: [
+          { id: 'r-a', valor: 4, registradoAt: '2026-08-22T00:00:00Z', sprintId: 'sprint-1', sprintNumero: 1, userId: 'user-a' },
+          { id: 'r-b', valor: 6, registradoAt: '2026-08-22T00:00:00Z', sprintId: 'sprint-1', sprintNumero: 1, userId: 'user-b' }
+        ],
+        estadisticas: {} as any, porSprint: []
+      }]));
+      // mockProyecto.totalMiembros = 1 por defecto; se sobreescribe para este test.
+      localStorage.setItem('mpdia_proyecto_activo', JSON.stringify({ ...mockProyecto, totalMiembros: 4 }));
+
+      component.ngOnInit();
+      fixture.detectChanges();
+
+      expect(fixture.nativeElement.textContent).toContain('2 de 4');
+      expect(component.integrantesRegistrados(component.metricas[0].variables[0])).toBe(2);
+    });
+  });
+
+  // ══════════════════════════════════════════════════════════════════════
+  // Corrección de captura por usuario: el campo de captura NO debe precargarse
+  // con el valor de otro integrante. Antes, VariableDinamicaService.
+  // construirVariableConValor() (backend) devolvía "cualquier registro" de la
+  // variable+sprint sin filtrar por usuario, y ese valor llegaba tal cual a
+  // BloqueVariable.valorNum (construirBloque()), precargando el input de
+  // cualquier miembro con el valor de otro. El backend ya está corregido
+  // (VariableDinamicaServiceTest); este test confirma que, con la respuesta ya
+  // corregida de VariableDinamicaService.obtenerVariables() (sin valorNum para
+  // mí), el formulario de Ejecución no muestra ni precarga un valor ajeno,
+  // aunque exista un registro de otro integrante en EvaluacionService.detalle().
+  // ══════════════════════════════════════════════════════════════════════
+  it('el campo de captura no se precarga con el valor de otro integrante que ya registró el suyo', () => {
+    planeacionService.listarMetricas.and.returnValue(of([metrica(METRICA_DEFECTOS, 'Defectos', true)]));
+    const variableId = 'v-' + METRICA_DEFECTOS + '-0';
+    // Respuesta YA corregida del backend: sin valorNum, porque YO (userId del
+    // JWT) todavía no registré nada — sin importar que 'otro-user' sí lo hizo.
+    variableService.obtenerVariables.and.returnValue(of({
+      parametrizacionId: 'param-' + METRICA_DEFECTOS, version: 1, status: 'aprobada',
+      variables: [{
+        id: variableId, nombre: 'defectos_totales', descripcion: '', tipoDato: 'numerico',
+        obligatorio: true, unidad: 'pts', frecuenciaCaptura: 'por_sprint', tipoAlcance: 'individual',
+        valorNum: undefined
+      }]
+    }));
+    evaluacionService.detalle.and.returnValue(of([{
+      variableId, variableNombre: 'defectos_totales', categoria: 'Significado', tipoAlcance: 'individual',
+      frecuenciaCaptura: 'por_sprint', formulaTexto: null,
+      registros: [
+        { id: 'r-otro', valor: 22, registradoAt: '2026-08-22T00:00:00Z', sprintId: 'sprint-1', sprintNumero: 1, userId: 'otro-user' }
+      ],
+      estadisticas: {} as any, porSprint: []
+    }]));
+
+    component.ngOnInit();
+
+    const v = component.metricas[0].variables[0];
+    expect(v.valorNum).toBeNull(); // nunca 22 — ese es el valor de 'otro-user', no el mío
+  });
+
+  // Corrección de Scrum Master único: esScrumMaster ya no depende del rol
+  // global de cuenta (auth.currentUser()?.role) sino de si el email del
+  // usuario autenticado coincide con el scrumMasterEmail del proyecto activo
+  // — mismo patrón ya usado en dashboard.component.ts (esScrumMasterDelProyecto).
+  describe('Corrección: Scrum Master único por proyecto (no por rol global de cuenta)', () => {
+    it('un usuario con rol global "scrum_master" pero que NO es el creador de este proyecto no es reconocido como su Scrum Master', () => {
+      component.proyecto = mockProyecto; // scrumMasterEmail: 'sm@test.com'
+      const authService = TestBed.inject(AuthService);
+      // Rol de CUENTA global "scrum_master" (creó otro proyecto propio), pero
+      // su email NO coincide con mockProyecto.scrumMasterEmail ('sm@test.com').
+      (authService.currentUser as any).set({
+        userId: 'u3', email: 'otro-creador@test.com', role: 'scrum_master', token: 't'
+      });
+
+      expect(component.esScrumMaster).toBe(false);
+    });
+
+    it('el creador real del proyecto (email = scrumMasterEmail) es reconocido como Scrum Master aunque su rol global sea "scrum_member"', () => {
+      component.proyecto = mockProyecto; // scrumMasterEmail: 'sm@test.com'
+      const authService = TestBed.inject(AuthService);
+      (authService.currentUser as any).set({
+        userId: 'u1', email: 'sm@test.com', role: 'scrum_member', token: 't'
+      });
+
+      expect(component.esScrumMaster).toBe(true);
+    });
+  });
 });

@@ -46,6 +46,24 @@ export interface GuardarParametrizacionRequest extends EscalaEstructurada {
   // Revisión de frecuencia de captura: faltaba acá, por lo que el backend nunca
   // podía recibirla y la persistía siempre como "por_sprint" (ver MetricRankingService).
   frecuenciaCaptura?: string | null;
+  /** Revisión de captura por parametrización: "EQUIPO" | "SCRUM_MASTER". */
+  responsableCaptura?: string | null;
+}
+
+/**
+ * Revisión de navegación: forma mínima de una parametrización pendiente de
+ * revisión, tal como la devuelve GET /metric-ranking/pendientes — usada por
+ * la notificación de aprobación pendiente (además de Planeación/Resumen/
+ * Verificación, que ya consumían este mismo endpoint por su cuenta).
+ */
+export interface PendienteNotificacion {
+  id:              string;
+  factorId:        string;
+  factorNombre:    string;
+  factorCategoria: string;
+  userEmail:       string;
+  metricaId?:      string | null;
+  createdAt:       string;
 }
 
 export interface TopParametrizacion extends EscalaEstructurada {

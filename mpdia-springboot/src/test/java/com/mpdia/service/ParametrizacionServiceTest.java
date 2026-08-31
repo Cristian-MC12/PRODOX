@@ -641,7 +641,173 @@ class ParametrizacionServiceTest {
         assertThat(result.getConfiguracionAprobadaJson()).contains("\"version\":1");
         verify(variableRepository, times(1)).save(any());
     }
-    
+
+    // ════════════════════════════════════════════════════════════════════
+    // Revisión de captura por parametrización: el alcance/responsable de
+    // captura (EQUIPO/SCRUM_MASTER) que el Scrum Master elige explícitamente
+    // en la parametrización debe materializarse en Variable.tipoAlcance —
+    // antes, crearVariablesDesdeParametrizacion() lo fijaba siempre en
+    // "grupal" sin importar la parametrización, dejando todas las métricas
+    // como si fueran SCRUM_MASTER.
+    // ════════════════════════════════════════════════════════════════════
+
+    private AprobarParametrizacionRequest requestAprobacion(String responsableCaptura) {
+        return new AprobarParametrizacionRequest(
+            "Objetivo", "Procedimiento", "indicador_variable", "Escala", "por_sprint",
+            "Fuente académica", "Σ x", "SUMA", "unidades",
+            responsableCaptura, // <- este es el campo que se está probando
+            "indicador_variable", // nombreVariable (snake_case válido)
+            null, null, null, null, null, null
+        );
+    }
+
+    private Metrica metricaDeCategoria(UUID metricaId, String categoria) {
+        Metrica metrica = new Metrica();
+        metrica.setId(metricaId);
+        MetricaCategoria cat = new MetricaCategoria();
+        cat.setNombre(categoria);
+        metrica.setCategoria(cat);
+        return metrica;
+    }
+
+    private MetricParametrizacion parametrizacionPropuesta(UUID id, UUID proyectoId, UUID metricaId) {
+        MetricParametrizacion p = new MetricParametrizacion();
+        p.setId(id);
+        p.setProyectoId(proyectoId);
+        p.setMetricaId(metricaId);
+        p.setStatus("propuesta");
+        p.setVersion(1);
+        return p;
+    }
+
+    @Test
+    void aprobarParametrizacion_conResponsableCapturaEquipo_materializaVariableIndividual() {
+        mockAuthentication();
+        UUID id = UUID.randomUUID();
+        UUID proyectoId = UUID.randomUUID();
+        UUID metricaId = UUID.randomUUID();
+
+        when(parametrizacionRepository.findById(id))
+            .thenReturn(Optional.of(parametrizacionPropuesta(id, proyectoId, metricaId)));
+        when(projectMemberRepository.existsByProyectoIdAndUserId(eq(proyectoId), anyString())).thenReturn(true);
+        when(parametrizacionRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        when(metricaRepository.findById(metricaId)).thenReturn(Optional.of(metricaDeCategoria(metricaId, "Calidad")));
+
+        MetricParametrizacion result = parametrizacionService.aprobarParametrizacion(id, requestAprobacion("EQUIPO"));
+
+        assertThat(result.getResponsableCaptura()).isEqualTo("EQUIPO");
+        org.mockito.ArgumentCaptor<Variable> captor = org.mockito.ArgumentCaptor.forClass(Variable.class);
+        verify(variableRepository, times(1)).save(captor.capture());
+        assertThat(captor.getValue().getTipoAlcance()).isEqualTo("individual");
+    }
+
+    @Test
+    void aprobarParametrizacion_conResponsableCapturaScrumMaster_materializaVariableGrupal() {
+        mockAuthentication();
+        UUID id = UUID.randomUUID();
+        UUID proyectoId = UUID.randomUUID();
+        UUID metricaId = UUID.randomUUID();
+
+        when(parametrizacionRepository.findById(id))
+            .thenReturn(Optional.of(parametrizacionPropuesta(id, proyectoId, metricaId)));
+        when(projectMemberRepository.existsByProyectoIdAndUserId(eq(proyectoId), anyString())).thenReturn(true);
+        when(parametrizacionRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        when(metricaRepository.findById(metricaId)).thenReturn(Optional.of(metricaDeCategoria(metricaId, "Calidad")));
+
+        MetricParametrizacion result = parametrizacionService.aprobarParametrizacion(id, requestAprobacion("SCRUM_MASTER"));
+
+        assertThat(result.getResponsableCaptura()).isEqualTo("SCRUM_MASTER");
+        org.mockito.ArgumentCaptor<Variable> captor = org.mockito.ArgumentCaptor.forClass(Variable.class);
+        verify(variableRepository, times(1)).save(captor.capture());
+        assertThat(captor.getValue().getTipoAlcance()).isEqualTo("grupal");
+    }
+
+    @Test
+    void aprobarParametrizacion_sinResponsableCapturaExplicito_defaultScrumMaster_materializaVariableGrupal() {
+        // No convertir silenciosamente a EQUIPO: quien no elige explícitamente
+        // (responsableCaptura=null) debe conservar el comportamiento previo a
+        // esta revisión (todas las métricas quedaban "grupal").
+        mockAuthentication();
+        UUID id = UUID.randomUUID();
+        UUID proyectoId = UUID.randomUUID();
+        UUID metricaId = UUID.randomUUID();
+
+        when(parametrizacionRepository.findById(id))
+            .thenReturn(Optional.of(parametrizacionPropuesta(id, proyectoId, metricaId)));
+        when(projectMemberRepository.existsByProyectoIdAndUserId(eq(proyectoId), anyString())).thenReturn(true);
+        when(parametrizacionRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        when(metricaRepository.findById(metricaId)).thenReturn(Optional.of(metricaDeCategoria(metricaId, "Calidad")));
+
+        MetricParametrizacion result = parametrizacionService.aprobarParametrizacion(id, requestAprobacion(null));
+
+        assertThat(result.getResponsableCaptura()).isEqualTo("SCRUM_MASTER");
+        org.mockito.ArgumentCaptor<Variable> captor = org.mockito.ArgumentCaptor.forClass(Variable.class);
+        verify(variableRepository, times(1)).save(captor.capture());
+        assertThat(captor.getValue().getTipoAlcance()).isEqualTo("grupal");
+    }
+
+    @Test
+    void aprobarParametrizacion_responsableCapturaInvalido_esRechazado() {
+        mockAuthentication();
+        UUID id = UUID.randomUUID();
+        UUID proyectoId = UUID.randomUUID();
+        UUID metricaId = UUID.randomUUID();
+
+        when(parametrizacionRepository.findById(id))
+            .thenReturn(Optional.of(parametrizacionPropuesta(id, proyectoId, metricaId)));
+        when(projectMemberRepository.existsByProyectoIdAndUserId(eq(proyectoId), anyString())).thenReturn(true);
+
+        assertThatThrownBy(() -> parametrizacionService.aprobarParametrizacion(id, requestAprobacion("EL_QUE_QUIERA")))
+            .isInstanceOf(ResponsableCapturaInvalidoException.class)
+            .hasMessageContaining("EL_QUE_QUIERA");
+
+        verify(parametrizacionRepository, never()).save(any());
+        verify(variableRepository, never()).save(any());
+    }
+
+    @Test
+    void guardarPropuesta_conResponsableCapturaEquipo_sePersisteEnLaEntidad() {
+        mockAuthentication();
+        UUID metricaId = UUID.randomUUID();
+        UUID proyectoId = UUID.randomUUID();
+        GuardarPropuestaRequest req = new GuardarPropuestaRequest(
+            metricaId, proyectoId, "Obj", "Proc", "Ind", "Esc", "por_sprint",
+            "Fuente", "Formula", "SUMA", "unidad",
+            "EQUIPO", // <- responsableCaptura, el campo que se está probando
+            null, // propuestaIAJson
+            null, // nombreVariable
+            null, null, null, null, null, null // escala estructurada (6 campos)
+        );
+
+        when(projectMemberRepository.existsByProyectoIdAndUserId(eq(proyectoId), anyString())).thenReturn(true);
+        when(parametrizacionRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        MetricParametrizacion result = parametrizacionService.guardarPropuesta(req);
+
+        assertThat(result.getResponsableCaptura()).isEqualTo("EQUIPO");
+    }
+
+    @Test
+    void guardarPropuesta_sinResponsableCapturaExplicito_defaultScrumMaster() {
+        mockAuthentication();
+        UUID metricaId = UUID.randomUUID();
+        UUID proyectoId = UUID.randomUUID();
+        // Constructor de compatibilidad (sin responsableCaptura) — simula un
+        // llamador previo a esta revisión.
+        GuardarPropuestaRequest req = new GuardarPropuestaRequest(
+            metricaId, proyectoId, "Obj", "Proc", "Ind", "Esc", "por_sprint",
+            "Fuente", "Formula", "SUMA", "unidad",
+            null, null, null, null, null, null, null, null
+        );
+
+        when(projectMemberRepository.existsByProyectoIdAndUserId(eq(proyectoId), anyString())).thenReturn(true);
+        when(parametrizacionRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        MetricParametrizacion result = parametrizacionService.guardarPropuesta(req);
+
+        assertThat(result.getResponsableCaptura()).isEqualTo("SCRUM_MASTER");
+    }
+
     @Test
     void aprobarParametrizacion_siEsV2_debeMarcarV1ComoInactiva() {
         // Given

@@ -265,6 +265,87 @@ class MetricRankingServiceTest {
         assertThat(captor.getValue().getFrecuenciaCaptura()).isEqualTo("diaria");
     }
 
+    // ══════════════════════════════════════════════════════════════════════
+    // Revisión de captura por parametrización: el alcance/responsable
+    // (EQUIPO/SCRUM_MASTER) elegido en Parametrización debe persistirse en la
+    // entidad — independiente de tipoOperacion, mismo patrón que
+    // frecuenciaCaptura arriba.
+    // ══════════════════════════════════════════════════════════════════════
+
+    private GuardarParametrizacionRequest requestConResponsable(String responsableCaptura) {
+        return new GuardarParametrizacionRequest(
+                null, "objetivo", "procedimiento", "indicador", "escala",
+                null, proyectoId, metricaId,
+                "SUMA", "SUMA(indicador)", "unidades", "fuente", "por_sprint",
+                responsableCaptura, null, null, null, null, null, null);
+    }
+
+    @Test
+    void guardar_conResponsableCapturaEquipo_laPersisteEnLaEntidad() {
+        when(metricaRepo.existsById(metricaId)).thenReturn(true);
+        when(parametrizacionRepo.findHistorialVersiones(metricaId, proyectoId)).thenReturn(List.of());
+        ArgumentCaptor<MetricParametrizacion> captor = ArgumentCaptor.forClass(MetricParametrizacion.class);
+
+        service.guardar(requestConResponsable("EQUIPO"), userId, userEmail);
+
+        verify(parametrizacionRepo).save(captor.capture());
+        assertThat(captor.getValue().getResponsableCaptura()).isEqualTo("EQUIPO");
+    }
+
+    @Test
+    void guardar_conResponsableCapturaScrumMaster_laPersisteEnLaEntidad() {
+        when(metricaRepo.existsById(metricaId)).thenReturn(true);
+        when(parametrizacionRepo.findHistorialVersiones(metricaId, proyectoId)).thenReturn(List.of());
+        ArgumentCaptor<MetricParametrizacion> captor = ArgumentCaptor.forClass(MetricParametrizacion.class);
+
+        service.guardar(requestConResponsable("SCRUM_MASTER"), userId, userEmail);
+
+        verify(parametrizacionRepo).save(captor.capture());
+        assertThat(captor.getValue().getResponsableCaptura()).isEqualTo("SCRUM_MASTER");
+    }
+
+    @Test
+    void guardar_sinResponsableCapturaInformado_defaultScrumMaster_comportamientoPreexistenteSinCambios() {
+        // No convertir silenciosamente a EQUIPO: quien no elige explícitamente
+        // conserva el comportamiento previo a esta revisión.
+        when(metricaRepo.existsById(metricaId)).thenReturn(true);
+        when(parametrizacionRepo.findHistorialVersiones(metricaId, proyectoId)).thenReturn(List.of());
+        ArgumentCaptor<MetricParametrizacion> captor = ArgumentCaptor.forClass(MetricParametrizacion.class);
+
+        service.guardar(requestConResponsable(null), userId, userEmail);
+
+        verify(parametrizacionRepo).save(captor.capture());
+        assertThat(captor.getValue().getResponsableCaptura()).isEqualTo("SCRUM_MASTER");
+    }
+
+    @Test
+    void guardar_responsableCapturaInvalido_esRechazado() {
+        assertThatThrownBy(() -> service.guardar(requestConResponsable("CUALQUIERA"), userId, userEmail))
+                .isInstanceOf(ResponsableCapturaInvalidoException.class)
+                .hasMessageContaining("CUALQUIERA");
+
+        verify(parametrizacionRepo, never()).save(any());
+    }
+
+    @Test
+    void reenvioConSoloElResponsableCapturaCambiado_siCreaVersionNueva() {
+        // Mismo criterio que reenvioConSoloLaFrecuenciaCambiada_siCreaVersionNueva:
+        // cambiar SOLO el responsable (todo lo demás igual) es una edición real
+        // que cambia quién puede capturar, no un reenvío duplicado.
+        MetricParametrizacion pendienteExistente = pendienteConContenidoDeRequest(1);
+        pendienteExistente.setResponsableCaptura("SCRUM_MASTER");
+        when(metricaRepo.existsById(metricaId)).thenReturn(true);
+        when(parametrizacionRepo.findHistorialVersiones(metricaId, proyectoId))
+                .thenReturn(List.of(pendienteExistente));
+        ArgumentCaptor<MetricParametrizacion> captor = ArgumentCaptor.forClass(MetricParametrizacion.class);
+
+        MetricParametrizacionDto dto = service.guardar(requestConResponsable("EQUIPO"), userId, userEmail);
+
+        verify(parametrizacionRepo, times(1)).save(captor.capture());
+        assertThat(dto.version()).isEqualTo(2);
+        assertThat(captor.getValue().getResponsableCaptura()).isEqualTo("EQUIPO");
+    }
+
     // ── A.3 ──────────────────────────────────────────────────────────────
 
     @Test
