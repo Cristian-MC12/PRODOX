@@ -6,4 +6,4 @@
 -- ============================================================
 ALTER TABLE proyectos
     ADD COLUMN IF NOT EXISTS numero_sprints   INTEGER NOT NULL DEFAULT 3,
-    ADD COLUMN IF NOT EXISTS fecha_inicio     DATE    NO
+    ADD COLUMN IF NOT EXISTS fecha_inicio     DATE    NOT NULL DEFAULT CURRENT_DATE;
