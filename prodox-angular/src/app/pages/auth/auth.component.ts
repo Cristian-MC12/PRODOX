@@ -1052,7 +1052,7 @@ export class AuthComponent implements OnInit {
     this.errorMsg = '';
     
     // Redirigir al endpoint OAuth2 de Spring Boot
-    window.location.href = 'http://localhost:8080/oauth2/authorization/google';
+    window.location.href = `${environment.apiBaseUrl.replace('/api', '')}/oauth2/authorization/google`;
   }
 
   private buildForm(tab: 'login' | 'register'): FormGroup {
