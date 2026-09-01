@@ -611,11 +611,11 @@ export class PlaneacionComponent implements OnInit {
   // filtran this.metricas directamente) — este filtro solo aplica al
   // panel de catálogo donde se eligen métricas nuevas.
   readonly METRICAS_VISIBLES = new Set<string>([
-    'dde97e2b-1b25-493e-9273-a6b59564b053', // Impedimentos por sprint
-    '2ba0cf34-0bec-4e7d-8dc5-40795f050ec9', // Problemas reportados por el cliente
-    '40beffdf-13f4-4772-8820-4df93fae525c', // Deuda técnica gestionada
-    'beb22a94-0e1b-496a-8b9e-a08a8f6d77c3', // Aprendizaje organizacional (FAT)
-    'ec0d74fe-0bf4-4970-af89-dcaa0736c8ed', // Defectos
+    'd0a56045-a0f5-47bf-9e96-a2056a99c709', // Defectos (SIG-CE-02)
+    '9dd2745a-63ee-42db-8f00-ec6ef279532d', // Deuda técnica gestionada (FLX-GAE-02)
+    '7e73e324-c4ef-44f2-9111-7c64e1226c1f', // Aprendizaje organizacional (FAT) (FLX-FAT-01)
+    'c0fbef4a-6103-4d57-8b5a-b7c7e55c7fd8', // Defectos encontrados (IMP-CAL-01)
+    'a0327bb1-362c-4f3e-9bc0-a3c34aad9bf0', // Errores en producción (IMP-CAL-02)
   ]);
 
   constructor(
