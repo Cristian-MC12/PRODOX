@@ -1,0 +1,58 @@
+/* Autor: Cristian Santiago Martinez Cordoba — PRODOX */
+
+.insights-grid {
+  display: grid;
+  gap: 1rem;
+}
+
+.insight-card {
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.insight-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.insight-card .card-header {
+  background-color: #f8f9fa;
+  border-bottom: 1px solid #dee2e6;
+  padding: 0.75rem 1rem;
+}
+
+.evidence-table {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.evidence-item {
+  background-color: #f8f9fa;
+  font-size: 0.875rem;
+}
+
+.recommendation-box {
+  background-color: rgba(13, 110, 253, 0.05);
+  border-left: 4px solid #0d6efd;
+}
+
+.badge-success {
+  background-color: #198754;
+  color: white;
+}
+
+.badge-warning {
+  background-color: #ffc107;
+  color: #000;
+}
+
+.badge-secondary {
+  background-color: #6c757d;
+  color: white;
+}
+
+/* Responsive */
+@media (min-width: 768px) {
+  .insights-grid {
+    grid-template-columns: repeat(auto-fill, minmax(500px, 1fr));
+  }
+}

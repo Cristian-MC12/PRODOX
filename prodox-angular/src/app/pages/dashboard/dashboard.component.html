@@ -1,0 +1,244 @@
+<!-- Autor: Cristian Santiago Martinez Cordoba — PRODOX -->
+<app-shell title="Dashboard">
+  <div class="exec-dashboard">
+    
+    <!-- Loading/Error/Empty States -->
+    @if (state() === 'loading') {
+      <div class="loading-state">
+        <div class="spinner-border text-primary"></div>
+        <p class="mt-3">Cargando dashboard...</p>
+      </div>
+    }
+
+    @if (state() === 'error' || state() === 'empty' || state() === 'insufficient-data') {
+      <div class="empty-state">
+        <i class="bi" [class.bi-exclamation-triangle]="state() === 'error'" 
+                      [class.bi-graph-up]="state() === 'empty'"
+                      [class.bi-bar-chart]="state() === 'insufficient-data'"></i>
+        <h4>{{getEmptyStateTitle()}}</h4>
+        <p>{{getEmptyStateMessage()}}</p>
+        @if (state() === 'error') {
+          <button class="btn btn-primary" (click)="retry()">
+            <i class="bi bi-arrow-clockwise me-2"></i>Reintentar
+          </button>
+        }
+      </div>
+    }
+
+    <!-- Dashboard Content -->
+    @if (state() === 'success' && projectOverview) {
+      
+      <!-- Header -->
+      <div class="exec-header">
+        <div>
+          <h1 class="exec-title">Resumen ejecutivo</h1>
+          <p class="exec-subtitle">Estado actual de métricas, riesgos y proyectos</p>
+        </div>
+        @if (esScrumMasterDelProyecto) {
+          <div class="exec-actions">
+            <button class="btn btn-sm btn-outline-secondary" (click)="navigateToInsights()">
+              <i class="bi bi-lightbulb me-1"></i>Insights IA
+            </button>
+            <button class="btn btn-sm btn-outline-secondary" (click)="navigateToRetrospective()">
+              <i class="bi bi-arrow-repeat me-1"></i>Retrospectiva
+            </button>
+            <button class="btn btn-sm btn-primary" (click)="navigateToReport()">
+              <i class="bi bi-file-text me-1"></i>Reporte
+            </button>
+          </div>
+        }
+      </div>
+
+      <!-- KPI Cards -->
+      <div class="kpi-cards">
+        <!-- Card 1: Métricas activas - Destacada con fondo azul -->
+        <div class="kpi-card kpi-primary">
+          <div class="kpi-header">
+            <div class="kpi-info">
+              <span class="kpi-label">Métricas activas</span>
+              <button class="kpi-menu"><i class="bi bi-three-dots"></i></button>
+            </div>
+            <div class="kpi-icon">
+              <i class="bi bi-graph-up-arrow"></i>
+            </div>
+          </div>
+          <div class="kpi-body">
+            <div class="kpi-value">{{getTotalMetricas()}}</div>
+            <div class="kpi-trend neutral">
+              <span>{{getMetricasTrendValue()}}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Card 2: Riesgos detectados -->
+        <div class="kpi-card">
+          <div class="kpi-header">
+            <div class="kpi-info">
+              <span class="kpi-label">Riesgos detectados</span>
+              <button class="kpi-menu"><i class="bi bi-three-dots"></i></button>
+            </div>
+            <div class="kpi-icon kpi-icon-danger">
+              <i class="bi bi-exclamation-triangle-fill"></i>
+            </div>
+          </div>
+          <div class="kpi-body">
+            <div class="kpi-value">{{risks.length}}</div>
+            <div class="kpi-trend neutral">
+              <span>{{getRisksTrendValue()}}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Card 3: Sprint activo -->
+        <div class="kpi-card">
+          <div class="kpi-header">
+            <div class="kpi-info">
+              <span class="kpi-label">Sprint activo</span>
+              <button class="kpi-menu"><i class="bi bi-three-dots"></i></button>
+            </div>
+            <div class="kpi-icon kpi-icon-info">
+              <i class="bi bi-folder-fill"></i>
+            </div>
+          </div>
+          <div class="kpi-body">
+            <div class="kpi-value">{{getSprintActivoLabel()}}</div>
+            <div class="kpi-trend neutral">
+              <span>{{getSprintActivoEstadoLabel()}}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Card 4: Miembros del equipo -->
+        <div class="kpi-card">
+          <div class="kpi-header">
+            <div class="kpi-info">
+              <span class="kpi-label">Miembros del equipo</span>
+              <button class="kpi-menu"><i class="bi bi-three-dots"></i></button>
+            </div>
+            <div class="kpi-icon kpi-icon-success">
+              <i class="bi bi-people-fill"></i>
+            </div>
+          </div>
+          <div class="kpi-body">
+            <div class="kpi-value">{{totalMiembros}}</div>
+            <div class="kpi-trend neutral">
+              <span>{{getMiembrosTrendValue()}}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Charts Grid -->
+      <div class="charts-grid">
+        
+        <!-- Row 1 -->
+        <div class="chart-row">
+          
+          <!-- Cumplimiento del sprint -->
+          <div class="chart-card chart-compact">
+            <div class="chart-header">
+              <h6 class="chart-title">Cumplimiento</h6>
+            </div>
+            <div class="chart-content chart-center">
+              @if (hasComplianceData()) {
+                <app-sprint-compliance-gauge
+                  [percentage]="getSprintCompliance()"
+                  [label]="''"
+                />
+              } @else {
+                <div class="empty-compact">
+                  <i class="bi bi-speedometer2"></i>
+                  <span>No hay datos suficientes</span>
+                </div>
+              }
+            </div>
+          </div>
+
+          <!-- Evolución de métricas -->
+          <div class="chart-card chart-wide">
+            <div class="chart-header">
+              <h6 class="chart-title">Evolución de métricas</h6>
+            </div>
+            <div class="chart-content">
+              <app-metrics-evolution-chart
+                [dataPoints]="evolutionData"
+                [title]="''"
+              />
+            </div>
+          </div>
+
+          <!-- Distribución de métricas -->
+          <div class="chart-card chart-compact">
+            <div class="chart-header">
+              <h6 class="chart-title">Distribución</h6>
+            </div>
+            <div class="chart-content chart-center">
+              <app-metrics-distribution-chart
+                [segments]="distributionSegments"
+                [title]="''"
+              />
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Row 2 -->
+        <div class="chart-row">
+          
+          <!-- Últimos riesgos -->
+          <div class="chart-card">
+            <div class="chart-header">
+              <h6 class="chart-title">Riesgos recientes</h6>
+            </div>
+            <div class="chart-content chart-compact-content">
+              @if (risks.length > 0) {
+                <div class="risks-compact">
+                  @for (risk of risks.slice(0, 2); track risk.tipo) {
+                    <div class="risk-row">
+                      <span class="risk-severity" [attr.data-level]="risk.severidad.toLowerCase()">
+                        {{getSeverityLabel(risk.severidad)}}
+                      </span>
+                      <span class="risk-text">{{risk.titulo}}</span>
+                      <span class="risk-date">{{formatDateCompact(risk.detectedAt)}}</span>
+                    </div>
+                  }
+                </div>
+              } @else {
+                <div class="empty-compact">
+                  <i class="bi bi-shield-check"></i>
+                  <span>Sin riesgos</span>
+                </div>
+              }
+            </div>
+          </div>
+
+          <!-- Sprints por estado -->
+          <div class="chart-card">
+            <div class="chart-header">
+              <h6 class="chart-title">Sprints por estado</h6>
+            </div>
+            <div class="chart-content chart-compact-content">
+              <div class="bar-chart-canvas-wrap">
+                <canvas #sprintsStatusCanvas></canvas>
+              </div>
+            </div>
+          </div>
+
+          <!-- Actividad reciente -->
+          <div class="chart-card">
+            <div class="chart-header">
+              <h6 class="chart-title">Actividad reciente</h6>
+            </div>
+            <div class="chart-content chart-compact-content">
+              @if (proyecto) {
+                <app-activity-feed [proyectoId]="proyecto.id" [limit]="2" />
+              }
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+    }
+  </div>
+</app-shell>

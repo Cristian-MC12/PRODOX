@@ -1,0 +1,18 @@
+/* Autor: Cristian Santiago Martinez Cordoba — PRODOX - Activity Feed Compact */
+.activity-feed-compact{width:100%}
+.feed-loading,.feed-empty{display:flex;align-items:center;justify-content:center;padding:var(--space-4);gap:var(--space-2);color:var(--text-secondary);font-size:0.875rem}
+.feed-empty{flex-direction:column;text-align:center}
+.feed-empty i{font-size:2rem;opacity:0.3;margin-bottom:var(--space-1)}
+.feed-empty p{margin:0;font-size:0.875rem}
+.activity-items{display:flex;flex-direction:column;gap:var(--space-3)}
+.activity-item-compact{display:flex;align-items:center;gap:var(--space-2);padding:var(--space-2);border-radius:var(--radius-sm);transition:background .2s}
+.activity-item-compact:hover{background:var(--background)}
+.activity-icon-compact{width:32px;height:32px;border-radius:var(--radius-md);display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0}
+.activity-icon-compact.icon-success{background:rgba(30,142,90,0.1);color:var(--success)}
+.activity-icon-compact.icon-info{background:rgba(90,150,196,0.1);color:var(--info)}
+.activity-icon-compact.icon-warning{background:rgba(217,154,43,0.1);color:var(--warning)}
+.activity-icon-compact.icon-primary{background:var(--brand-tint);color:var(--brand)}
+.activity-text-compact{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.activity-title-compact{font-size:0.875rem;font-weight:600;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.activity-desc-compact{font-size:0.75rem;color:var(--text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.activity-time-compact{font-size:0.7rem;color:var(--text-secondary);flex-shrink:0;white-space:nowrap}

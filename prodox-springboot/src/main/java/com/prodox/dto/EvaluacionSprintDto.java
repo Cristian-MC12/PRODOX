@@ -1,0 +1,22 @@
+// Autor: Cristian Santiago Martinez Cordoba — PRODOX
+package com.prodox.dto;
+
+import java.math.BigDecimal;
+import java.util.UUID;
+
+public record EvaluacionSprintDto(
+    UUID       sprintId,
+    Integer    sprintNumero,
+    UUID       variableId,
+    String     variableNombre,
+    String     categoria,
+    String     tipoAlcance,
+    BigDecimal promedio,
+    BigDecimal min,
+    BigDecimal max,
+    Integer    totalRegistros,
+    /** Fórmula con la que se midió (contexto para el evaluador) */
+    String     formulaTexto,
+    /** Frecuencia con que se capturó */
+    String     frecuenciaCaptura
+) {}

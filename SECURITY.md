@@ -13,7 +13,7 @@ Si estás viendo este mensaje, es porque se detectó una API key filtrada en el 
 
 3. **Configura tu entorno local:**
    ```bash
-   cd mpdia-springboot/src/main/resources
+   cd prodox-springboot/src/main/resources
    cp application.properties.example application.properties
    # Edita application.properties y agrega tu nueva API key
    ```
@@ -38,7 +38,7 @@ Si ya subiste secretos a Git, necesitas limpiar el historial:
 ```bash
 # OPCIÓN 1: Usar git-filter-repo (recomendado)
 pip install git-filter-repo
-git filter-repo --path mpdia-springboot/src/main/resources/application.properties --invert-paths
+git filter-repo --path prodox-springboot/src/main/resources/application.properties --invert-paths
 
 # OPCIÓN 2: Resetear el repositorio (pérdida de historial)
 # Solo si es aceptable perder el historial
@@ -46,7 +46,7 @@ rm -rf .git
 git init
 git add .
 git commit -m "Initial commit (cleaned)"
-git remote add origin https://github.com/Cristian-MC12/MPDIA.git
+git remote add origin https://github.com/Cristian-MC12/PRODOX.git
 git push -f origin main
 ```
 

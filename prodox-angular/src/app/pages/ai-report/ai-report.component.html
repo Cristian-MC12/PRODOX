@@ -1,0 +1,225 @@
+<!-- Autor: Cristian Santiago Martinez Cordoba — PRODOX -->
+<app-shell title="Reporte Ejecutivo de Sprint">
+  <div class="container-fluid p-4">
+    <div class="row mb-4">
+      <div class="col">
+        <p class="text-muted mb-0">
+          Genera un reporte ejecutivo combinando métricas reales con análisis de IA
+        </p>
+      </div>
+    </div>
+
+    <!-- Alertas -->
+    @if (alertMsg()) {
+      <div class="alert {{alertClass()}} alert-dismissible fade show" role="alert">
+        {{alertMsg()}}
+        <button type="button" class="btn-close" (click)="alertMsg.set('')"></button>
+      </div>
+    }
+
+    <!-- Selección de Sprint -->
+    <div class="card mb-4">
+      <div class="card-body">
+        <h5 class="card-title mb-3">Seleccionar Sprint</h5>
+        
+        @if (loading()) {
+          <div class="d-flex align-items-center">
+            <div class="spinner-border spinner-border-sm me-2" role="status"></div>
+            <span>Cargando sprints...</span>
+          </div>
+        } @else {
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label">Sprint</label>
+              <select 
+                class="form-select" 
+                [(ngModel)]="selectedSprintId"
+                [disabled]="generating()">
+                <option value="">Seleccioná un sprint</option>
+                @for (sprint of sprints; track sprint.id) {
+                  <option [value]="sprint.id">
+                    Sprint {{sprint.numero}} - {{sprint.sprintGoal}}
+                    ({{sprint.fechaInicio}} a {{sprint.fechaFin}})
+                  </option>
+                }
+              </select>
+            </div>
+            <div class="col-md-6 d-flex align-items-end">
+              <button 
+                class="btn btn-primary"
+                (click)="generateReport()"
+                [disabled]="!selectedSprintId || generating()">
+                @if (generating()) {
+                  <span class="spinner-border spinner-border-sm me-2"></span>
+                  Generando...
+                } @else {
+                  <i class="bi bi-magic me-2"></i>
+                  Generar Reporte
+                }
+              </button>
+            </div>
+          </div>
+
+          <!-- RE.3 - Progreso de generación -->
+          @if (generating() && generationStep()) {
+            <div class="mt-3 text-center">
+              <p class="mb-2 text-muted">{{generationStep()}}</p>
+              <div class="progress" style="height: 6px;">
+                <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                     role="progressbar" 
+                     style="width: 100%" 
+                     aria-valuenow="100" 
+                     aria-valuemin="0" 
+                     aria-valuemax="100">
+                </div>
+              </div>
+              <small class="text-muted d-block mt-2">
+                Esto puede tomar 15-30 segundos
+              </small>
+            </div>
+          }
+        }
+      </div>
+    </div>
+
+    <!-- Reporte Generado -->
+    @if (report) {
+      <div class="card">
+        <div class="card-header bg-primary text-white">
+          <h5 class="mb-0">
+            <i class="bi bi-file-earmark-text me-2"></i>
+            Sprint {{report.sprintNumero}} - {{report.sprintGoal}}
+          </h5>
+          <small>
+            {{report.fechaInicio}} a {{report.fechaFin}} | 
+            Generado: {{report.generatedAt | date:'short'}}
+          </small>
+        </div>
+        <div class="card-body">
+          
+          <!-- Alerta de datos insuficientes -->
+          @if (hasInsufficientData()) {
+            <div class="alert alert-warning">
+              <i class="bi bi-exclamation-triangle me-2"></i>
+              <strong>Datos insuficientes</strong><br>
+              El sprint no tiene suficientes métricas registradas para generar un análisis completo.
+              Asegurate de registrar valores de variables durante la ejecución del sprint.
+            </div>
+          }
+
+          <!-- Resumen Ejecutivo -->
+          <div class="mb-4">
+            <h5 class="border-bottom pb-2 mb-3">
+              <i class="bi bi-file-text me-2"></i>
+              Resumen Ejecutivo
+            </h5>
+            <p class="lead">{{report.resumenEjecutivo | limpiarMarkdownIA}}</p>
+          </div>
+
+          <!-- Métricas -->
+          @if (getMetricasArray().length > 0) {
+            <div class="mb-4">
+              <h5 class="border-bottom pb-2 mb-3">
+                <i class="bi bi-graph-up me-2"></i>
+                Métricas del Sprint
+              </h5>
+              <div class="row">
+                @for (metrica of getMetricasArray(); track metrica.categoria) {
+                  <div class="col-md-3 mb-3">
+                    <div class="card bg-light">
+                      <div class="card-body text-center">
+                        <h6 class="text-muted mb-1">{{metrica.categoria}}</h6>
+                        <h3 class="mb-0">{{metrica.valor | number:'1.2-2'}}</h3>
+                      </div>
+                    </div>
+                  </div>
+                }
+              </div>
+            </div>
+          }
+
+          <!-- Highlights -->
+          @if (report.highlights.length > 0) {
+            <div class="mb-4">
+              <h5 class="border-bottom pb-2 mb-3">
+                <i class="bi bi-star-fill me-2 text-warning"></i>
+                Aspectos Destacados
+              </h5>
+              <ul class="list-unstyled">
+                @for (highlight of report.highlights; track $index) {
+                  <li class="mb-2">
+                    <i class="bi bi-check-circle-fill text-success me-2"></i>
+                    {{highlight | limpiarMarkdownIA}}
+                  </li>
+                }
+              </ul>
+            </div>
+          }
+
+          <!-- Concerns -->
+          @if (report.concerns.length > 0) {
+            <div class="mb-4">
+              <h5 class="border-bottom pb-2 mb-3">
+                <i class="bi bi-exclamation-circle-fill me-2 text-danger"></i>
+                Puntos de Atención
+              </h5>
+              <ul class="list-unstyled">
+                @for (concern of report.concerns; track $index) {
+                  <li class="mb-2">
+                    <i class="bi bi-exclamation-triangle text-warning me-2"></i>
+                    {{concern | limpiarMarkdownIA}}
+                  </li>
+                }
+              </ul>
+            </div>
+          }
+
+          <!-- Insights -->
+          @if (report.insights.length > 0) {
+            <div class="mb-4">
+              <h5 class="border-bottom pb-2 mb-3">
+                <i class="bi bi-lightbulb-fill me-2 text-info"></i>
+                Insights Relacionados
+              </h5>
+              <div class="row">
+                @for (insight of report.insights; track insight.id) {
+                  <div class="col-md-6 mb-3">
+                    <div class="card border-start border-4 border-info">
+                      <div class="card-body">
+                        <h6 class="card-title">
+                          <span class="badge bg-{{insight.severity === 'HIGH' ? 'warning' : 'info'}} me-2">
+                            {{insight.severity}}
+                          </span>
+                          {{insight.title | limpiarMarkdownIA}}
+                        </h6>
+                        <p class="card-text small">{{insight.description | limpiarMarkdownIA}}</p>
+                      </div>
+                    </div>
+                  </div>
+                }
+              </div>
+            </div>
+          }
+
+          <!-- Recomendaciones -->
+          <div class="mb-4">
+            <h5 class="border-bottom pb-2 mb-3">
+              <i class="bi bi-award-fill me-2 text-primary"></i>
+              Recomendaciones
+            </h5>
+            <div class="alert alert-info">
+              <p class="mb-0">{{report.recomendaciones | limpiarMarkdownIA}}</p>
+            </div>
+          </div>
+
+          <!-- Generado por IA -->
+          <div class="text-muted small text-center mt-4">
+            <i class="bi bi-robot me-1"></i>
+            Reporte generado por IA basado en datos reales del proyecto.
+            Las interpretaciones y recomendaciones son sugerencias que deben ser validadas por el equipo.
+          </div>
+        </div>
+      </div>
+    }
+  </div>
+</app-shell>

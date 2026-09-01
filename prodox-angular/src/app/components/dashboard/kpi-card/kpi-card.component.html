@@ -1,0 +1,26 @@
+<!-- Autor: Cristian Santiago Martinez Cordoba — PRODOX -->
+<div class="kpi-card" [attr.data-variant]="variant">
+  <div class="kpi-card-header">
+    <div class="kpi-card-icon" [attr.data-variant]="variant">
+      <i class="bi {{icon}}"></i>
+    </div>
+    <div class="kpi-card-meta">
+      @if (trend && trendValue) {
+        <span class="kpi-trend" [attr.data-trend]="trend">
+          <i class="bi" [class.bi-arrow-up]="trend === 'up'" 
+                        [class.bi-arrow-down]="trend === 'down'"
+                        [class.bi-dash]="trend === 'neutral'"></i>
+          {{trendValue}}
+        </span>
+      }
+    </div>
+  </div>
+  
+  <div class="kpi-card-body">
+    <div class="kpi-value">{{value}}</div>
+    <div class="kpi-title">{{title}}</div>
+    @if (subtitle) {
+      <div class="kpi-subtitle">{{subtitle}}</div>
+    }
+  </div>
+</div>

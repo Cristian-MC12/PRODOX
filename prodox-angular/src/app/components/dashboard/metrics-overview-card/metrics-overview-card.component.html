@@ -1,0 +1,32 @@
+<!-- Autor: Cristian Santiago Martinez Cordoba — PRODOX -->
+<div class="metrics-section">
+  <h5 class="prox-section-title mb-3">
+    <i class="bi bi-graph-up me-2"></i>
+    Métricas Promedio
+  </h5>
+
+  @if (getMetricasArray().length > 0) {
+    <div class="row g-3">
+      @for (metrica of getMetricasArray(); track metrica.categoria; let isFirst = $first) {
+        <div class="col-lg-3 col-md-4 col-6">
+          <div class="kpi-tile" [class.kpi-tile-hero]="isFirst">
+            <div class="kpi-tile-label text-truncate" [title]="metrica.categoria">
+              {{metrica.categoria}}
+              <i class="bi bi-info-circle ms-1"
+                 [title]="'Promedio histórico de ' + metrica.categoria + ': ' + (metrica.valor | number:'1.1-1')"></i>
+            </div>
+            <div class="kpi-tile-value">{{metrica.valor | number:'1.1-1'}}</div>
+            <span class="kpi-tile-pill" [class]="isFirst ? '' : getMetricTrendClass(metrica.valor)">
+              {{getMetricInterpretation(metrica.valor)}}
+            </span>
+          </div>
+        </div>
+      }
+    </div>
+  } @else {
+    <div class="alert alert-info">
+      <i class="bi bi-info-circle me-2"></i>
+      No hay métricas disponibles. Completa al menos un sprint para ver datos.
+    </div>
+  }
+</div>

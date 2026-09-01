@@ -1,0 +1,35 @@
+<!-- Autor: Cristian Santiago Martinez Cordoba — PRODOX -->
+<div class="card">
+  <div class="card-body">
+    <h5 class="prox-section-title mb-3">
+      <i class="bi bi-speedometer2 me-2"></i>
+      Resumen del Proyecto
+    </h5>
+    <div class="row">
+      <div class="col-md-3 col-6 mb-3 mb-md-0 prox-stat">
+        <div class="prox-stat-label">Total Sprints</div>
+        <div class="prox-stat-value">{{overview.totalSprints}}</div>
+      </div>
+      <div class="col-md-3 col-6 mb-3 mb-md-0 prox-stat">
+        <div class="prox-stat-label">Finalizados</div>
+        <div class="prox-stat-value text-success">{{overview.sprintsFinalizados}}</div>
+      </div>
+      @if (overview.sprintActualNumero) {
+        <div class="col-md-3 col-6 prox-stat">
+          <div class="prox-stat-label">Sprint Actual</div>
+          <div class="prox-stat-value text-primary">{{overview.sprintActualNumero}}</div>
+        </div>
+      }
+      @if (overview.mejorSprint) {
+        <div class="col-md-3 col-6 prox-stat">
+          <div class="prox-stat-label">Mejor Sprint</div>
+          <div class="prox-stat-value text-warning">
+            <i class="bi bi-trophy-fill me-1"></i>
+            {{overview.mejorSprint.numero}}
+          </div>
+          <small class="text-muted">{{overview.mejorSprint.razon}}</small>
+        </div>
+      }
+    </div>
+  </div>
+</div>

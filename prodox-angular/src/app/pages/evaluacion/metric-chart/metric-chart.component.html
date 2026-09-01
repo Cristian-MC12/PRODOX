@@ -1,0 +1,21 @@
+<!-- Autor: Cristian Santiago Martinez Cordoba — PRODOX -->
+@if (registros.length === 0) {
+  <div class="text-center text-muted small py-3">{{ mensajeVacio }}</div>
+} @else {
+  @if (registroUnico; as unico) {
+    <div class="metric-single-value">
+      <div class="metric-single-value-number">{{ unico.valor }}</div>
+      <div class="metric-single-value-meta">
+        <div>Registrado el {{ formatearFecha(unico.registradoAt, true) }}</div>
+        <div>1 registro · Frecuencia: {{ frecuenciaLabel }}</div>
+        <div class="metric-single-value-insuficiente">
+          Se requiere al menos un segundo período de medición para identificar una tendencia.
+        </div>
+      </div>
+    </div>
+  } @else {
+    <div class="metric-chart-canvas-wrap" [style.height.px]="height">
+      <canvas #canvasRef></canvas>
+    </div>
+  }
+}

@@ -1,21 +1,27 @@
 # ─── Angular ───────────────────────────────────────────────
-mpdia-angular/node_modules/
-mpdia-angular/dist/
-mpdia-angular/.angular/cache/
-mpdia-angular/.angular/
-mpdia-angular/*.env
+prodox-angular/node_modules/
+prodox-angular/dist/
+prodox-angular/.angular/cache/
+prodox-angular/.angular/
+prodox-angular/*.env
 
 # ─── Spring Boot / Maven ────────────────────────────────────
-mpdia-springboot/target/
-mpdia-springboot/.mvn/wrapper/maven-wrapper.jar
+prodox-springboot/target/
+prodox-springboot/.mvn/wrapper/maven-wrapper.jar
+prodox-springboot/effective-pom
+prodox-springboot/hs_err_pid*.log
+prodox-springboot/audit_tmp/
 *.class
 *.jar
 *.war
 
+# ─── Video/demo (proyecto aparte, no forma parte del build) ─
+mpdia-video/
+
 # ─── Archivos de configuración sensibles ───────────────────
-mpdia-springboot/src/main/resources/application.properties
-mpdia-springboot/src/main/resources/application-prod.properties
-mpdia-springboot/src/main/resources/application-dev.properties
+prodox-springboot/src/main/resources/application.properties
+prodox-springboot/src/main/resources/application-prod.properties
+prodox-springboot/src/main/resources/application-dev.properties
 *.env
 .env*
 

@@ -1,0 +1,25 @@
+/* Autor: Cristian Santiago Martinez Cordoba — PRODOX */
+.metric-chart-canvas-wrap { position: relative; width: 100%; }
+.metric-single-value {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 0.75rem 0.5rem;
+  gap: 0.15rem;
+}
+.metric-single-value-number {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--bs-primary);
+  line-height: 1;
+}
+.metric-single-value-meta {
+  font-size: 0.72rem;
+  color: var(--bs-secondary-color);
+}
+.metric-single-value-insuficiente {
+  margin-top: 0.35rem;
+  font-style: italic;
+}

@@ -1,0 +1,421 @@
+// Autor: Cristian Santiago Martinez Cordoba — PRODOX
+import { Component, OnInit } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { Router } from '@angular/router';
+import { HttpClient } from '@angular/common/http';
+import { catchError, forkJoin, map, of } from 'rxjs';
+import { ShellComponent } from '../../layout/shell/shell.component';
+import { SeleccionService } from '../../services/seleccion.service';
+import { MetricRankingService } from '../../services/metric-ranking.service';
+import { MetricaSeleccionada } from '../../models/seleccion.model';
+import { environment } from '../../../environments/environment';
+
+@Component({
+  selector: 'app-resumen-seleccion',
+  standalone: true,
+  imports: [CommonModule, ShellComponent],
+  template: `
+    <app-shell title="Resumen de Selección">
+
+      <!-- Breadcrumb de navegación -->
+      <nav aria-label="breadcrumb" class="mb-3">
+        <ol class="breadcrumb small mb-0">
+          <li class="breadcrumb-item">
+            <a href="#" (click)="$event.preventDefault(); router.navigate(['/planeacion'])">
+              <i class="bi bi-layers me-1"></i>Planeación
+            </a>
+          </li>
+          <li class="breadcrumb-item active">Resumen de Selección</li>
+        </ol>
+      </nav>
+
+      <p class="text-muted small mb-4">
+        Estas son las métricas seleccionadas para el sprint. Parametrizá cada una con GenAI
+        y luego enviá al Scrum Master para verificación.
+      </p>
+
+      <!-- Leyenda de colores -->
+      <div class="d-flex gap-3 mb-3 flex-wrap">
+        <span class="small"><span class="badge bg-danger me-1">●</span>Sin parametrizar</span>
+        <span class="small"><span class="badge bg-warning text-dark me-1">●</span>Parcial</span>
+        <span class="small"><span class="badge bg-success me-1">●</span>Completa</span>
+      </div>
+
+      <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <span class="fw-semibold small">
+            <i class="bi bi-table me-1"></i>Métricas seleccionadas
+          </span>
+          <button class="btn btn-outline-secondary btn-sm" (click)="router.navigate(['/planeacion'])">
+            <i class="bi bi-arrow-left me-1"></i>Volver a Planeación
+          </button>
+        </div>
+
+        <div class="card-body p-0">
+          @if (cargando) {
+            <div class="text-center text-muted py-5">
+              <span class="spinner-border spinner-border-sm me-2"></span>Cargando selecciones...
+            </div>
+          } @else if (seleccionadas.length === 0) {
+            <div class="text-center text-muted py-5">
+              <i class="bi bi-inbox fs-2 d-block mb-2"></i>
+              No hay métricas seleccionadas.
+              <br>
+              <button class="btn btn-primary btn-sm mt-3" (click)="router.navigate(['/planeacion'])">
+                Ir a Planeación
+              </button>
+            </div>
+          } @else {
+            <div class="table-responsive">
+              <table class="table table-hover mb-0">
+                <thead class="table-light">
+                  <tr>
+                    <th style="width:8px"></th>
+                    <th>Métrica</th>
+                    <th>Estado</th>
+                    <th class="text-center">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (s of seleccionadas; track s.id) {
+                    <tr>
+                      <td class="p-0">
+                        <div class="h-100 rounded-start"
+                             style="width:6px;min-height:48px"
+                             [style.background-color]="colorEstado(s.estadoParametrizacion)">
+                        </div>
+                      </td>
+                      <td>
+                        <span class="badge mb-1 prox-badge-sm" [class]="categoryBadge(s.factorCategoria)">
+                          {{ s.factorCategoria }}
+                        </span>
+                        <div class="small fw-semibold">{{ s.metricaNombre }}</div>
+                        @if (s.parametrizacion) {
+                          <div class="text-muted" style="font-size:0.7rem">
+                            {{ s.parametrizacion.objetivo | slice:0:60 }}...
+                          </div>
+                        }
+                      </td>
+                      <td class="align-middle">
+                        @switch (s.estadoParametrizacion) {
+                          @case ('completa') {
+                            <span class="badge bg-success prox-badge-sm">
+                              <i class="bi bi-check-circle me-1"></i>Completa
+                            </span>
+                          }
+                          @case ('parcial') {
+                            <span class="badge bg-warning text-dark prox-badge-sm">
+                              <i class="bi bi-exclamation-circle me-1"></i>Parcial
+                            </span>
+                          }
+                          @default {
+                            <span class="badge bg-danger prox-badge-sm">
+                              <i class="bi bi-x-circle me-1"></i>Sin parametrizar
+                            </span>
+                          }
+                        }
+                      </td>
+                      <td class="text-center align-middle">
+                        <div class="d-flex gap-1 justify-content-center">
+                          @if (s.estadoParametrizacion !== 'sin_parametrizar') {
+                            <button class="btn btn-sm btn-outline-info py-0 px-2"
+                                    (click)="toggleDetalle(s.id)"
+                                    title="Ver detalle de parametrización">
+                              <i class="bi" [class.bi-eye]="!esDetalleVisible(s.id)" [class.bi-eye-slash]="esDetalleVisible(s.id)"></i>
+                            </button>
+                          }
+                          <button class="btn btn-sm btn-outline-primary py-0 px-2"
+                                  (click)="parametrizar(s)"
+                                  [title]="s.estadoParametrizacion === 'sin_parametrizar' ? 'Parametrizar con GenAI' : 'Editar parametrización'">
+                            <i class="bi bi-stars"></i>
+                          </button>
+                          <button class="btn btn-sm btn-outline-danger py-0 px-2"
+                                  (click)="quitar(s.id)"
+                                  title="Quitar">
+                            <i class="bi bi-trash"></i>
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                    <!-- Fila expandible con detalle de parametrización -->
+                    @if (esDetalleVisible(s.id) && s.parametrizacion) {
+                      <tr class="table-active">
+                        <td colspan="4" class="py-3 px-4">
+                          <div class="small">
+                            <div class="mb-3">
+                              <strong class="text-primary"><i class="bi bi-bullseye me-1"></i>Objetivo:</strong>
+                              <p class="mb-0 mt-1 text-muted">{{ s.parametrizacion.objetivo }}</p>
+                            </div>
+                            <div class="mb-3">
+                              <strong class="text-primary"><i class="bi bi-list-ol me-1"></i>Procedimiento:</strong>
+                              <p class="mb-0 mt-1 text-muted">{{ s.parametrizacion.procedimiento }}</p>
+                            </div>
+                            <div class="mb-3">
+                              <strong class="text-primary"><i class="bi bi-speedometer2 me-1"></i>Indicador/Variable:</strong>
+                              <p class="mb-0 mt-1 text-muted">{{ s.parametrizacion.indicadorVariable }}</p>
+                            </div>
+                            <div>
+                              <strong class="text-primary"><i class="bi bi-bar-chart-steps me-1"></i>Escala:</strong>
+                              <p class="mb-0 mt-1 text-muted">{{ s.parametrizacion.escala }}</p>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    }
+                  }
+                </tbody>
+              </table>
+            </div>
+          }
+        </div>
+
+        @if (seleccionadas.length > 0) {
+          <div class="card-footer d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <div class="small text-muted">
+              {{ completadas }} de {{ seleccionadas.length }} parametrizadas
+            </div>
+            <div class="d-flex gap-2">
+              <button class="btn btn-outline-secondary btn-sm" (click)="router.navigate(['/planeacion'])">
+                <i class="bi bi-arrow-left me-1"></i>Editar selección
+              </button>
+              <button class="btn btn-primary btn-sm"
+                      [disabled]="completadas === 0 || enviando"
+                      (click)="aceptar()">
+                @if (enviando) {
+                  <span class="spinner-border spinner-border-sm me-1"></span>
+                } @else {
+                  <i class="bi bi-send me-1"></i>
+                }
+                Enviar al Scrum Master
+              </button>
+            </div>
+          </div>
+        }
+      </div>
+
+      @if (errorMsg) {
+        <div class="alert alert-danger small mt-3 py-2">{{ errorMsg }}</div>
+      }
+
+    </app-shell>
+  `
+})
+export class ResumenSeleccionComponent implements OnInit {
+  seleccionadas: MetricaSeleccionada[] = [];
+  enviando  = false;
+  errorMsg  = '';
+  detallesVisibles = new Set<string>(); // IDs de métricas con detalle visible
+  cargando = true;
+
+  constructor(
+    public  router: Router,
+    private seleccionService: SeleccionService,
+    private rankingService: MetricRankingService,
+    private http: HttpClient
+  ) {}
+
+  ngOnInit(): void {
+    // Cargar tanto desde localStorage como desde el backend
+    this.cargarSelecciones();
+  }
+
+  private cargarSelecciones(): void {
+    this.cargando = true;
+    
+    // Primero intentar desde localStorage
+    this.seleccionService.getAll().subscribe(locales => {
+      this.seleccionadas = locales;
+      this.cargando = false;
+      
+      // Si no hay nada en localStorage, intentar cargar parametrizaciones del backend
+      if (locales.length === 0) {
+        this.cargarDesdeBackend();
+      }
+    });
+  }
+
+  private cargarDesdeBackend(): void {
+    const proyectoActivo = localStorage.getItem('mpdia_proyecto_activo');
+    const proyectoId = proyectoActivo ? JSON.parse(proyectoActivo)?.id ?? null : null;
+    
+    if (!proyectoId) {
+      this.cargando = false;
+      return;
+    }
+
+    // Cargar parametrizaciones del proyecto actual
+    this.http.get<any[]>(`${environment.apiBaseUrl}/metric-ranking/pendientes?proyectoId=${proyectoId}`)
+      .pipe(catchError(() => of([])))
+      .subscribe(params => {
+        // Convertir parametrizaciones a MetricaSeleccionada
+        this.seleccionadas = params.map(p => ({
+          id: p.id || crypto.randomUUID(),
+          factorId: p.metricaId,
+          factorNombre: p.metricaNombre || 'Métrica',
+          factorCategoria: p.factorCategoria || 'General',
+          metricaNombre: p.metricaNombre || 'Métrica',
+          metricaDescripcion: '',
+          proyectoId: proyectoId,
+          creadoEn: p.createdAt || new Date().toISOString(),
+          estadoParametrizacion: 'completa' as const,
+          parametrizacion: {
+            objetivo: p.objetivo,
+            procedimiento: p.procedimiento,
+            indicadorVariable: p.indicadorVariable || p.escala,
+            escala: p.escala,
+            // Corrección de duplicados en Verificación: si esta parametrización ya tiene
+            // escala estructurada en el backend, hay que conservarla acá — de lo contrario
+            // un reenvío desde esta pantalla la manda en null y aceptar() abajo la trata
+            // como contenido distinto, creando una versión nueva innecesaria (duplicado).
+            tipoOperacion: p.tipoOperacion ?? null,
+            formulaAcademica: p.formulaAcademica ?? null,
+            unidadResultado: p.unidadResultado ?? null,
+            fuenteAcademica: p.fuenteAcademica ?? null,
+            frecuenciaCaptura: p.frecuenciaCaptura ?? null,
+            escalaTipo: p.escalaTipo ?? null,
+            escalaMin: p.escalaMin ?? null,
+            escalaMax: p.escalaMax ?? null,
+            escalaPaso: p.escalaPaso ?? null,
+            escalaSinLimite: p.escalaSinLimite ?? null,
+            escalaDescripcion: p.escalaDescripcion ?? null
+          }
+        }));
+        this.cargando = false;
+      });
+  }
+
+  get completadas(): number {
+    return this.seleccionadas.filter(s => s.estadoParametrizacion === 'completa').length;
+  }
+
+  parametrizar(s: MetricaSeleccionada): void {
+    this.router.navigate(['/parametrizacion', s.id]);
+  }
+
+  quitar(id: string): void {
+    this.seleccionService.quitar(id);
+  }
+
+  toggleDetalle(id: string): void {
+    if (this.detallesVisibles.has(id)) {
+      this.detallesVisibles.delete(id);
+    } else {
+      this.detallesVisibles.add(id);
+    }
+  }
+
+  esDetalleVisible(id: string): boolean {
+    return this.detallesVisibles.has(id);
+  }
+
+  /**
+   * Guarda todas las parametrizaciones completas en el backend y navega a verificación.
+   *
+   * FASE 10: solo se limpia la selección local y se navega si TODAS las operaciones
+   * terminan correctamente. Si alguna falla, el usuario permanece en Resumen, ve
+   * exactamente qué métrica falló y puede reintentar sin perder su selección
+   * (ver diagnóstico FASE 9, bloque 7 — antes, catchError(() => of(null)) ocultaba
+   * cualquier error HTTP y navegaba a Verificación como si todo hubiera salido bien).
+   */
+  aceptar(): void {
+    // FASE 20: reentrada bloqueada ANTES que nada, sobre el estado real del
+    // componente — no basta con [disabled]="enviando" en el template, porque
+    // dos clics muy rápidos pueden ejecutar aceptar() dos veces antes de que
+    // Angular llegue a reflejar "enviando" como disabled en el DOM (confirmado
+    // empíricamente: dos clics con ~26ms de diferencia generaban dos filas
+    // "pendiente" idénticas). Esta comprobación tiene efecto incluso si el
+    // binding del template no llegó a actualizar el atributo disabled a tiempo.
+    if (this.enviando) return;
+
+    const proyectoActivo = localStorage.getItem('mpdia_proyecto_activo');
+    const proyectoId: string | null = proyectoActivo ? (JSON.parse(proyectoActivo)?.id ?? null) : null;
+
+    const completas = this.seleccionadas.filter(s =>
+      s.estadoParametrizacion === 'completa' && s.parametrizacion
+    );
+
+    if (completas.length === 0 || !proyectoId) return;
+
+    this.enviando = true;
+    this.errorMsg = '';
+
+    const guardados$ = completas.map(s =>
+      this.rankingService.guardar({
+        factorId:          null,
+        objetivo:          s.parametrizacion!.objetivo,
+        procedimiento:     s.parametrizacion!.procedimiento,
+        indicadorVariable: s.parametrizacion!.indicadorVariable,
+        escala:            s.parametrizacion!.escala,
+        metricaBaseId:     null,
+        proyectoId,
+        metricaId:         s.factorId,  // desde Planeación, factorId contiene el metricaId
+        // FASE 11: propagar los campos académicos completados en Parametrización — antes se
+        // descartaban aquí, dejando la parametrización sin tipoOperacion tras aprobarse.
+        tipoOperacion:     s.parametrizacion!.tipoOperacion ?? null,
+        formulaAcademica:  s.parametrizacion!.formulaAcademica ?? null,
+        unidadResultado:   s.parametrizacion!.unidadResultado ?? null,
+        fuenteAcademica:   s.parametrizacion!.fuenteAcademica ?? null,
+        // Revisión de frecuencia de captura: antes no se propagaba aquí tampoco,
+        // dejando la parametrización siempre en "por_sprint" al enviarla al
+        // Scrum Master por este flujo (ver MetricRankingService.guardarPorMetrica()).
+        frecuenciaCaptura: s.parametrizacion!.frecuenciaCaptura ?? 'por_sprint',
+        // Revisión de captura por parametrización: propaga el alcance/responsable
+        // ya elegido en Parametrización (independiente de tipoOperacion) — antes
+        // este payload no lo incluía y el envío en lote siempre quedaba
+        // "SCRUM_MASTER" sin importar lo elegido en el formulario.
+        responsableCaptura: s.parametrizacion!.responsableCaptura ?? 'SCRUM_MASTER',
+        // Corrección de duplicados en Verificación: esta pantalla puede reenviar una
+        // métrica que YA fue enviada individualmente desde Parametrización (el usuario
+        // llega acá y vuelve a pulsar "Enviar al Scrum Master"). Antes este payload no
+        // incluía la escala estructurada, así que el backend veía un contenido distinto
+        // al ya pendiente y creaba una versión nueva — dos filas "pendiente" para la
+        // misma métrica. Enviando los mismos campos que parametrizacion.component.ts,
+        // el backend reconoce el reenvío como idéntico y no duplica.
+        escalaTipo:        s.parametrizacion!.escalaTipo ?? null,
+        escalaMin:         s.parametrizacion!.escalaMin ?? null,
+        escalaMax:         s.parametrizacion!.escalaMax ?? null,
+        escalaPaso:        s.parametrizacion!.escalaPaso ?? null,
+        escalaSinLimite:   s.parametrizacion!.escalaSinLimite ?? null,
+        escalaDescripcion: s.parametrizacion!.escalaDescripcion ?? null
+      }).pipe(
+        map(() => ({ ok: true as const, nombre: s.metricaNombre })),
+        catchError(err => of({
+          ok: false as const,
+          nombre: s.metricaNombre,
+          error: (err?.error?.error ?? err?.message ?? 'error desconocido') as string
+        }))
+      )
+    );
+
+    forkJoin(guardados$).subscribe(resultados => {
+      this.enviando = false;
+      const fallidas = resultados.filter(r => !r.ok) as { ok: false; nombre: string; error: string }[];
+
+      if (fallidas.length > 0) {
+        const detalle = fallidas.map(f => `${f.nombre} (${f.error})`).join('; ');
+        this.errorMsg = fallidas.length === resultados.length
+          ? `No se pudo enviar ninguna métrica al Scrum Master: ${detalle}. Tu selección se mantuvo intacta, podés reintentar.`
+          : `${fallidas.length} de ${resultados.length} métrica(s) no se pudieron enviar: ${detalle}. Tu selección se mantuvo intacta, podés reintentar.`;
+        return; // permanece en Resumen: no se limpia la selección ni se navega
+      }
+
+      // Todas las operaciones terminaron correctamente.
+      this.seleccionService.limpiar(); // Limpiar localStorage
+      this.router.navigate(['/verificacion']);
+    });
+  }
+
+  colorEstado(estado: string): string {
+    return ({ sin_parametrizar: '#dc3545', parcial: '#ffc107', completa: '#198754' } as Record<string, string>)[estado] ?? '#6c757d';
+  }
+
+  categoryBadge(cat: string): string {
+    const map: Record<string, string> = {
+      'Significado':      'bg-primary',
+      'Flexibilidad':     'bg-warning text-dark',
+      'Impacto':          'bg-danger',
+      'Socio-Humano FSH': 'bg-info text-dark'
+    };
+    return map[cat] ?? 'bg-secondary';
+  }
+}

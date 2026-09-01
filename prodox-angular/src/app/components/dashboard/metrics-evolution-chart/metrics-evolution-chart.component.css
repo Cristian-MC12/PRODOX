@@ -1,0 +1,4 @@
+/* Autor: Cristian Santiago Martinez Cordoba — PRODOX */
+.chart-canvas-wrap{position:relative;width:100%;aspect-ratio:2/1}
+.empty-chart{text-align:center;padding:var(--space-6) var(--space-4);color:var(--text-secondary)}
+.empty-chart i{font-size:3rem;color:var(--border);margin-bottom:var(--space-3);display:block}
