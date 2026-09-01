@@ -1,6 +1,7 @@
 export const environment = {
   production: true,
   apiBaseUrl: 'https://prodox-production.up.railway.app/api',
+  backendUrl: 'https://prodox-production.up.railway.app',
   // UUIDs de métricas base para producción (Railway)
   metricasBase: [
     'd0a56045-a0f5-47bf-9e96-a2056a99c709', // Defectos (SIG-CE-02)
