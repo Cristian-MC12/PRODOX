@@ -202,6 +202,9 @@ import { filter, Subscription } from 'rxjs';
             General
           </small>
           <div class="d-flex align-items-center gap-2 mb-2">
+            <div class="user-avatar">
+              {{ nombreMostrado().charAt(0).toUpperCase() }}
+            </div>
             <div class="flex-grow-1">
               <strong class="d-block">{{ nombreMostrado() }}</strong>
               <small class="text-muted d-block">{{ esScrumMaster() ? 'Scrum Master' : 'Scrum Member' }}</small>
