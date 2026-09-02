@@ -26,9 +26,9 @@ import { filter, Subscription } from 'rxjs';
         <img src="assets/images/logos/Logo-PRODOX-AI.jpg" alt="PRODOX AI" class="sidebar-brand-logo">
       </a>
 
-      <!-- Project Card Container -->
-      @if (proyectoActivo()) {
-        <div class="px-3" style="padding-bottom: 10px;">
+      <!-- Project Card Container - Solo visible cuando NO está colapsado -->
+      @if (proyectoActivo() && !collapsed()) {
+        <div class="px-3 project-card-wrapper" style="padding-bottom: 10px;">
           <div style="background: rgba(15, 23, 42, 0.6); border-radius: 8px; padding: 8px 10px;">
             <!-- Proyecto Activo -->
             <small class="text-uppercase d-block" style="font-size: 8px; letter-spacing: 0.05em; color: #FFFFFF; opacity: 0.5; margin-bottom: 5px;">
@@ -64,18 +64,23 @@ import { filter, Subscription } from 'rxjs';
 
       <!-- Nav links -->
       <ul class="nav flex-column flex-grow-1" style="margin-top: 4px;">
-        <!-- Separador Proyecto -->
-        <li class="nav-item px-3" style="padding-top: 4px; padding-bottom: 2px;">
-          <small class="text-muted text-uppercase" style="font-size:var(--text-2xs);letter-spacing:.05em">
-            Proyecto
-          </small>
-        </li>
+        <!-- Separador Proyecto - Solo visible cuando NO está colapsado -->
+        @if (!collapsed()) {
+          <li class="nav-item px-3" style="padding-top: 4px; padding-bottom: 2px;">
+            <small class="text-muted text-uppercase" style="font-size:var(--text-2xs);letter-spacing:.05em">
+              Proyecto
+            </small>
+          </li>
+        }
 
         <!-- Proyectos siempre visible -->
         <li class="nav-item">
           <a class="nav-link" routerLink="/proyectos" routerLinkActive="active" 
-             (click)="close()" title="Proyectos">
-            <i class="bi bi-folder2-open"></i>Proyectos
+             [title]="collapsed() ? 'Proyectos' : ''">
+            <i class="bi bi-folder2-open"></i>
+            @if (!collapsed()) {
+              <span>Proyectos</span>
+            }
           </a>
         </li>
 
@@ -85,9 +90,11 @@ import { filter, Subscription } from 'rxjs';
         @if (proyectoActivo()) {
           <li class="nav-item">
             <a class="nav-link" routerLink="/sprints" routerLinkActive="active" 
-               (click)="close()" title="Sprints">
+               [title]="collapsed() ? 'Sprints' : ''">
               <i class="bi bi-calendar3-range"></i>
-              <span>Sprints</span>
+              @if (!collapsed()) {
+                <span>Sprints</span>
+              }
             </a>
           </li>
         }
@@ -95,55 +102,70 @@ import { filter, Subscription } from 'rxjs';
         <!-- Equipo: inmediatamente debajo de Proyectos/Sprints (reorganización de navegación) -->
         <li class="nav-item">
           <a class="nav-link" routerLink="/equipo" routerLinkActive="active" 
-             (click)="close()" title="Equipo">
-            <i class="bi bi-people"></i>Equipo
+             [title]="collapsed() ? 'Equipo' : ''">
+            <i class="bi bi-people"></i>
+            @if (!collapsed()) {
+              <span>Equipo</span>
+            }
           </a>
         </li>
 
         @if (proyectoActivo()) {
-          <!-- Separador de fase -->
-          <li class="nav-item px-3" style="padding-top: 8px; padding-bottom: 2px;">
-            <small class="text-muted text-uppercase" style="font-size:var(--text-2xs);letter-spacing:.05em">
-              Fases del proyecto
-            </small>
-          </li>
+          <!-- Separador de fase - Solo visible cuando NO está colapsado -->
+          @if (!collapsed()) {
+            <li class="nav-item px-3" style="padding-top: 8px; padding-bottom: 2px;">
+              <small class="text-muted text-uppercase" style="font-size:var(--text-2xs);letter-spacing:.05em">
+                Fases del proyecto
+              </small>
+            </li>
+          }
 
           <li class="nav-item">
             <a class="nav-link" routerLink="/planeacion" routerLinkActive="active" 
-               (click)="close()" title="Planeación">
+               [title]="collapsed() ? 'Planeación' : ''">
               <i class="bi bi-layers"></i>
-              <span>Planeación</span>
+              @if (!collapsed()) {
+                <span>Planeación</span>
+              }
             </a>
           </li>
 
           <li class="nav-item">
             <a class="nav-link" routerLink="/ejecucion" routerLinkActive="active" 
-               (click)="close()" title="Ejecución">
+               [title]="collapsed() ? 'Ejecución' : ''">
               <i class="bi bi-pencil-square"></i>
-              <span>Ejecución</span>
+              @if (!collapsed()) {
+                <span>Ejecución</span>
+              }
             </a>
           </li>
 
           <li class="nav-item">
             <a class="nav-link" routerLink="/evaluacion" routerLinkActive="active" 
-               (click)="close()" title="Evaluación">
+               [title]="collapsed() ? 'Evaluación' : ''">
               <i class="bi bi-bar-chart-line"></i>
-              <span>Evaluación</span>
+              @if (!collapsed()) {
+                <span>Evaluación</span>
+              }
             </a>
           </li>
 
-          <!-- Separador IA -->
-          <li class="nav-item px-3" style="padding-top: 8px; padding-bottom: 2px;">
-            <small class="text-muted text-uppercase" style="font-size:var(--text-2xs);letter-spacing:.05em">
-              Análisis IA
-            </small>
-          </li>
+          <!-- Separador IA - Solo visible cuando NO está colapsado -->
+          @if (!collapsed()) {
+            <li class="nav-item px-3" style="padding-top: 8px; padding-bottom: 2px;">
+              <small class="text-muted text-uppercase" style="font-size:var(--text-2xs);letter-spacing:.05em">
+                Análisis IA
+              </small>
+            </li>
+          }
 
           <li class="nav-item">
             <a class="nav-link" routerLink="/dashboard" routerLinkActive="active" 
-               (click)="close()" title="Dashboard">
+               [title]="collapsed() ? 'Dashboard' : ''">
               <i class="bi bi-speedometer2"></i>
-              <span>Dashboard</span>
+              @if (!collapsed()) {
+                <span>Dashboard</span>
+              }
             </a>
           </li>
 
@@ -154,9 +176,11 @@ import { filter, Subscription } from 'rxjs';
 
           <li class="nav-item">
             <a class="nav-link" routerLink="/ai-report" routerLinkActive="active" 
-               (click)="close()" title="Reportes">
+               [title]="collapsed() ? 'Reportes' : ''">
               <i class="bi bi-file-earmark-bar-graph"></i>
-              <span>Reportes</span>
+              @if (!collapsed()) {
+                <span>Reportes</span>
+              }
             </a>
           </li>
 
@@ -172,27 +196,39 @@ import { filter, Subscription } from 'rxjs';
       </ul>
 
       <!-- User / logout -->
-      <div class="border-top p-3">
-        <small class="text-muted text-uppercase d-block mb-2" style="font-size:var(--text-2xs);letter-spacing:.05em">
-          General
-        </small>
-        <div class="d-flex align-items-center gap-2 mb-2">
-          <div>
-            <strong>{{ nombreMostrado() }}</strong>
-            <small class="text-muted d-block">{{ esScrumMaster() ? 'Scrum Master' : 'Scrum Member' }}</small>
+      <div class="border-top p-3 user-section">
+        @if (!collapsed()) {
+          <small class="text-muted text-uppercase d-block mb-2" style="font-size:var(--text-2xs);letter-spacing:.05em">
+            General
+          </small>
+          <div class="d-flex align-items-center gap-2 mb-2">
+            <div class="flex-grow-1">
+              <strong class="d-block">{{ nombreMostrado() }}</strong>
+              <small class="text-muted d-block">{{ esScrumMaster() ? 'Scrum Master' : 'Scrum Member' }}</small>
+            </div>
+            <i class="bi bi-three-dots-vertical"></i>
           </div>
-          <i class="bi bi-three-dots-vertical ms-auto"></i>
-        </div>
-        <button class="btn btn-sm btn-outline-secondary w-100" (click)="auth.logout()">
-          <i class="bi bi-box-arrow-right me-1"></i>Cerrar sesión
-        </button>
+          <button class="btn btn-sm btn-outline-secondary w-100" (click)="auth.logout()">
+            <i class="bi bi-box-arrow-right me-1"></i>Cerrar sesión
+          </button>
+        } @else {
+          <!-- Vista colapsada: solo avatar y botón de logout -->
+          <div class="d-flex flex-column align-items-center gap-2">
+            <div class="user-avatar-collapsed" [title]="nombreMostrado()">
+              {{ nombreMostrado().charAt(0).toUpperCase() }}
+            </div>
+            <button class="btn btn-icon-only" (click)="auth.logout()" title="Cerrar sesión">
+              <i class="bi bi-box-arrow-right"></i>
+            </button>
+          </div>
+        }
       </div>
     </nav>
   `
 })
 export class SidebarComponent implements OnInit, OnDestroy {
   open = signal(false);
-  collapsed = signal(false);
+  collapsed = signal(this.leerEstadoColapsado());
   proyectoActivo = signal<ProyectoDto | null>(this.leerProyectoActivo());
 
   private routerSub?: Subscription;
@@ -219,6 +255,19 @@ export class SidebarComponent implements OnInit, OnDestroy {
     } catch { return null; }
   }
 
+  private leerEstadoColapsado(): boolean {
+    try {
+      const raw = localStorage.getItem('mpdia_sidebar_collapsed');
+      return raw === 'true';
+    } catch { return false; }
+  }
+
+  private guardarEstadoColapsado(collapsed: boolean): void {
+    try {
+      localStorage.setItem('mpdia_sidebar_collapsed', String(collapsed));
+    } catch { }
+  }
+
   /**
    * Corrección: Scrum Master es siempre relativo al proyecto activo (su
    * scrumMasterEmail, fijado por el backend al crearlo), nunca el rol
@@ -241,6 +290,17 @@ export class SidebarComponent implements OnInit, OnDestroy {
   }
 
   toggle(): void { this.open.update(v => !v); }
-  close(): void  { this.open.set(false); }
-  toggleCollapse(): void { this.collapsed.update(v => !v); }
+  close(): void  { 
+    // Solo cerrar en modo móvil, NO cambiar el estado collapsed
+    if (this.open()) {
+      this.open.set(false); 
+    }
+  }
+  toggleCollapse(): void { 
+    this.collapsed.update(v => {
+      const newValue = !v;
+      this.guardarEstadoColapsado(newValue);
+      return newValue;
+    });
+  }
 }

@@ -14,13 +14,19 @@ import { catchError, of } from 'rxjs';
   imports: [CommonModule, SidebarComponent, NotificacionesBellComponent],
   template: `
     <div class="d-flex" [class.sidebar-collapsed]="sidebar.collapsed()">
+      <!-- Overlay oscuro para móvil -->
+      @if (sidebar.open()) {
+        <div class="sidebar-overlay" (click)="sidebar.close()"></div>
+      }
+      
       <app-sidebar #sidebar></app-sidebar>
 
       <div class="main-content w-100">
         <!-- Header -->
         <header class="page-header d-flex align-items-center justify-content-between gap-3">
-          <button class="btn btn-sm btn-outline-secondary d-md-none"
-                  (click)="sidebar.toggle()">
+          <button class="btn btn-sidebar-toggle"
+                  (click)="toggleSidebar(sidebar)"
+                  [title]="getTooltip(sidebar)">
             <i class="bi bi-list"></i>
           </button>
           @if (title) {
@@ -120,5 +126,25 @@ export class ShellComponent implements OnInit {
       'finalizado':   'bg-secondary',
       'reabierto':    'bg-info text-dark'
     } as Record<string, string>)[estado] ?? 'bg-secondary';
+  }
+
+  // Función inteligente para el botón hamburguesa
+  toggleSidebar(sidebar: any): void {
+    if (window.innerWidth < 768) {
+      // En móvil: abrir/cerrar overlay
+      sidebar.toggle();
+    } else {
+      // En desktop: colapsar/expandir
+      sidebar.toggleCollapse();
+    }
+  }
+
+  // Tooltip dinámico según el contexto
+  getTooltip(sidebar: any): string {
+    if (window.innerWidth < 768) {
+      return sidebar.open() ? 'Cerrar menú' : 'Abrir menú';
+    } else {
+      return sidebar.collapsed() ? 'Expandir sidebar' : 'Colapsar sidebar';
+    }
   }
 }
