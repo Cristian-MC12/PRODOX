@@ -188,8 +188,17 @@ public class SprintService {
             throw new IllegalArgumentException("Solo se pueden cerrar sprints que están en ejecución.");
         }
         marcarFinalizado(s);
+        sprintRepo.save(s);
+        
+        // Activar el siguiente sprint pendiente (igual que hace el scheduler)
+        sprintRepo.findFirstByProyectoIdAndEstadoOrderByNumeroAsc(s.getProyectoId(), "pendiente")
+                .ifPresent(siguiente -> {
+                    siguiente.setEstado("en_ejecucion");
+                    sprintRepo.save(siguiente);
+                });
+        
         Proyecto p = getProyecto(s.getProyectoId());
-        return toDto(sprintRepo.save(s), p);
+        return toDto(s, p);
     }
 
     private void marcarFinalizado(Sprint s) {
