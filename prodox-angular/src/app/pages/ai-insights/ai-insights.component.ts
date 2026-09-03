@@ -1,6 +1,7 @@
 // Autor: Cristian Santiago Martinez Cordoba — PRODOX
 import { Component, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { catchError, of } from 'rxjs';
 import { ShellComponent } from '../../layout/shell/shell.component';
@@ -12,7 +13,7 @@ import { LimpiarMarkdownIAPipe } from '../../core/limpiar-markdown-ia.pipe';
 @Component({
   selector: 'app-ai-insights',
   standalone: true,
-  imports: [CommonModule, ShellComponent, LimpiarMarkdownIAPipe],
+  imports: [CommonModule, FormsModule, ShellComponent, LimpiarMarkdownIAPipe],
   templateUrl: './ai-insights.component.html',
   styleUrl: './ai-insights.component.css'
 })
@@ -31,6 +32,13 @@ export class AIInsightsComponent implements OnInit {
   sortBy = signal<'fecha' | 'severidad'>('severidad');
   sortDirection = signal<'asc' | 'desc'>('desc');
   typeFilter = signal<string>('ALL');
+
+  // Estado de edición
+  editingInsightId: string | null = null;
+  editedTitle: string = '';
+  editedDescription: string = '';
+  editedRecommendation: string = '';
+  originalInsight: AIInsight | null = null;
 
   constructor(
     public router: Router,
@@ -301,5 +309,227 @@ export class AIInsightsComponent implements OnInit {
 
   toggleSortDirection(): void {
     this.sortDirection.update(dir => dir === 'asc' ? 'desc' : 'asc');
+  }
+
+  // ============ EDICIÓN DE INSIGHTS ============
+
+  editarInsight(insight: AIInsight): void {
+    this.editingInsightId = insight.id;
+    this.originalInsight = { ...insight };
+    this.editedTitle = insight.title;
+    this.editedDescription = insight.description;
+    this.editedRecommendation = insight.recommendation || '';
+  }
+
+  cancelarEdicion(): void {
+    this.editingInsightId = null;
+    this.editedTitle = '';
+    this.editedDescription = '';
+    this.editedRecommendation = '';
+    this.originalInsight = null;
+  }
+
+  guardarCambios(insight: AIInsight): void {
+    if (!this.editedTitle.trim() || !this.editedDescription.trim()) {
+      this.showAlert('El título y descripción no pueden estar vacíos', 'alert-warning');
+      return;
+    }
+
+    const updateData = {
+      title: this.editedTitle.trim(),
+      description: this.editedDescription.trim(),
+      recommendation: this.editedRecommendation.trim() || null
+    };
+
+    this.insightsService.updateInsight(insight.id, updateData)
+      .pipe(
+        catchError(err => {
+          console.error('Error actualizando insight:', err);
+          this.showAlert('Error al guardar los cambios', 'alert-danger');
+          return of(null);
+        })
+      )
+      .subscribe(updated => {
+        if (updated) {
+          // Actualizar el insight en la lista local
+          const index = this.insights.findIndex(i => i.id === insight.id);
+          if (index !== -1) {
+            this.insights[index] = { ...this.insights[index], ...updateData };
+          }
+          this.showAlert('Insight actualizado correctamente', 'alert-success');
+          this.cancelarEdicion();
+        }
+      });
+  }
+
+  estaEditando(insightId: string): boolean {
+    return this.editingInsightId === insightId;
+  }
+
+  // ============ EXPORTACIÓN A WORD ============
+
+  async exportarAWord(): Promise<void> {
+    if (this.insights.length === 0) {
+      this.showAlert('No hay insights para exportar', 'alert-warning');
+      return;
+    }
+
+    try {
+      // Usar importaciones dinámicas para optimizar el bundle
+      const { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } = await import('docx');
+      const { saveAs } = await import('file-saver');
+
+      const doc = new Document({
+        sections: [{
+          properties: {},
+          children: [
+            // Título del documento
+            new Paragraph({
+              text: 'AI Insights — Análisis Agile',
+              heading: HeadingLevel.HEADING_1,
+              alignment: AlignmentType.CENTER,
+              spacing: { after: 400 }
+            }),
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: `Proyecto: ${this.proyecto?.nombre || 'Sin nombre'}`,
+                  bold: true
+                })
+              ],
+              spacing: { after: 200 }
+            }),
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: `Fecha de exportación: ${new Date().toLocaleDateString('es-AR')}`,
+                  italics: true
+                })
+              ],
+              spacing: { after: 400 }
+            }),
+            new Paragraph({
+              text: `Total de insights: ${this.insights.length}`,
+              spacing: { after: 600 }
+            }),
+
+            // Insights
+            ...this.insights.flatMap((insight, index) => [
+              new Paragraph({
+                text: `${index + 1}. ${insight.title}`,
+                heading: HeadingLevel.HEADING_2,
+                spacing: { before: 400, after: 200 }
+              }),
+              new Paragraph({
+                children: [
+                  new TextRun({ text: 'Tipo: ', bold: true }),
+                  new TextRun(this.getTypeLabel(insight.type))
+                ],
+                spacing: { after: 100 }
+              }),
+              new Paragraph({
+                children: [
+                  new TextRun({ text: 'Severidad: ', bold: true }),
+                  new TextRun(this.getSeverityLabel(insight.severity))
+                ],
+                spacing: { after: 100 }
+              }),
+              new Paragraph({
+                children: [
+                  new TextRun({ text: 'Confianza: ', bold: true }),
+                  new TextRun(this.getConfidenceLabel(insight.confidence))
+                ],
+                spacing: { after: 200 }
+              }),
+              new Paragraph({
+                text: 'Observación',
+                heading: HeadingLevel.HEADING_3,
+                spacing: { after: 100 }
+              }),
+              new Paragraph({
+                text: insight.description,
+                spacing: { after: 200 }
+              }),
+
+              // Evidencia
+              ...(insight.evidence && insight.evidence.length > 0 ? [
+                new Paragraph({
+                  text: 'Evidencia',
+                  heading: HeadingLevel.HEADING_3,
+                  spacing: { after: 100 }
+                }),
+                ...insight.evidence.flatMap(evidence => [
+                  new Paragraph({
+                    children: [
+                      new TextRun({ text: `${evidence.categoria}: `, bold: true }),
+                      new TextRun(this.formatEvidenceForWord(evidence))
+                    ],
+                    spacing: { after: 100 }
+                  })
+                ])
+              ] : []),
+
+              // Recomendación
+              ...(insight.recommendation ? [
+                new Paragraph({
+                  text: 'Recomendación',
+                  heading: HeadingLevel.HEADING_3,
+                  spacing: { after: 100, before: 200 }
+                }),
+                new Paragraph({
+                  text: insight.recommendation,
+                  spacing: { after: 200 }
+                })
+              ] : []),
+
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text: `Generado: ${new Date(insight.createdAt).toLocaleString('es-AR')}`,
+                    italics: true,
+                    size: 18
+                  })
+                ],
+                spacing: { after: 400 }
+              })
+            ])
+          ]
+        }]
+      });
+
+      const blob = await Packer.toBlob(doc);
+      const fileName = `Insights_${this.proyecto?.nombre || 'Proyecto'}_${new Date().toISOString().split('T')[0]}.docx`;
+      saveAs(blob, fileName);
+
+      this.showAlert('Documento Word exportado correctamente', 'alert-success');
+    } catch (error) {
+      console.error('Error exportando a Word:', error);
+      this.showAlert('Error al exportar a Word. Verificá que las dependencias estén instaladas.', 'alert-danger');
+    }
+  }
+
+  private formatEvidenceForWord(evidence: InsightEvidence): string {
+    const parts: string[] = [];
+    
+    if (evidence.valorActual !== null) {
+      parts.push(`Valor actual: ${evidence.valorActual.toFixed(2)}`);
+    }
+    if (evidence.valorAnterior !== null) {
+      parts.push(`Valor anterior: ${evidence.valorAnterior.toFixed(2)}`);
+    }
+    if (evidence.promedioHistorico !== null) {
+      parts.push(`Promedio: ${evidence.promedioHistorico.toFixed(2)}`);
+    }
+    if (evidence.variacionPorcentual !== null) {
+      parts.push(`Variación: ${evidence.variacionPorcentual.toFixed(1)}%`);
+    }
+    if (evidence.tendencia) {
+      parts.push(`Tendencia: ${evidence.tendencia}`);
+    }
+    if (evidence.numeroSprints !== null) {
+      parts.push(`Sprints: ${evidence.numeroSprints}`);
+    }
+    
+    return parts.join(', ');
   }
 }

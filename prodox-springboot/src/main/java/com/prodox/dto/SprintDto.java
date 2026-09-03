@@ -19,5 +19,15 @@ public record SprintDto(
     LocalDate fechaFin,
     String    cerradoPor,
     Instant   cerradoAt,
-    Instant   createdAt
+    Instant   createdAt,
+    /** V41 — timebox real del proyecto dueño de este sprint: HORAS | DIAS |
+     *  SEMANAS + duración en esa unidad (copiado de Proyecto, mismo patrón
+     *  que timeBoxSemanas). */
+    String    timeboxUnidad,
+    Integer   timeboxDuracion,
+    /** Representación temporal real (fecha+hora) del inicio/fin de este
+     *  sprint — solo no-null cuando el timebox del proyecto está en HORAS.
+     *  Para días/semanas siguen siendo la fuente de verdad fechaInicio/fechaFin. */
+    Instant   fechaHoraInicio,
+    Instant   fechaHoraFin
 ) {}

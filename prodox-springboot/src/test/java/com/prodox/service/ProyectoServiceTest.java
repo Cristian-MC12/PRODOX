@@ -18,6 +18,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -58,6 +59,8 @@ class ProyectoServiceTest {
         proyecto.setDescripcion("Descripción");
         proyecto.setMetodo("scrum");
         proyecto.setTimeBoxSemanas(2);
+        proyecto.setTimeboxUnidad("SEMANAS");
+        proyecto.setTimeboxDuracion(2);
         proyecto.setNumeroSprints(3);
         proyecto.setFechaInicio(java.time.LocalDate.now());
         proyecto.setProductGoal("Medir productividad");
@@ -78,7 +81,7 @@ class ProyectoServiceTest {
         when(memberRepo.findByProyectoId(proyectoId)).thenReturn(List.of());
 
         CrearProyectoRequest req = new CrearProyectoRequest(
-                "Sistema PRODOX", "Descripción", "scrum", 2, 3,
+                "Sistema PRODOX", "Descripción", "scrum", "SEMANAS", 2, null, 3,
                 LocalDate.now(), "Medir productividad");
 
         ProyectoDto dto = proyectoService.crear(smId.toString(), req);
@@ -86,10 +89,12 @@ class ProyectoServiceTest {
         assertThat(dto.nombre()).isEqualTo("Sistema PRODOX");
         assertThat(dto.metodo()).isEqualTo("scrum");
         assertThat(dto.estado()).isEqualTo("activo");
+        assertThat(dto.timeboxUnidad()).isEqualTo("SEMANAS");
+        assertThat(dto.timeboxDuracion()).isEqualTo(2);
         verify(proyectoRepo).save(any(Proyecto.class));
         verify(projectMemberService).agregarScrumMaster(eq(proyectoId), eq(smId.toString()), eq("sm@prodox.com"));
-        verify(sprintService).crearSprintsIniciales(eq(proyectoId), eq("Sprint 1"),
-                eq(3), eq(2), any(LocalDate.class));
+        verify(sprintService).crearSprintsIniciales(eq(proyectoId), eq("Sprint 1"), eq(3),
+                eq("SEMANAS"), eq(2), any(LocalDate.class), isNull());
     }
 
     @Test
@@ -99,7 +104,7 @@ class ProyectoServiceTest {
         when(userRepo.findById(smId)).thenReturn(Optional.of(scrumMaster));
 
         CrearProyectoRequest req = new CrearProyectoRequest(
-                "Proyecto", null, "scrum", 1, 3, LocalDate.now(), "Goal");
+                "Proyecto", null, "scrum", "SEMANAS", 1, null, 3, LocalDate.now(), "Goal");
 
         assertThatThrownBy(() -> proyectoService.crear(smId.toString(), req))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -112,11 +117,203 @@ class ProyectoServiceTest {
         when(userRepo.findById(smId)).thenReturn(Optional.empty());
 
         CrearProyectoRequest req = new CrearProyectoRequest(
-                "Proyecto", null, "scrum", 1, 3, LocalDate.now(), "Goal");
+                "Proyecto", null, "scrum", "SEMANAS", 1, null, 3, LocalDate.now(), "Goal");
 
         assertThatThrownBy(() -> proyectoService.crear(smId.toString(), req))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Usuario no encontrado");
+    }
+
+    // ── V41: Timebox de la iteración (horas/días/semanas) ──────────────────
+
+    private void mockeaCreacionExitosa() {
+        when(userRepo.findById(smId)).thenReturn(Optional.of(scrumMaster));
+        when(proyectoRepo.save(any(Proyecto.class))).thenAnswer(i -> i.getArgument(0));
+        when(memberRepo.findByProyectoId(any())).thenReturn(List.of());
+    }
+
+    @Test
+    @DisplayName("crear: timebox en HORAS crea el proyecto con hora de inicio y llama a SprintService con esa unidad")
+    void crear_timeboxHoras_creaProyectoYPropagaASprintService() {
+        mockeaCreacionExitosa();
+
+        CrearProyectoRequest req = new CrearProyectoRequest(
+                "Proyecto Horas", null, "scrum", "HORAS", 8, LocalTime.of(8, 0),
+                3, LocalDate.of(2026, 9, 2), "Goal");
+
+        ProyectoDto dto = proyectoService.crear(smId.toString(), req);
+
+        assertThat(dto.timeboxUnidad()).isEqualTo("HORAS");
+        assertThat(dto.timeboxDuracion()).isEqualTo(8);
+        assertThat(dto.horaInicio()).isEqualTo(LocalTime.of(8, 0));
+        // Campo legado acotado a 1-4 (168h = 1 semana; 8h redondea hacia arriba a 1 semana).
+        assertThat(dto.timeBoxSemanas()).isEqualTo(1);
+        verify(sprintService).crearSprintsIniciales(any(), eq("Sprint 1"), eq(3),
+                eq("HORAS"), eq(8), eq(LocalDate.of(2026, 9, 2)), eq(LocalTime.of(8, 0)));
+    }
+
+    @Test
+    @DisplayName("crear: timebox en DIAS crea el proyecto y llama a SprintService con esa unidad, sin hora de inicio")
+    void crear_timeboxDias_creaProyectoYPropagaASprintService() {
+        mockeaCreacionExitosa();
+
+        CrearProyectoRequest req = new CrearProyectoRequest(
+                "Proyecto Días", null, "scrum", "DIAS", 3, null,
+                4, LocalDate.of(2026, 9, 2), "Goal");
+
+        ProyectoDto dto = proyectoService.crear(smId.toString(), req);
+
+        assertThat(dto.timeboxUnidad()).isEqualTo("DIAS");
+        assertThat(dto.timeboxDuracion()).isEqualTo(3);
+        assertThat(dto.horaInicio()).isNull();
+        verify(sprintService).crearSprintsIniciales(any(), eq("Sprint 1"), eq(4),
+                eq("DIAS"), eq(3), eq(LocalDate.of(2026, 9, 2)), isNull());
+    }
+
+    @Test
+    @DisplayName("crear: timebox en SEMANAS conserva exactamente el comportamiento previo a V41")
+    void crear_timeboxSemanas_conservaComportamientoPrevio() {
+        mockeaCreacionExitosa();
+
+        CrearProyectoRequest req = new CrearProyectoRequest(
+                "Proyecto Semanas", null, "scrum", "SEMANAS", 2, null,
+                3, LocalDate.of(2026, 9, 2), "Goal");
+
+        ProyectoDto dto = proyectoService.crear(smId.toString(), req);
+
+        assertThat(dto.timeboxUnidad()).isEqualTo("SEMANAS");
+        assertThat(dto.timeboxDuracion()).isEqualTo(2);
+        assertThat(dto.timeBoxSemanas()).isEqualTo(2); // idéntico a timeboxDuracion, sin aproximación
+        verify(sprintService).crearSprintsIniciales(any(), eq("Sprint 1"), eq(3),
+                eq("SEMANAS"), eq(2), eq(LocalDate.of(2026, 9, 2)), isNull());
+    }
+
+    @Test
+    @DisplayName("crear: rechaza duración de timebox vacía (null)")
+    void crear_timeboxDuracionNull_lanzaExcepcion() {
+        when(userRepo.findById(smId)).thenReturn(Optional.of(scrumMaster));
+
+        CrearProyectoRequest req = new CrearProyectoRequest(
+                "Proyecto", null, "scrum", "SEMANAS", null, null, 3, LocalDate.now(), "Goal");
+
+        assertThatThrownBy(() -> proyectoService.crear(smId.toString(), req))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("mayor a 0");
+        verify(proyectoRepo, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("crear: rechaza duración de timebox en 0")
+    void crear_timeboxDuracionCero_lanzaExcepcion() {
+        when(userRepo.findById(smId)).thenReturn(Optional.of(scrumMaster));
+
+        CrearProyectoRequest req = new CrearProyectoRequest(
+                "Proyecto", null, "scrum", "DIAS", 0, null, 3, LocalDate.now(), "Goal");
+
+        assertThatThrownBy(() -> proyectoService.crear(smId.toString(), req))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("mayor a 0");
+        verify(proyectoRepo, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("crear: rechaza duración de timebox negativa")
+    void crear_timeboxDuracionNegativa_lanzaExcepcion() {
+        when(userRepo.findById(smId)).thenReturn(Optional.of(scrumMaster));
+
+        CrearProyectoRequest req = new CrearProyectoRequest(
+                "Proyecto", null, "scrum", "HORAS", -5, LocalTime.of(8, 0), 3, LocalDate.now(), "Goal");
+
+        assertThatThrownBy(() -> proyectoService.crear(smId.toString(), req))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("mayor a 0");
+        verify(proyectoRepo, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("crear: rechaza unidad de timebox inválida (defensa en profundidad, sin pasar por @Pattern del DTO)")
+    void crear_timeboxUnidadInvalida_lanzaExcepcion() {
+        when(userRepo.findById(smId)).thenReturn(Optional.of(scrumMaster));
+
+        CrearProyectoRequest req = new CrearProyectoRequest(
+                "Proyecto", null, "scrum", "MESES", 1, null, 3, LocalDate.now(), "Goal");
+
+        assertThatThrownBy(() -> proyectoService.crear(smId.toString(), req))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Unidad de timebox inválida");
+        verify(proyectoRepo, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("crear: rechaza timebox en SEMANAS fuera del rango histórico (>4)")
+    void crear_timeboxSemanasFueraDeRango_lanzaExcepcion() {
+        when(userRepo.findById(smId)).thenReturn(Optional.of(scrumMaster));
+
+        CrearProyectoRequest req = new CrearProyectoRequest(
+                "Proyecto", null, "scrum", "SEMANAS", 5, null, 3, LocalDate.now(), "Goal");
+
+        assertThatThrownBy(() -> proyectoService.crear(smId.toString(), req))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("entre 1 y 4");
+        verify(proyectoRepo, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("crear: rechaza timebox en DIAS fuera de rango (>30)")
+    void crear_timeboxDiasFueraDeRango_lanzaExcepcion() {
+        when(userRepo.findById(smId)).thenReturn(Optional.of(scrumMaster));
+
+        CrearProyectoRequest req = new CrearProyectoRequest(
+                "Proyecto", null, "scrum", "DIAS", 31, null, 3, LocalDate.now(), "Goal");
+
+        assertThatThrownBy(() -> proyectoService.crear(smId.toString(), req))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("entre 1 y 30");
+        verify(proyectoRepo, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("crear: rechaza timebox en HORAS fuera de rango (>168)")
+    void crear_timeboxHorasFueraDeRango_lanzaExcepcion() {
+        when(userRepo.findById(smId)).thenReturn(Optional.of(scrumMaster));
+
+        CrearProyectoRequest req = new CrearProyectoRequest(
+                "Proyecto", null, "scrum", "HORAS", 200, LocalTime.of(8, 0), 3, LocalDate.now(), "Goal");
+
+        assertThatThrownBy(() -> proyectoService.crear(smId.toString(), req))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("entre 1 y 168");
+        verify(proyectoRepo, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("crear: rechaza timebox en HORAS sin hora de inicio (fecha/hora de inicio inválida)")
+    void crear_timeboxHorasSinHoraInicio_lanzaExcepcion() {
+        when(userRepo.findById(smId)).thenReturn(Optional.of(scrumMaster));
+
+        CrearProyectoRequest req = new CrearProyectoRequest(
+                "Proyecto", null, "scrum", "HORAS", 8, null, 3, LocalDate.now(), "Goal");
+
+        assertThatThrownBy(() -> proyectoService.crear(smId.toString(), req))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("hora de inicio");
+        verify(proyectoRepo, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("crear: un Scrum Member no puede crear proyecto (y por lo tanto no puede fijar el Timebox) ni por llamada directa al servicio")
+    void crear_scrumMemberIntentaFijarTimebox_lanzaExcepcion() {
+        scrumMaster.setRole("scrum_member");
+        when(userRepo.findById(smId)).thenReturn(Optional.of(scrumMaster));
+
+        CrearProyectoRequest req = new CrearProyectoRequest(
+                "Proyecto", null, "scrum", "HORAS", 8, LocalTime.of(8, 0), 3, LocalDate.now(), "Goal");
+
+        assertThatThrownBy(() -> proyectoService.crear(smId.toString(), req))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Solo el Scrum Master");
+        verify(proyectoRepo, never()).save(any());
+        verify(sprintService, never()).crearSprintsIniciales(any(), any(), anyInt(), any(), anyInt(), any(), any());
     }
 
     // ── listarMisProyectos ────────────────────────────────────────────────
@@ -165,6 +362,28 @@ class ProyectoServiceTest {
         ProyectoDto dto = proyectoService.getById(proyectoId, smId.toString());
 
         assertThat(dto.nombre()).isEqualTo("Sistema PRODOX");
+    }
+
+    @Test
+    @DisplayName("getById: miRol refleja el rol POR PROYECTO (ProjectMember.rol), no el rol global de AppUser")
+    void getById_miRolReflejaProjectMemberRolNoRolGlobal() {
+        // El usuario global es "scrum_master" (scrumMaster.setRole en setUp), pero en
+        // ESTE proyecto es product_owner — miRol debe reflejar el rol por proyecto.
+        ProjectMember comoProductOwner = new ProjectMember();
+        comoProductOwner.setProyectoId(proyectoId);
+        comoProductOwner.setUserId(smId.toString());
+        comoProductOwner.setRol("product_owner");
+
+        when(memberRepo.existsByProyectoIdAndUserId(proyectoId, smId.toString())).thenReturn(true);
+        when(proyectoRepo.findById(proyectoId)).thenReturn(Optional.of(proyecto));
+        when(userRepo.findById(smId)).thenReturn(Optional.of(scrumMaster));
+        when(memberRepo.findByProyectoId(proyectoId)).thenReturn(List.of());
+        when(memberRepo.findByProyectoIdAndUserId(proyectoId, smId.toString())).thenReturn(Optional.of(comoProductOwner));
+
+        ProyectoDto dto = proyectoService.getById(proyectoId, smId.toString());
+
+        assertThat(dto.miRol()).isEqualTo("product_owner");
+        assertThat(scrumMaster.getRole()).isEqualTo("scrum_master"); // rol global sin cambios
     }
 
     @Test

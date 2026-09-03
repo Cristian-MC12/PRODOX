@@ -10,11 +10,15 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -56,6 +60,106 @@ class SprintServiceTest {
         sprintEnEjecucion.setEstado("en_ejecucion");
         sprintEnEjecucion.setFechaInicio(LocalDate.now().minusWeeks(1));
         sprintEnEjecucion.setFechaFin(LocalDate.now().plusWeeks(1));
+    }
+
+    // ── V41: crearSprintsIniciales (timebox en horas/días/semanas) ─────────
+
+    @Test
+    @DisplayName("crearSprintsIniciales: SEMANAS conserva EXACTAMENTE la fórmula previa a V41")
+    void crearSprintsIniciales_semanas_calculaFechasIgualQueAntes() {
+        when(sprintRepo.save(any(Sprint.class))).thenAnswer(i -> i.getArgument(0));
+
+        sprintService.crearSprintsIniciales(proyectoId, "Meta", 2,
+                "SEMANAS", 2, LocalDate.of(2026, 1, 1), null);
+
+        ArgumentCaptor<Sprint> captor = ArgumentCaptor.forClass(Sprint.class);
+        verify(sprintRepo, times(2)).save(captor.capture());
+        List<Sprint> guardados = captor.getAllValues();
+
+        assertThat(guardados.get(0).getFechaInicio()).isEqualTo(LocalDate.of(2026, 1, 1));
+        assertThat(guardados.get(0).getFechaFin()).isEqualTo(LocalDate.of(2026, 1, 14));
+        assertThat(guardados.get(0).getEstado()).isEqualTo("en_ejecucion");
+        assertThat(guardados.get(0).getFechaHoraInicio()).isNull();
+
+        assertThat(guardados.get(1).getFechaInicio()).isEqualTo(LocalDate.of(2026, 1, 15));
+        assertThat(guardados.get(1).getFechaFin()).isEqualTo(LocalDate.of(2026, 1, 28));
+        assertThat(guardados.get(1).getEstado()).isEqualTo("pendiente");
+    }
+
+    @Test
+    @DisplayName("crearSprintsIniciales: DIAS calcula fechas análogas a semanas, pero por días")
+    void crearSprintsIniciales_dias_calculaFechasAnalogo() {
+        when(sprintRepo.save(any(Sprint.class))).thenAnswer(i -> i.getArgument(0));
+
+        sprintService.crearSprintsIniciales(proyectoId, "Meta", 2,
+                "DIAS", 3, LocalDate.of(2026, 1, 1), null);
+
+        ArgumentCaptor<Sprint> captor = ArgumentCaptor.forClass(Sprint.class);
+        verify(sprintRepo, times(2)).save(captor.capture());
+        List<Sprint> guardados = captor.getAllValues();
+
+        assertThat(guardados.get(0).getFechaInicio()).isEqualTo(LocalDate.of(2026, 1, 1));
+        assertThat(guardados.get(0).getFechaFin()).isEqualTo(LocalDate.of(2026, 1, 3));
+        assertThat(guardados.get(1).getFechaInicio()).isEqualTo(LocalDate.of(2026, 1, 4));
+        assertThat(guardados.get(1).getFechaFin()).isEqualTo(LocalDate.of(2026, 1, 6));
+    }
+
+    @Test
+    @DisplayName("crearSprintsIniciales: HORAS calcula fecha/hora de fin respetando la duración exacta (mismo día)")
+    void crearSprintsIniciales_horas_calculaFechaHoraFinMismoDia() {
+        when(sprintRepo.save(any(Sprint.class))).thenAnswer(i -> i.getArgument(0));
+
+        sprintService.crearSprintsIniciales(proyectoId, "Meta", 1,
+                "HORAS", 8, LocalDate.of(2026, 9, 2), LocalTime.of(8, 0));
+
+        ArgumentCaptor<Sprint> captor = ArgumentCaptor.forClass(Sprint.class);
+        verify(sprintRepo).save(captor.capture());
+        Sprint s = captor.getValue();
+
+        ZoneId zona = ZoneId.systemDefault();
+        assertThat(s.getFechaHoraInicio()).isEqualTo(LocalDateTime.of(2026, 9, 2, 8, 0).atZone(zona).toInstant());
+        assertThat(s.getFechaHoraFin()).isEqualTo(LocalDateTime.of(2026, 9, 2, 16, 0).atZone(zona).toInstant());
+        // fechaInicio/fechaFin (DATE) también se completan, para el código existente que ya los lee.
+        assertThat(s.getFechaInicio()).isEqualTo(LocalDate.of(2026, 9, 2));
+        assertThat(s.getFechaFin()).isEqualTo(LocalDate.of(2026, 9, 2));
+    }
+
+    @Test
+    @DisplayName("crearSprintsIniciales: HORAS respeta el cambio de día — 10 horas desde las 16:00 terminan a las 02:00 del día siguiente, sin limitarse a las 23:59")
+    void crearSprintsIniciales_horas_respetaElCambioDeDia() {
+        when(sprintRepo.save(any(Sprint.class))).thenAnswer(i -> i.getArgument(0));
+
+        sprintService.crearSprintsIniciales(proyectoId, "Meta", 1,
+                "HORAS", 10, LocalDate.of(2026, 9, 2), LocalTime.of(16, 0));
+
+        ArgumentCaptor<Sprint> captor = ArgumentCaptor.forClass(Sprint.class);
+        verify(sprintRepo).save(captor.capture());
+        Sprint s = captor.getValue();
+
+        ZoneId zona = ZoneId.systemDefault();
+        assertThat(s.getFechaHoraFin()).isEqualTo(LocalDateTime.of(2026, 9, 3, 2, 0).atZone(zona).toInstant());
+        assertThat(s.getFechaFin()).isEqualTo(LocalDate.of(2026, 9, 3));
+    }
+
+    @Test
+    @DisplayName("crearSprintsIniciales: HORAS con múltiples sprints avanza secuencialmente respetando la duración de cada uno")
+    void crearSprintsIniciales_horas_multiplesSprintsAvanzanSecuencialmente() {
+        when(sprintRepo.save(any(Sprint.class))).thenAnswer(i -> i.getArgument(0));
+
+        sprintService.crearSprintsIniciales(proyectoId, "Meta", 2,
+                "HORAS", 8, LocalDate.of(2026, 9, 2), LocalTime.of(8, 0));
+
+        ArgumentCaptor<Sprint> captor = ArgumentCaptor.forClass(Sprint.class);
+        verify(sprintRepo, times(2)).save(captor.capture());
+        List<Sprint> guardados = captor.getAllValues();
+
+        ZoneId zona = ZoneId.systemDefault();
+        // Sprint 1: 08:00 -> 16:00 del mismo día.
+        assertThat(guardados.get(0).getFechaHoraInicio()).isEqualTo(LocalDateTime.of(2026, 9, 2, 8, 0).atZone(zona).toInstant());
+        assertThat(guardados.get(0).getFechaHoraFin()).isEqualTo(LocalDateTime.of(2026, 9, 2, 16, 0).atZone(zona).toInstant());
+        // Sprint 2: continúa exactamente donde terminó el 1 -> 16:00 a medianoche.
+        assertThat(guardados.get(1).getFechaHoraInicio()).isEqualTo(LocalDateTime.of(2026, 9, 2, 16, 0).atZone(zona).toInstant());
+        assertThat(guardados.get(1).getFechaHoraFin()).isEqualTo(LocalDateTime.of(2026, 9, 3, 0, 0).atZone(zona).toInstant());
     }
 
     // ── crearSprintInicial ────────────────────────────────────────────────

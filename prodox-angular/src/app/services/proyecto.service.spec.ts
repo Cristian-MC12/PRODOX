@@ -43,7 +43,8 @@ describe('ProyectoService', () => {
       nombre: 'Sistema PRODOX',
       descripcion: 'Desc',
       metodo: 'scrum',
-      timeBoxSemanas: 2,
+      timeboxUnidad: 'SEMANAS',
+      timeboxDuracion: 2,
       numeroSprints: 3,
       fechaInicio: '2026-06-01',
       productGoal: 'Goal producto'

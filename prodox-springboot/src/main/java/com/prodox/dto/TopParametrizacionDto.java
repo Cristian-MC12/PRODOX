@@ -12,19 +12,29 @@ import java.util.UUID;
  * frontend parametrizacion.component.ts) pueda reutilizar la parametrización
  * COMPLETA en vez de copiar solo objetivo/procedimiento/indicadorVariable/escala
  * y descartar el resto — bug corregido en la revisión de Ejecución/Parametrización.
+ * 
+ * Incluye también los campos de escala estructurada para que "Usar" pueda prellenar
+ * todos los campos del formulario de parametrización.
  */
 public record TopParametrizacionDto(
-    UUID    id,
-    String  userEmail,
-    String  objetivo,
-    String  procedimiento,
-    String  indicadorVariable,
-    String  escala,
-    int     usos,
-    Instant createdAt,
-    String  frecuenciaCaptura,
-    String  fuenteAcademica,
-    String  formulaAcademica,
-    String  tipoOperacion,
-    String  unidadResultado
+    UUID           id,
+    String         userEmail,
+    String         objetivo,
+    String         procedimiento,
+    String         indicadorVariable,
+    String         escala,
+    int            usos,
+    Instant        createdAt,
+    String         frecuenciaCaptura,
+    String         fuenteAcademica,
+    String         formulaAcademica,
+    String         tipoOperacion,
+    String         unidadResultado,
+    // Campos de escala estructurada
+    String         escalaTipo,
+    java.math.BigDecimal escalaMin,
+    java.math.BigDecimal escalaMax,
+    java.math.BigDecimal escalaPaso,
+    Boolean        escalaSinLimite,
+    String         escalaDescripcion
 ) {}

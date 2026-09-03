@@ -144,7 +144,7 @@ class ProjectMemberServiceTest {
         when(invRepo.save(any(ProjectInvitacion.class))).thenAnswer(i -> i.getArgument(0));
         when(emailService.enviar(eq("member@prodox.com"), anyString(), anyString())).thenReturn(true);
 
-        InvitarProyectoRequest req = new InvitarProyectoRequest("member@prodox.com");
+        InvitarProyectoRequest req = new InvitarProyectoRequest("member@prodox.com", null);
         InvitarProyectoResponse res = service.invitar(proyectoId, smId.toString(), req);
 
         assertThat(res.codigo()).startsWith("PRJ-");
@@ -173,7 +173,7 @@ class ProjectMemberServiceTest {
         when(invRepo.save(any(ProjectInvitacion.class))).thenAnswer(i -> i.getArgument(0));
         when(emailService.enviar(anyString(), anyString(), anyString())).thenReturn(false);
 
-        InvitarProyectoRequest req = new InvitarProyectoRequest("member@prodox.com");
+        InvitarProyectoRequest req = new InvitarProyectoRequest("member@prodox.com", null);
         InvitarProyectoResponse res = service.invitar(proyectoId, smId.toString(), req);
 
         assertThat(res.codigo()).startsWith("PRJ-");
@@ -186,7 +186,7 @@ class ProjectMemberServiceTest {
     void invitar_proyectoInexistente_lanzaExcepcion() {
         when(proyectoRepo.findById(proyectoId)).thenReturn(Optional.empty());
 
-        InvitarProyectoRequest req = new InvitarProyectoRequest("alguien@prodox.com");
+        InvitarProyectoRequest req = new InvitarProyectoRequest("alguien@prodox.com", null);
 
         assertThatThrownBy(() -> service.invitar(proyectoId, smId.toString(), req))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -201,13 +201,422 @@ class ProjectMemberServiceTest {
         when(proyectoRepo.findById(proyectoId)).thenReturn(Optional.of(proyecto));
 
         String otroId = UUID.randomUUID().toString();
-        InvitarProyectoRequest req = new InvitarProyectoRequest("alguien@prodox.com");
+        InvitarProyectoRequest req = new InvitarProyectoRequest("alguien@prodox.com", null);
 
         assertThatThrownBy(() -> service.invitar(proyectoId, otroId, req))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Solo el Scrum Master puede invitar");
         verify(invRepo, never()).save(any());
         verify(emailService, never()).enviar(anyString(), anyString(), anyString());
+    }
+
+    // ── invitar con rol (V39 — Product Owner) ──────────────────────────────
+
+    @Test
+    @DisplayName("invitar: SM puede invitar con rol product_owner — la invitación queda marcada con ese rol")
+    void invitar_conRolProductOwner_persisteRolEnLaInvitacion() {
+        when(proyectoRepo.findById(proyectoId)).thenReturn(Optional.of(proyecto));
+        when(invRepo.save(any(ProjectInvitacion.class))).thenAnswer(i -> i.getArgument(0));
+        when(emailService.enviar(anyString(), anyString(), anyString())).thenReturn(true);
+
+        InvitarProyectoRequest req = new InvitarProyectoRequest("po@prodox.com", "product_owner");
+        service.invitar(proyectoId, smId.toString(), req);
+
+        ArgumentCaptor<ProjectInvitacion> captor = ArgumentCaptor.forClass(ProjectInvitacion.class);
+        verify(invRepo).save(captor.capture());
+        assertThat(captor.getValue().getRol()).isEqualTo("product_owner");
+    }
+
+    @Test
+    @DisplayName("invitar: sin rol especificado, la invitación conserva el comportamiento previo a V39 (scrum_member)")
+    void invitar_sinRol_persisteScrumMemberPorDefecto() {
+        when(proyectoRepo.findById(proyectoId)).thenReturn(Optional.of(proyecto));
+        when(invRepo.save(any(ProjectInvitacion.class))).thenAnswer(i -> i.getArgument(0));
+        when(emailService.enviar(anyString(), anyString(), anyString())).thenReturn(true);
+
+        InvitarProyectoRequest req = new InvitarProyectoRequest("member@prodox.com", null);
+        service.invitar(proyectoId, smId.toString(), req);
+
+        ArgumentCaptor<ProjectInvitacion> captor = ArgumentCaptor.forClass(ProjectInvitacion.class);
+        verify(invRepo).save(captor.capture());
+        assertThat(captor.getValue().getRol()).isEqualTo("scrum_member");
+    }
+
+    @Test
+    @DisplayName("unirse: una invitación marcada como product_owner crea el ProjectMember con ese rol")
+    void unirse_invitacionProductOwner_creaMiembroProductOwner() {
+        ProjectInvitacion inv = new ProjectInvitacion();
+        inv.setProyectoId(proyectoId);
+        inv.setEmail("member@prodox.com");
+        inv.setCodigo("PRJ-ABC123");
+        inv.setUsado(false);
+        inv.setRol("product_owner");
+
+        when(invRepo.findByCodigoAndUsadoFalse("PRJ-ABC123")).thenReturn(Optional.of(inv));
+        when(userRepo.findById(memberId)).thenReturn(Optional.of(memberUser));
+        when(memberRepo.existsByProyectoIdAndUserId(proyectoId, memberId.toString())).thenReturn(false);
+        when(memberRepo.save(any(ProjectMember.class))).thenAnswer(i -> i.getArgument(0));
+
+        ProjectMemberDto dto = service.unirse(memberId.toString(), new UnirseProyectoRequest("PRJ-ABC123"));
+
+        assertThat(dto.rol()).isEqualTo("product_owner");
+    }
+
+    // ── cambiarRol (V39 — Product Owner) ───────────────────────────────────
+
+    @Test
+    @DisplayName("cambiarRol: el Scrum Master puede convertir un Scrum Member en Product Owner")
+    void cambiarRol_smConvierteScrumMemberEnProductOwner() {
+        ProjectMember sm = new ProjectMember();
+        sm.setProyectoId(proyectoId); sm.setUserId(smId.toString()); sm.setRol("scrum_master");
+        ProjectMember target = new ProjectMember();
+        target.setProyectoId(proyectoId); target.setUserId(memberId.toString());
+        target.setUserEmail("member@prodox.com"); target.setRol("scrum_member");
+
+        when(memberRepo.findByProyectoIdAndUserId(proyectoId, smId.toString())).thenReturn(Optional.of(sm));
+        when(memberRepo.findByProyectoIdAndUserId(proyectoId, memberId.toString())).thenReturn(Optional.of(target));
+        when(memberRepo.save(any(ProjectMember.class))).thenAnswer(i -> i.getArgument(0));
+
+        ProjectMemberDto dto = service.cambiarRol(proyectoId, smId.toString(), memberId.toString(), "product_owner");
+
+        assertThat(dto.rol()).isEqualTo("product_owner");
+    }
+
+    @Test
+    @DisplayName("cambiarRol: el Scrum Master puede devolver un Product Owner a Scrum Member")
+    void cambiarRol_smConvierteProductOwnerEnScrumMember() {
+        ProjectMember sm = new ProjectMember();
+        sm.setProyectoId(proyectoId); sm.setUserId(smId.toString()); sm.setRol("scrum_master");
+        ProjectMember target = new ProjectMember();
+        target.setProyectoId(proyectoId); target.setUserId(memberId.toString());
+        target.setUserEmail("po@prodox.com"); target.setRol("product_owner");
+
+        when(memberRepo.findByProyectoIdAndUserId(proyectoId, smId.toString())).thenReturn(Optional.of(sm));
+        when(memberRepo.findByProyectoIdAndUserId(proyectoId, memberId.toString())).thenReturn(Optional.of(target));
+        when(memberRepo.save(any(ProjectMember.class))).thenAnswer(i -> i.getArgument(0));
+
+        ProjectMemberDto dto = service.cambiarRol(proyectoId, smId.toString(), memberId.toString(), "scrum_member");
+
+        assertThat(dto.rol()).isEqualTo("scrum_member");
+    }
+
+    @Test
+    @DisplayName("cambiarRol: un Product Owner no puede cambiar roles de otros miembros")
+    void cambiarRol_solicitanteProductOwner_lanzaSecurityException() {
+        ProjectMember solicitantePO = new ProjectMember();
+        solicitantePO.setProyectoId(proyectoId); solicitantePO.setUserId(memberId.toString()); solicitantePO.setRol("product_owner");
+
+        when(memberRepo.findByProyectoIdAndUserId(proyectoId, memberId.toString())).thenReturn(Optional.of(solicitantePO));
+
+        assertThatThrownBy(() -> service.cambiarRol(proyectoId, memberId.toString(), smId.toString(), "scrum_member"))
+                .isInstanceOf(SecurityException.class)
+                .hasMessageContaining("Solo el Scrum Master");
+        verify(memberRepo, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("cambiarRol: un Scrum Member no puede cambiar roles de otros miembros")
+    void cambiarRol_solicitanteScrumMember_lanzaSecurityException() {
+        ProjectMember solicitanteMember = new ProjectMember();
+        solicitanteMember.setProyectoId(proyectoId); solicitanteMember.setUserId(memberId.toString()); solicitanteMember.setRol("scrum_member");
+
+        when(memberRepo.findByProyectoIdAndUserId(proyectoId, memberId.toString())).thenReturn(Optional.of(solicitanteMember));
+
+        assertThatThrownBy(() -> service.cambiarRol(proyectoId, memberId.toString(), smId.toString(), "product_owner"))
+                .isInstanceOf(SecurityException.class)
+                .hasMessageContaining("Solo el Scrum Master");
+        verify(memberRepo, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("cambiarRol: intentar asignar scrum_master mediante este endpoint se rechaza (no existe mecanismo de reasignación de SM)")
+    void cambiarRol_intentaAsignarScrumMaster_lanzaIllegalArgumentException() {
+        ProjectMember sm = new ProjectMember();
+        sm.setProyectoId(proyectoId); sm.setUserId(smId.toString()); sm.setRol("scrum_master");
+
+        when(memberRepo.findByProyectoIdAndUserId(proyectoId, smId.toString())).thenReturn(Optional.of(sm));
+
+        assertThatThrownBy(() -> service.cambiarRol(proyectoId, smId.toString(), memberId.toString(), "scrum_master"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Rol inválido");
+        verify(memberRepo, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("cambiarRol: no se puede cambiar el rol del propio Scrum Master del proyecto (evita dejarlo sin SM y bloquea la auto-reasignación)")
+    void cambiarRol_targetEsElScrumMaster_lanzaIllegalArgumentException() {
+        ProjectMember sm = new ProjectMember();
+        sm.setProyectoId(proyectoId); sm.setUserId(smId.toString()); sm.setRol("scrum_master");
+
+        when(memberRepo.findByProyectoIdAndUserId(proyectoId, smId.toString())).thenReturn(Optional.of(sm));
+
+        assertThatThrownBy(() -> service.cambiarRol(proyectoId, smId.toString(), smId.toString(), "product_owner"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Scrum Master");
+        verify(memberRepo, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("cambiarRol: un usuario externo al proyecto (no miembro) recibe SecurityException")
+    void cambiarRol_solicitanteExterno_lanzaSecurityException() {
+        String externoId = UUID.randomUUID().toString();
+        when(memberRepo.findByProyectoIdAndUserId(proyectoId, externoId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.cambiarRol(proyectoId, externoId, memberId.toString(), "product_owner"))
+                .isInstanceOf(SecurityException.class)
+                .hasMessageContaining("No tienes acceso a este proyecto");
+        verify(memberRepo, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("cambiarRol: el usuario objetivo debe ser miembro de ESTE proyecto (no de otro)")
+    void cambiarRol_targetNoEsMiembroDeEsteProyecto_lanzaIllegalArgumentException() {
+        ProjectMember sm = new ProjectMember();
+        sm.setProyectoId(proyectoId); sm.setUserId(smId.toString()); sm.setRol("scrum_master");
+        String targetDeOtroProyecto = UUID.randomUUID().toString();
+
+        when(memberRepo.findByProyectoIdAndUserId(proyectoId, smId.toString())).thenReturn(Optional.of(sm));
+        when(memberRepo.findByProyectoIdAndUserId(proyectoId, targetDeOtroProyecto)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.cambiarRol(proyectoId, smId.toString(), targetDeOtroProyecto, "product_owner"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("no es miembro de este proyecto");
+        verify(memberRepo, never()).save(any());
+    }
+
+    // ── V40: a lo sumo un Product Owner activo por proyecto ────────────────
+
+    @Test
+    @DisplayName("invitar: proyecto sin PO ni invitación pendiente — invitar product_owner es permitido")
+    void invitar_proyectoSinProductOwner_permiteInvitarProductOwner() {
+        when(proyectoRepo.findById(proyectoId)).thenReturn(Optional.of(proyecto));
+        when(memberRepo.existsByProyectoIdAndRol(proyectoId, "product_owner")).thenReturn(false);
+        when(invRepo.findByProyectoIdAndRolAndUsadoFalse(proyectoId, "product_owner")).thenReturn(List.of());
+        when(invRepo.save(any(ProjectInvitacion.class))).thenAnswer(i -> i.getArgument(0));
+        when(emailService.enviar(anyString(), anyString(), anyString())).thenReturn(true);
+
+        InvitarProyectoResponse res = service.invitar(proyectoId, smId.toString(),
+                new InvitarProyectoRequest("po@prodox.com", "product_owner"));
+
+        assertThat(res.codigo()).startsWith("PRJ-");
+        verify(invRepo).save(any(ProjectInvitacion.class));
+    }
+
+    @Test
+    @DisplayName("invitar: rechaza invitar product_owner si el proyecto YA tiene un Product Owner activo (Caso E)")
+    void invitar_proyectoConProductOwnerActivo_rechazaNuevaInvitacionProductOwner() {
+        when(proyectoRepo.findById(proyectoId)).thenReturn(Optional.of(proyecto));
+        when(memberRepo.existsByProyectoIdAndRol(proyectoId, "product_owner")).thenReturn(true);
+
+        assertThatThrownBy(() -> service.invitar(proyectoId, smId.toString(),
+                new InvitarProyectoRequest("otro-po@prodox.com", "product_owner")))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("ya tiene un Product Owner");
+        verify(invRepo, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("invitar: rechaza invitar product_owner si ya existe una invitación de PO pendiente (Caso C)")
+    void invitar_invitacionProductOwnerPendiente_rechazaNuevaInvitacionProductOwner() {
+        ProjectInvitacion pendiente = new ProjectInvitacion();
+        pendiente.setProyectoId(proyectoId);
+        pendiente.setRol("product_owner");
+        pendiente.setUsado(false);
+        pendiente.setExpiresAt(Instant.now().plus(7, ChronoUnit.DAYS));
+
+        when(proyectoRepo.findById(proyectoId)).thenReturn(Optional.of(proyecto));
+        when(memberRepo.existsByProyectoIdAndRol(proyectoId, "product_owner")).thenReturn(false);
+        when(invRepo.findByProyectoIdAndRolAndUsadoFalse(proyectoId, "product_owner")).thenReturn(List.of(pendiente));
+
+        assertThatThrownBy(() -> service.invitar(proyectoId, smId.toString(),
+                new InvitarProyectoRequest("segundo-po@prodox.com", "product_owner")))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("invitación de Product Owner pendiente");
+        verify(invRepo, never()).save(any(ProjectInvitacion.class));
+    }
+
+    @Test
+    @DisplayName("invitar: una invitación de PO YA EXPIRADA no cuenta como pendiente — permite generar una nueva")
+    void invitar_invitacionProductOwnerExpirada_noBloqueaNuevaInvitacion() {
+        ProjectInvitacion expirada = new ProjectInvitacion();
+        expirada.setProyectoId(proyectoId);
+        expirada.setRol("product_owner");
+        expirada.setUsado(false);
+        expirada.setExpiresAt(Instant.now().minus(1, ChronoUnit.DAYS));
+
+        when(proyectoRepo.findById(proyectoId)).thenReturn(Optional.of(proyecto));
+        when(memberRepo.existsByProyectoIdAndRol(proyectoId, "product_owner")).thenReturn(false);
+        when(invRepo.findByProyectoIdAndRolAndUsadoFalse(proyectoId, "product_owner")).thenReturn(List.of(expirada));
+        when(invRepo.save(any(ProjectInvitacion.class))).thenAnswer(i -> i.getArgument(0));
+        when(emailService.enviar(anyString(), anyString(), anyString())).thenReturn(true);
+
+        InvitarProyectoResponse res = service.invitar(proyectoId, smId.toString(),
+                new InvitarProyectoRequest("nuevo-po@prodox.com", "product_owner"));
+
+        assertThat(res.codigo()).startsWith("PRJ-");
+        verify(invRepo).save(any(ProjectInvitacion.class));
+    }
+
+    @Test
+    @DisplayName("invitar: la invitación de scrum_member no dispara ninguna validación de unicidad de Product Owner")
+    void invitar_invitacionScrumMember_noValidaUnicidadDeProductOwner() {
+        when(proyectoRepo.findById(proyectoId)).thenReturn(Optional.of(proyecto));
+        when(invRepo.save(any(ProjectInvitacion.class))).thenAnswer(i -> i.getArgument(0));
+        when(emailService.enviar(anyString(), anyString(), anyString())).thenReturn(true);
+
+        service.invitar(proyectoId, smId.toString(), new InvitarProyectoRequest("member@prodox.com", "scrum_member"));
+
+        verify(memberRepo, never()).existsByProyectoIdAndRol(any(), any());
+        verify(invRepo, never()).findByProyectoIdAndRolAndUsadoFalse(any(), any());
+    }
+
+    @Test
+    @DisplayName("invitar: defensa en profundidad — rechaza rol scrum_master aunque se invoque el servicio directamente (sin pasar por @Valid del DTO)")
+    void invitar_rolScrumMaster_lanzaIllegalArgumentException() {
+        when(proyectoRepo.findById(proyectoId)).thenReturn(Optional.of(proyecto));
+
+        assertThatThrownBy(() -> service.invitar(proyectoId, smId.toString(),
+                new InvitarProyectoRequest("intruso@prodox.com", "scrum_master")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Rol de invitación inválido");
+        verify(invRepo, never()).save(any());
+        verify(emailService, never()).enviar(anyString(), anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("unirse: acepta invitación de PO cuando el proyecto todavía no tiene uno (Caso A)")
+    void unirse_invitacionProductOwnerSinPoActivo_creaProductOwner() {
+        ProjectInvitacion inv = new ProjectInvitacion();
+        inv.setProyectoId(proyectoId);
+        inv.setEmail("member@prodox.com");
+        inv.setCodigo("PRJ-ABC123");
+        inv.setUsado(false);
+        inv.setRol("product_owner");
+
+        when(invRepo.findByCodigoAndUsadoFalse("PRJ-ABC123")).thenReturn(Optional.of(inv));
+        when(userRepo.findById(memberId)).thenReturn(Optional.of(memberUser));
+        when(memberRepo.existsByProyectoIdAndUserId(proyectoId, memberId.toString())).thenReturn(false);
+        when(memberRepo.existsByProyectoIdAndRol(proyectoId, "product_owner")).thenReturn(false);
+        when(memberRepo.save(any(ProjectMember.class))).thenAnswer(i -> i.getArgument(0));
+
+        ProjectMemberDto dto = service.unirse(memberId.toString(), new UnirseProyectoRequest("PRJ-ABC123"));
+
+        assertThat(dto.rol()).isEqualTo("product_owner");
+    }
+
+    @Test
+    @DisplayName("unirse: respaldo ante condición de carrera — rechaza aceptar una invitación de PO si el proyecto YA tiene uno activo")
+    void unirse_invitacionProductOwnerPeroYaHayPoActivo_rechaza() {
+        ProjectInvitacion inv = new ProjectInvitacion();
+        inv.setProyectoId(proyectoId);
+        inv.setEmail("member@prodox.com");
+        inv.setCodigo("PRJ-ABC123");
+        inv.setUsado(false);
+        inv.setRol("product_owner");
+
+        when(invRepo.findByCodigoAndUsadoFalse("PRJ-ABC123")).thenReturn(Optional.of(inv));
+        when(userRepo.findById(memberId)).thenReturn(Optional.of(memberUser));
+        when(memberRepo.existsByProyectoIdAndUserId(proyectoId, memberId.toString())).thenReturn(false);
+        when(memberRepo.existsByProyectoIdAndRol(proyectoId, "product_owner")).thenReturn(true);
+
+        assertThatThrownBy(() -> service.unirse(memberId.toString(), new UnirseProyectoRequest("PRJ-ABC123")))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("ya tiene un Product Owner");
+        verify(memberRepo, never()).save(any());
+        verify(invRepo, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("cambiarRol: rechaza promover a otro miembro a Product Owner si el proyecto ya tiene uno (Caso B)")
+    void cambiarRol_yaHayProductOwner_rechazaPromoverAOtroMiembro() {
+        ProjectMember sm = new ProjectMember();
+        sm.setProyectoId(proyectoId); sm.setUserId(smId.toString()); sm.setRol("scrum_master");
+        ProjectMember target = new ProjectMember();
+        target.setProyectoId(proyectoId); target.setUserId(memberId.toString()); target.setRol("scrum_member");
+
+        when(memberRepo.findByProyectoIdAndUserId(proyectoId, smId.toString())).thenReturn(Optional.of(sm));
+        when(memberRepo.findByProyectoIdAndUserId(proyectoId, memberId.toString())).thenReturn(Optional.of(target));
+        when(memberRepo.existsByProyectoIdAndRol(proyectoId, "product_owner")).thenReturn(true);
+
+        assertThatThrownBy(() -> service.cambiarRol(proyectoId, smId.toString(), memberId.toString(), "product_owner"))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("ya tiene un Product Owner");
+        verify(memberRepo, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("cambiarRol: liberar al Product Owner actual (a Scrum Member) permite delegar uno nuevo después (Caso D)")
+    void cambiarRol_liberaProductOwnerYPermiteDelegarUnoNuevo() {
+        ProjectMember sm = new ProjectMember();
+        sm.setProyectoId(proyectoId); sm.setUserId(smId.toString()); sm.setRol("scrum_master");
+        ProjectMember poActual = new ProjectMember();
+        poActual.setProyectoId(proyectoId); poActual.setUserId(memberId.toString()); poActual.setRol("product_owner");
+
+        when(memberRepo.findByProyectoIdAndUserId(proyectoId, smId.toString())).thenReturn(Optional.of(sm));
+        when(memberRepo.findByProyectoIdAndUserId(proyectoId, memberId.toString())).thenReturn(Optional.of(poActual));
+        when(memberRepo.save(any(ProjectMember.class))).thenAnswer(i -> i.getArgument(0));
+
+        // Paso 1: PO actual -> Scrum Member (libera el rol; no debe consultar unicidad, va HACIA scrum_member).
+        ProjectMemberDto dto = service.cambiarRol(proyectoId, smId.toString(), memberId.toString(), "scrum_member");
+        assertThat(dto.rol()).isEqualTo("scrum_member");
+        verify(memberRepo, never()).existsByProyectoIdAndRol(any(), any());
+
+        // Paso 2: ahora que el proyecto quedó sin PO, delegar uno nuevo debe ser posible.
+        UUID otroUserId = UUID.randomUUID();
+        ProjectMember nuevoCandidato = new ProjectMember();
+        nuevoCandidato.setProyectoId(proyectoId); nuevoCandidato.setUserId(otroUserId.toString()); nuevoCandidato.setRol("scrum_member");
+        when(memberRepo.findByProyectoIdAndUserId(proyectoId, otroUserId.toString())).thenReturn(Optional.of(nuevoCandidato));
+        when(memberRepo.existsByProyectoIdAndRol(proyectoId, "product_owner")).thenReturn(false);
+
+        ProjectMemberDto dto2 = service.cambiarRol(proyectoId, smId.toString(), otroUserId.toString(), "product_owner");
+        assertThat(dto2.rol()).isEqualTo("product_owner");
+    }
+
+    @Test
+    @DisplayName("cambiarRol: 'promover' a quien YA es Product Owner es un no-op permitido, no choca contra sí mismo")
+    void cambiarRol_targetYaEsProductOwner_noValidaContraSiMismo() {
+        ProjectMember sm = new ProjectMember();
+        sm.setProyectoId(proyectoId); sm.setUserId(smId.toString()); sm.setRol("scrum_master");
+        ProjectMember target = new ProjectMember();
+        target.setProyectoId(proyectoId); target.setUserId(memberId.toString()); target.setRol("product_owner");
+
+        when(memberRepo.findByProyectoIdAndUserId(proyectoId, smId.toString())).thenReturn(Optional.of(sm));
+        when(memberRepo.findByProyectoIdAndUserId(proyectoId, memberId.toString())).thenReturn(Optional.of(target));
+        when(memberRepo.save(any(ProjectMember.class))).thenAnswer(i -> i.getArgument(0));
+
+        ProjectMemberDto dto = service.cambiarRol(proyectoId, smId.toString(), memberId.toString(), "product_owner");
+
+        assertThat(dto.rol()).isEqualTo("product_owner");
+        verify(memberRepo, never()).existsByProyectoIdAndRol(any(), any());
+    }
+
+    @Test
+    @DisplayName("V39/V40: un mismo usuario puede ser Product Owner en un proyecto y Scrum Member en otro (rol por proyecto, no global)")
+    void mismoUsuario_productOwnerEnUnProyecto_scrumMemberEnOtro() {
+        UUID proyectoBId = UUID.randomUUID();
+
+        ProjectInvitacion invA = new ProjectInvitacion();
+        invA.setProyectoId(proyectoId); invA.setEmail("member@prodox.com"); invA.setCodigo("PRJ-AAA111");
+        invA.setUsado(false); invA.setRol("product_owner");
+
+        ProjectInvitacion invB = new ProjectInvitacion();
+        invB.setProyectoId(proyectoBId); invB.setEmail("member@prodox.com"); invB.setCodigo("PRJ-BBB222");
+        invB.setUsado(false); invB.setRol("scrum_member");
+
+        when(invRepo.findByCodigoAndUsadoFalse("PRJ-AAA111")).thenReturn(Optional.of(invA));
+        when(invRepo.findByCodigoAndUsadoFalse("PRJ-BBB222")).thenReturn(Optional.of(invB));
+        when(userRepo.findById(memberId)).thenReturn(Optional.of(memberUser));
+        when(memberRepo.existsByProyectoIdAndUserId(any(), eq(memberId.toString()))).thenReturn(false);
+        when(memberRepo.existsByProyectoIdAndRol(proyectoId, "product_owner")).thenReturn(false);
+        when(memberRepo.save(any(ProjectMember.class))).thenAnswer(i -> i.getArgument(0));
+
+        ProjectMemberDto dtoA = service.unirse(memberId.toString(), new UnirseProyectoRequest("PRJ-AAA111"));
+        ProjectMemberDto dtoB = service.unirse(memberId.toString(), new UnirseProyectoRequest("PRJ-BBB222"));
+
+        assertThat(dtoA.proyectoId()).isEqualTo(proyectoId);
+        assertThat(dtoA.rol()).isEqualTo("product_owner");
+        assertThat(dtoB.proyectoId()).isEqualTo(proyectoBId);
+        assertThat(dtoB.rol()).isEqualTo("scrum_member");
     }
 
     // ── unirse ────────────────────────────────────────────────────────────

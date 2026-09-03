@@ -554,6 +554,20 @@ body {
     }
   }
 
+  // Backlog es una funcionalidad de Planeación, no una fase propia — se
+  // indenta como sub-ítem suyo en vez de aparecer al mismo nivel que
+  // Planeación/Ejecución/Evaluación. Solo en modo expandido: en modo
+  // colapsado (:not(.collapsed) no aplica) todos los íconos quedan
+  // centrados igual, sin espacio para representar jerarquía.
+  &:not(.collapsed) .nav-link.nav-subitem {
+    padding-left: 1.75rem;
+    opacity: 0.85;
+
+    i, .bi {
+      font-size: 0.8rem;
+    }
+  }
+
   // Separadores - BLANCO BRILLANTE
   .nav-item {
     small.text-muted, small.text-uppercase {
@@ -1502,3 +1516,21 @@ body {
     transform: scale(1.05);
   }
 }
+
+// ══════════════════════════════════════════════════════════════════════════
+// Tooltips de ayuda mejorados
+// ══════════════════════════════════════════════════════════════════════════
+
+// Iconos de información con cursor de ayuda
+i.bi-info-circle,
+i.bi-info-circle-fill {
+  &[style*="cursor: help"], &[style*="cursor:help"] {
+    transition: color 0.2s ease, transform 0.2s ease;
+    
+    &:hover {
+      color: var(--bs-primary) !important;
+      transform: scale(1.15);
+    }
+  }
+}
+

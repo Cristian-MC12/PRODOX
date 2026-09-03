@@ -14,6 +14,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.UUID;
 
@@ -29,22 +32,53 @@ public class SprintService {
     /**
      * Crea todos los sprints del proyecto con sus fechas calculadas.
      * Sprint 1 → en_ejecucion, los demás → pendiente.
+     *
+     * V41 — timebox real por unidad:
+     * <ul>
+     *   <li>SEMANAS: misma fórmula EXACTA que antes de V41 (sin cambios de
+     *       comportamiento para proyectos en semanas, la inmensa mayoría).</li>
+     *   <li>DIAS: misma fórmula que semanas, pero con {@code plusDays}.</li>
+     *   <li>HORAS: fecha Y hora reales ({@code LocalDateTime.plusHours}),
+     *       que respeta correctamente el cambio de día — un timebox de 10
+     *       horas iniciado a las 16:00 termina a las 02:00 del día
+     *       siguiente, nunca se limita a las 23:59 del mismo día. Además de
+     *       fechaHoraInicio/fechaHoraFin (Instant, precisión real), se
+     *       completan también fechaInicio/fechaFin (solo la parte de fecha)
+     *       para que todo el código existente que ya lee esos dos campos
+     *       (evaluación, ejecución, dashboard) siga funcionando sin cambios.</li>
+     * </ul>
      */
     @Transactional
-    public void crearSprintsIniciales(UUID proyectoId, String sprintGoal,
-                                      int numeroSprints, int timeBoxSemanas,
-                                      LocalDate fechaInicio) {
+    public void crearSprintsIniciales(UUID proyectoId, String sprintGoal, int numeroSprints,
+                                      String timeboxUnidad, int timeboxDuracion,
+                                      LocalDate fechaInicio, LocalTime horaInicio) {
         for (int i = 1; i <= numeroSprints; i++) {
-            LocalDate inicio = fechaInicio.plusWeeks((long) (i - 1) * timeBoxSemanas);
-            LocalDate fin    = inicio.plusWeeks(timeBoxSemanas).minusDays(1);
-
             Sprint s = new Sprint();
             s.setProyectoId(proyectoId);
             s.setNumero(i);
             s.setSprintGoal(i == 1 ? sprintGoal : "Sprint " + i);
             s.setEstado(i == 1 ? "en_ejecucion" : "pendiente");
-            s.setFechaInicio(inicio);
-            s.setFechaFin(fin);
+
+            if ("HORAS".equals(timeboxUnidad)) {
+                LocalDateTime inicioLdt = LocalDateTime.of(fechaInicio, horaInicio)
+                        .plusHours((long) (i - 1) * timeboxDuracion);
+                LocalDateTime finLdt = inicioLdt.plusHours(timeboxDuracion);
+                ZoneId zona = ZoneId.systemDefault();
+                s.setFechaHoraInicio(inicioLdt.atZone(zona).toInstant());
+                s.setFechaHoraFin(finLdt.atZone(zona).toInstant());
+                s.setFechaInicio(inicioLdt.toLocalDate());
+                s.setFechaFin(finLdt.toLocalDate());
+            } else if ("DIAS".equals(timeboxUnidad)) {
+                LocalDate inicio = fechaInicio.plusDays((long) (i - 1) * timeboxDuracion);
+                LocalDate fin = inicio.plusDays(timeboxDuracion).minusDays(1);
+                s.setFechaInicio(inicio);
+                s.setFechaFin(fin);
+            } else { // SEMANAS
+                LocalDate inicio = fechaInicio.plusWeeks((long) (i - 1) * timeboxDuracion);
+                LocalDate fin = inicio.plusWeeks(timeboxDuracion).minusDays(1);
+                s.setFechaInicio(inicio);
+                s.setFechaFin(fin);
+            }
             sprintRepo.save(s);
         }
     }
@@ -141,6 +175,23 @@ public class SprintService {
         return toDto(sprintRepo.save(s), p);
     }
 
+    /**
+     * Cierra el sprint actualmente en ejecución sin iniciar uno nuevo.
+     * Útil cuando se quiere finalizar el último sprint del proyecto o cuando
+     * no hay más sprints pendientes por iniciar.
+     */
+    @Transactional
+    public SprintDto cerrarSprintActual(UUID sprintId) {
+        Sprint s = sprintRepo.findById(sprintId)
+                .orElseThrow(() -> new IllegalArgumentException("Sprint no encontrado."));
+        if (!"en_ejecucion".equals(s.getEstado())) {
+            throw new IllegalArgumentException("Solo se pueden cerrar sprints que están en ejecución.");
+        }
+        marcarFinalizado(s);
+        Proyecto p = getProyecto(s.getProyectoId());
+        return toDto(sprintRepo.save(s), p);
+    }
+
     private void marcarFinalizado(Sprint s) {
         s.setEstado("finalizado");
         s.setCerradoAt(Instant.now());
@@ -193,6 +244,8 @@ public class SprintService {
                 s.getNumero(), s.getSprintGoal(), s.getEstado(),
                 s.getFechaInicio(), s.getFechaFin(),
                 s.getCerradoPor(), s.getCerradoAt(),
-                s.getCreatedAt());
+                s.getCreatedAt(),
+                p.getTimeboxUnidad(), p.getTimeboxDuracion(),
+                s.getFechaHoraInicio(), s.getFechaHoraFin());
     }
 }

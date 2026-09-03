@@ -1,6 +1,7 @@
 // Autor: Cristian Santiago Martinez Cordoba — PRODOX
 package com.prodox.controller;
 
+import com.prodox.dto.CambiarRolMiembroRequest;
 import com.prodox.dto.InvitacionEstadoDto;
 import com.prodox.dto.InvitarProyectoRequest;
 import com.prodox.dto.InvitarProyectoResponse;
@@ -54,5 +55,23 @@ public class ProjectMemberController {
             @Valid @RequestBody UnirseProyectoRequest request,
             Authentication auth) {
         return ResponseEntity.ok(service.unirse(auth.getName(), request));
+    }
+
+    /**
+     * PATCH /api/project-members/{proyectoId}/{userId}/rol — cambia el rol
+     * (product_owner | scrum_member) de un miembro existente. Restringido al
+     * Scrum Master del proyecto (V39). El userId de la ruta es el MIEMBRO
+     * OBJETIVO, nunca el solicitante — el solicitante se obtiene siempre de
+     * `auth.getName()` (JWT ya validado), jamás de un valor enviado por el
+     * frontend, así que no hay forma de que el propio Angular determine
+     * "quién soy" para esta operación.
+     */
+    @PatchMapping("/{proyectoId}/{userId}/rol")
+    public ResponseEntity<ProjectMemberDto> cambiarRol(
+            @PathVariable UUID proyectoId,
+            @PathVariable String userId,
+            @Valid @RequestBody CambiarRolMiembroRequest request,
+            Authentication auth) {
+        return ResponseEntity.ok(service.cambiarRol(proyectoId, auth.getName(), userId, request.rol()));
     }
 }

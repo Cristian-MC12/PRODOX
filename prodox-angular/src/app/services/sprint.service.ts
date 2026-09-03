@@ -36,4 +36,9 @@ export class SprintService {
   finalizarReabierto(sprintId: string): Observable<SprintDto> {
     return this.http.patch<SprintDto>(`${this.base}/${sprintId}/finalizar`, {});
   }
+
+  /** Cierra el sprint actualmente en ejecución sin iniciar uno nuevo. */
+  cerrarSprintActual(sprintId: string): Observable<SprintDto> {
+    return this.http.patch<SprintDto>(`${this.base}/${sprintId}/cerrar`, {});
+  }
 }

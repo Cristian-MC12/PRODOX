@@ -15,6 +15,17 @@ import java.util.UUID;
 @IdClass(ProjectMember.MemberId.class)
 public class ProjectMember {
 
+    /**
+     * Valores válidos de {@link #rol} para un miembro dentro de UN proyecto
+     * (rol por proyecto — no confundir con el rol global inmutable de
+     * {@link AppUser#getRole()}). Centralizados acá para que las
+     * comparaciones de rol en controllers/servicios ("PRODUCT_OWNER" nuevo
+     * desde acá en adelante) no dependan de literales de string repetidos.
+     */
+    public static final String ROL_SCRUM_MASTER = "scrum_master";
+    public static final String ROL_PRODUCT_OWNER = "product_owner";
+    public static final String ROL_SCRUM_MEMBER = "scrum_member";
+
     @Id
     @Column(name = "proyecto_id")
     private UUID proyectoId;

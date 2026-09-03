@@ -115,7 +115,7 @@ class MetricRankingDuplicadoPendienteTest {
 
         var creado = proyectoService.crear(userId, new CrearProyectoRequest(
                 "TEST-DUP-PENDIENTE-" + UUID.randomUUID(), "test duplicado pendiente", "scrum",
-                1, 2, LocalDate.now(), "goal test"));
+                "SEMANAS", 1, null, 2, LocalDate.now(), "goal test"));
         proyectoId = creado.id();
     }
 

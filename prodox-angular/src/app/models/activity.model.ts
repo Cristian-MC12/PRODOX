@@ -1,13 +1,15 @@
 // Autor: Cristian Santiago Martinez Cordoba — PRODOX
 // Modelo unificado para el feed de actividad del Dashboard
 
-export type ActivityType = 
+export type ActivityType =
   | 'evaluation_completed'
   | 'sprint_created'
   | 'sprint_closed'
   | 'member_joined'
   | 'ai_insight_generated'
-  | 'metric_parametrized';
+  | 'metric_parametrized'
+  | 'historia_created'
+  | 'historia_completed';
 
 export interface Activity {
   id: string;

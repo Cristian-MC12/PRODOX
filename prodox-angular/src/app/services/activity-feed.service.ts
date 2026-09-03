@@ -8,6 +8,7 @@ import { EvaluacionService } from './evaluacion.service';
 import { SprintService } from './sprint.service';
 import { ProjectMemberService } from './project-member.service';
 import { AIInsightsService } from './ai-insights.service';
+import { HistoriaUsuarioService } from './historia-usuario.service';
 
 @Injectable({ providedIn: 'root' })
 export class ActivityFeedService {
@@ -16,12 +17,17 @@ export class ActivityFeedService {
     private evaluacionService: EvaluacionService,
     private sprintService: SprintService,
     private memberService: ProjectMemberService,
-    private insightsService: AIInsightsService
+    private insightsService: AIInsightsService,
+    private historiaService: HistoriaUsuarioService
   ) {}
 
   /**
    * Obtiene las actividades recientes del proyecto desde múltiples fuentes.
-   * Combina evaluaciones, sprints, miembros e insights en un feed unificado.
+   * Combina evaluaciones, sprints, miembros, insights e historias de usuario
+   * (V39 — Product Owner) en un feed unificado. No hay tabla de
+   * notificaciones nueva: igual que el resto de este servicio, se deriva
+   * 100% de endpoints de lectura que ya existían para otro propósito
+   * (GET /api/historias/{proyectoId}, ya usado por el Backlog).
    */
   getProjectActivities(proyectoId: string, limit: number = 10): Observable<Activity[]> {
     const requests = {
@@ -36,11 +42,14 @@ export class ActivityFeedService {
       ),
       insights: this.insightsService.getProjectInsights(proyectoId).pipe(
         catchError(() => of([]))
+      ),
+      historias: this.historiaService.listar(proyectoId).pipe(
+        catchError(() => of([]))
       )
     };
 
     return forkJoin(requests).pipe(
-      map(({ evaluaciones, sprints, miembros, insights }) => {
+      map(({ evaluaciones, sprints, miembros, insights, historias }) => {
         const activities: Activity[] = [];
         
         // Calcular rango de fechas para filtrar actividades recientes (últimos 30 días)
@@ -139,6 +148,42 @@ export class ActivityFeedService {
             iconColor: 'text-info',
             metadata: { type: insight.type }
           });
+        });
+
+        // Procesar historias de usuario (V39 — creadas o completadas recientemente).
+        // "completada" usa updatedAt como aproximación (igual criterio que
+        // sprint_created usa fechaInicio): no distingue completada-y-luego-
+        // reeditada de completada-ahora-mismo, aceptable para un feed informativo.
+        historias.forEach(h => {
+          const fechaCreacion = new Date(h.createdAt);
+          if (fechaCreacion > thirtyDaysAgo) {
+            activities.push({
+              id: `historia-created-${h.id}`,
+              type: 'historia_created',
+              title: 'Historia creada',
+              description: h.titulo,
+              timestamp: fechaCreacion,
+              user: h.creadoPor,
+              icon: 'bi-file-earmark-plus-fill',
+              iconColor: 'text-primary',
+              metadata: { prioridad: h.prioridad }
+            });
+          }
+
+          if (h.estado === 'completada') {
+            const fechaActualizacion = new Date(h.updatedAt);
+            if (fechaActualizacion > thirtyDaysAgo) {
+              activities.push({
+                id: `historia-completed-${h.id}`,
+                type: 'historia_completed',
+                title: 'Historia completada',
+                description: h.titulo,
+                timestamp: fechaActualizacion,
+                icon: 'bi-check-square-fill',
+                iconColor: 'text-success'
+              });
+            }
+          }
         });
 
         // Ordenar por timestamp descendente y limitar

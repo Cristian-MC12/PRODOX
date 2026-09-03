@@ -81,6 +81,28 @@ public class ProjectMemberService {
             throw new IllegalArgumentException("Solo el Scrum Master puede invitar.");
         }
 
+        // V39: rol opcional en la invitación — si no se envía, se conserva el
+        // comportamiento previo (scrum_member).
+        String rolInvitacion = req.rol() != null ? req.rol() : ProjectMember.ROL_SCRUM_MEMBER;
+
+        // Defensa en profundidad: el DTO ya bloquea "scrum_master" con
+        // @Pattern (solo se aplica cuando la petición pasa por el controller
+        // con @Valid), pero este método de servicio debe ser seguro de
+        // invocar directamente sin depender de esa validación externa — no
+        // hay más que un Scrum Master por proyecto y se asigna únicamente al
+        // crear el proyecto (ver agregarScrumMaster), nunca por invitación.
+        if (!ProjectMember.ROL_SCRUM_MEMBER.equals(rolInvitacion) && !ProjectMember.ROL_PRODUCT_OWNER.equals(rolInvitacion)) {
+            throw new IllegalArgumentException(
+                    "Rol de invitación inválido. Solo se puede invitar como scrum_member o product_owner.");
+        }
+
+        // V40 — a lo sumo un Product Owner activo por proyecto: ni ya
+        // existente ni con una invitación pendiente sin aceptar todavía.
+        if (ProjectMember.ROL_PRODUCT_OWNER.equals(rolInvitacion)) {
+            validarNoHayProductOwnerActivo(proyectoId);
+            validarNoHayInvitacionPoPendiente(proyectoId);
+        }
+
         String codigo = generarCodigo();
         String token  = UUID.randomUUID().toString().replace("-", "");
 
@@ -89,6 +111,7 @@ public class ProjectMemberService {
         inv.setEmail(req.email());
         inv.setToken(token);
         inv.setCodigo(codigo);
+        inv.setRol(rolInvitacion);
         inv.setExpiresAt(Instant.now().plus(expirationDays, ChronoUnit.DAYS));
         invRepo.save(inv);
 
@@ -163,15 +186,31 @@ public class ProjectMemberService {
             throw new IllegalArgumentException("Ya eres miembro de este proyecto.");
         }
 
+        // V40 — respaldo ante condiciones de carrera: entre que se generó
+        // esta invitación de Product Owner y que se acepta, el Scrum Master
+        // pudo haber delegado el rol a otra persona (cambiarRol) o pudo
+        // haberse aceptado otra invitación de PO primero. invitar() ya
+        // valida esto al CREAR la invitación, pero no garantiza nada sobre
+        // lo que pasó después — se vuelve a validar acá, al momento real de
+        // crear el ProjectMember (el índice único parcial de V40 es el
+        // respaldo final si dos aceptaciones llegaran a la vez).
+        if (ProjectMember.ROL_PRODUCT_OWNER.equals(inv.getRol())) {
+            validarNoHayProductOwnerActivo(inv.getProyectoId());
+        }
+
         ProjectMember m = new ProjectMember();
         m.setProyectoId(inv.getProyectoId());
         m.setUserId(userId);
         m.setUserEmail(userEmail);
-        // Rol de miembro fijo en "scrum_member": una invitación nunca otorga
-        // scrum_master, ni acá ni tocando el AppUser.role global del usuario
-        // (que ni siquiera se lee en este método) — el rol global inmutable
-        // solo se define al crear la cuenta (registro/Google).
-        m.setRol("scrum_member");
+        // V39: el rol por proyecto queda determinado por lo que el Scrum
+        // Master eligió al invitar (scrum_member por defecto, o
+        // product_owner — ver ProjectMemberService.invitar). Una invitación
+        // NUNCA otorga scrum_master (ProjectInvitacion.rol solo admite
+        // scrum_member/product_owner, reforzado por el CHECK de V39), ni
+        // toca el AppUser.role global del usuario (que ni siquiera se lee en
+        // este método) — el rol global inmutable solo se define al crear la
+        // cuenta (registro/Google).
+        m.setRol(inv.getRol());
         memberRepo.save(m);
 
         inv.setUsado(true);
@@ -179,6 +218,93 @@ public class ProjectMemberService {
 
         return new ProjectMemberDto(m.getProyectoId(), m.getUserId(),
                 m.getUserEmail(), m.getRol(), m.getJoinedAt());
+    }
+
+    /**
+     * Cambia el rol POR PROYECTO de un miembro existente (V39 — Product Owner).
+     * Reglas de seguridad, en orden:
+     * <ol>
+     *   <li>El solicitante debe ser miembro de {@code proyectoId} (si no,
+     *       SecurityException — cubre tanto "usuario externo" como "SM de
+     *       otro proyecto intentando tocar este").</li>
+     *   <li>El solicitante debe tener rol scrum_master EN ESE proyecto (si
+     *       no, SecurityException) — nunca se confía en el rol global de
+     *       {@link com.prodox.entity.AppUser}, solo en {@link ProjectMember#getRol()}.</li>
+     *   <li>{@code nuevoRol} solo admite scrum_member o product_owner —
+     *       "scrum_master" se rechaza siempre (no existe hoy un mecanismo
+     *       oficial de reasignación de Scrum Master; no se inventa uno acá).</li>
+     *   <li>El usuario objetivo debe ser miembro de este mismo proyecto.</li>
+     *   <li>No se permite tocar el rol del miembro que actualmente es
+     *       scrum_master del proyecto — evita dejar el proyecto sin Scrum
+     *       Master y, como el propio solicitante SIEMPRE es ese scrum_master
+     *       (paso 2), esto también impide que alguien se reasigne su propio
+     *       rol a sí mismo mediante este endpoint.</li>
+     * </ol>
+     */
+    @Transactional
+    public ProjectMemberDto cambiarRol(UUID proyectoId, String solicitanteId, String targetUserId, String nuevoRol) {
+        ProjectMember solicitante = memberRepo.findByProyectoIdAndUserId(proyectoId, solicitanteId)
+                .orElseThrow(() -> new SecurityException("No tienes acceso a este proyecto"));
+
+        if (!ProjectMember.ROL_SCRUM_MASTER.equals(solicitante.getRol())) {
+            throw new SecurityException("Solo el Scrum Master del proyecto puede cambiar roles de sus miembros.");
+        }
+
+        if (!ProjectMember.ROL_SCRUM_MEMBER.equals(nuevoRol) && !ProjectMember.ROL_PRODUCT_OWNER.equals(nuevoRol)) {
+            throw new IllegalArgumentException(
+                    "Rol inválido. Solo se puede asignar scrum_member o product_owner mediante este endpoint.");
+        }
+
+        ProjectMember target = memberRepo.findByProyectoIdAndUserId(proyectoId, targetUserId)
+                .orElseThrow(() -> new IllegalArgumentException("El usuario no es miembro de este proyecto."));
+
+        if (ProjectMember.ROL_SCRUM_MASTER.equals(target.getRol())) {
+            throw new IllegalArgumentException(
+                    "No se puede cambiar el rol del Scrum Master del proyecto mediante este endpoint.");
+        }
+
+        // V40 — a lo sumo un Product Owner activo por proyecto. Si el
+        // objetivo YA es product_owner, "cambiarlo a product_owner" es un
+        // no-op y no debe rechazarse por chocar consigo mismo — solo se
+        // valida cuando se está promoviendo a alguien que todavía no lo es.
+        boolean yaEsProductOwner = ProjectMember.ROL_PRODUCT_OWNER.equals(target.getRol());
+        if (ProjectMember.ROL_PRODUCT_OWNER.equals(nuevoRol) && !yaEsProductOwner) {
+            validarNoHayProductOwnerActivo(proyectoId);
+        }
+
+        target.setRol(nuevoRol);
+        memberRepo.save(target);
+
+        return new ProjectMemberDto(target.getProyectoId(), target.getUserId(),
+                target.getUserEmail(), target.getRol(), target.getJoinedAt());
+    }
+
+    /**
+     * V40 — a lo sumo un Product Owner activo por proyecto. Se usa desde
+     * invitar(), unirse() y cambiarRol(); el respaldo real ante llamadas
+     * concurrentes es el índice único parcial de la migración V40 sobre
+     * project_members (esta validación evita el caso común con un mensaje
+     * claro, sin depender únicamente de esperar la excepción de integridad).
+     */
+    private void validarNoHayProductOwnerActivo(UUID proyectoId) {
+        if (memberRepo.existsByProyectoIdAndRol(proyectoId, ProjectMember.ROL_PRODUCT_OWNER)) {
+            throw new IllegalStateException("Este proyecto ya tiene un Product Owner.");
+        }
+    }
+
+    /**
+     * V40 — evita que el Scrum Master genere varias invitaciones de Product
+     * Owner pendientes para el mismo proyecto. Una invitación expirada pero
+     * nunca aceptada ("usado" sigue en false) NO cuenta como pendiente: ya
+     * no puede aceptarse, así que no debería seguir bloqueando una nueva.
+     */
+    private void validarNoHayInvitacionPoPendiente(UUID proyectoId) {
+        boolean hayPendiente = invRepo.findByProyectoIdAndRolAndUsadoFalse(proyectoId, ProjectMember.ROL_PRODUCT_OWNER)
+                .stream()
+                .anyMatch(inv -> inv.getExpiresAt() == null || inv.getExpiresAt().isAfter(Instant.now()));
+        if (hayPendiente) {
+            throw new IllegalStateException("Ya existe una invitación de Product Owner pendiente para este proyecto.");
+        }
     }
 
     private String generarCodigo() {

@@ -14,4 +14,8 @@ public interface ProjectMemberRepository extends JpaRepository<ProjectMember, Pr
     List<ProjectMember> findByUserId(String userId);
     boolean existsByProyectoIdAndUserId(UUID proyectoId, String userId);
     Optional<ProjectMember> findByProyectoIdAndUserId(UUID proyectoId, String userId);
+
+    /** V40 — a lo sumo un Product Owner activo por proyecto (ver también el
+     *  índice único parcial de V40 sobre project_members). */
+    boolean existsByProyectoIdAndRol(UUID proyectoId, String rol);
 }

@@ -12,7 +12,17 @@ export const jwtInterceptor: HttpInterceptorFn = (req, next) => {
 
   if (token) {
     req = req.clone({
-      setHeaders: { Authorization: `Bearer ${token}` }
+      setHeaders: { 
+        Authorization: `Bearer ${token}`,
+        Accept: 'application/json'
+      }
+    });
+  } else {
+    // Incluso sin token, establecer Accept específico
+    req = req.clone({
+      setHeaders: { 
+        Accept: 'application/json'
+      }
     });
   }
 

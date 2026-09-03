@@ -50,4 +50,11 @@ export class AIInsightsService {
   dismissInsight(insightId: string): Observable<void> {
     return this.http.post<void>(`${this.base}/${insightId}/dismiss`, {});
   }
+
+  /**
+   * Actualiza los campos editables de un insight (title, description, recommendation).
+   */
+  updateInsight(insightId: string, updateData: { title: string; description: string; recommendation: string | null }): Observable<AIInsight> {
+    return this.http.put<AIInsight>(`${this.base}/${insightId}`, updateData);
+  }
 }

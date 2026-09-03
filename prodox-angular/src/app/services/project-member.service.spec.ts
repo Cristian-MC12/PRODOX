@@ -82,6 +82,35 @@ describe('ProjectMemberService', () => {
     http.flush({ codigo: 'PRJ-ABC123', emailEnviado: false });
   });
 
+  it('invitar: V39 — con rol product_owner, lo incluye en el body', () => {
+    const proyectoId = 'uuid-proyecto-1';
+    const email = 'po@mpdia.com';
+
+    service.invitar(proyectoId, email, 'product_owner').subscribe(res => {
+      expect(res.codigo).toBe('PRJ-ABC123');
+    });
+
+    const http = httpMock.expectOne(`${environment.apiBaseUrl}/project-members/${proyectoId}/invitar`);
+    expect(http.request.body).toEqual({ email, rol: 'product_owner' });
+    http.flush({ codigo: 'PRJ-ABC123', emailEnviado: true });
+  });
+
+  // ── cambiarRol (V39 — Product Owner) ────────────────────────────────────
+
+  it('cambiarRol: debe hacer PATCH a /project-members/{proyectoId}/{userId}/rol', () => {
+    const proyectoId = 'uuid-proyecto-1';
+    const userId = 'uuid-user-1';
+
+    service.cambiarRol(proyectoId, userId, 'product_owner').subscribe(res => {
+      expect(res.rol).toBe('product_owner');
+    });
+
+    const http = httpMock.expectOne(`${environment.apiBaseUrl}/project-members/${proyectoId}/${userId}/rol`);
+    expect(http.request.method).toBe('PATCH');
+    expect(http.request.body).toEqual({ rol: 'product_owner' });
+    http.flush({ ...mockMiembro, rol: 'product_owner' });
+  });
+
   // ── unirse ────────────────────────────────────────────────────────────────
 
   it('unirse: debe hacer POST con código y retornar el nuevo miembro', () => {

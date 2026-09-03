@@ -39,7 +39,7 @@ class EliminarProyectoE2ETest {
 
         CrearProyectoRequest req = new CrearProyectoRequest(
                 "E2E-DELETE-" + UUID.randomUUID(), "test e2e de eliminación", "scrum",
-                1, 2, LocalDate.now(), "goal e2e");
+                "SEMANAS", 1, null, 2, LocalDate.now(), "goal e2e");
 
         var creado = proyectoService.crear(sm.getId().toString(), req);
         entityManager.flush();

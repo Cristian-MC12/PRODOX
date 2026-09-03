@@ -49,6 +49,16 @@ public class Sprint {
     @Column(name = "fecha_fin")
     private LocalDate fechaFin;
 
+    /** Representación temporal real (fecha+hora) del inicio del sprint —
+     *  solo se completa cuando el timebox del proyecto está en HORAS (V41).
+     *  Para sprints en días/semanas sigue usándose exclusivamente
+     *  fechaInicio/fechaFin (DATE), sin ningún cambio de comportamiento. */
+    @Column(name = "fecha_hora_inicio")
+    private Instant fechaHoraInicio;
+
+    @Column(name = "fecha_hora_fin")
+    private Instant fechaHoraFin;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
 }

@@ -3,6 +3,7 @@ package com.prodox.controller;
 
 import com.prodox.dto.ai.AIInsightDto;
 import com.prodox.dto.ai.GenerateInsightsResultDto;
+import com.prodox.dto.ai.UpdateInsightDto;
 import com.prodox.service.AIInsightsService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -108,5 +109,32 @@ public class AIInsightsController {
         insightsService.dismissInsight(insightId, userId);
         
         return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * PUT /api/ai/insights/{insightId}
+     * 
+     * Actualiza los campos editables de un insight (title, description, recommendation).
+     * Permite al usuario refinar o corregir insights generados automáticamente.
+     * 
+     * @param insightId ID del insight a actualizar
+     * @param updateDto DTO con los campos a actualizar
+     * @param auth Usuario autenticado (obtenido del JWT)
+     * @return Insight actualizado
+     * @throws SecurityException si el usuario no tiene acceso al proyecto del insight (403)
+     * @throws IllegalArgumentException si el insight no existe (400)
+     */
+    @PutMapping("/{insightId}")
+    public ResponseEntity<AIInsightDto> updateInsight(
+            @PathVariable UUID insightId,
+            @RequestBody UpdateInsightDto updateDto,
+            Authentication auth) {
+        
+        String userId = auth.getName();
+        log.info("PUT update insight={} usuario={}", insightId, userId);
+        
+        AIInsightDto updated = insightsService.updateInsight(insightId, updateDto, userId);
+        
+        return ResponseEntity.ok(updated);
     }
 }

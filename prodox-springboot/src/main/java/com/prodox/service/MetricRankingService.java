@@ -661,7 +661,14 @@ public class MetricRankingService {
                         p.getFuenteAcademica(),
                         p.getFormulaAcademica(),
                         p.getTipoOperacion(),
-                        p.getUnidadResultado()
+                        p.getUnidadResultado(),
+                        // Campos de escala estructurada
+                        p.getEscalaTipo(),
+                        p.getEscalaMin(),
+                        p.getEscalaMax(),
+                        p.getEscalaPaso(),
+                        p.getEscalaSinLimite(),
+                        p.getEscalaDescripcion()
                 ))
                 .toList();
     }
@@ -690,7 +697,14 @@ public class MetricRankingService {
                         p.getFuenteAcademica(),
                         p.getFormulaAcademica(),
                         p.getTipoOperacion(),
-                        p.getUnidadResultado()
+                        p.getUnidadResultado(),
+                        // Campos de escala estructurada
+                        p.getEscalaTipo(),
+                        p.getEscalaMin(),
+                        p.getEscalaMax(),
+                        p.getEscalaPaso(),
+                        p.getEscalaSinLimite(),
+                        p.getEscalaDescripcion()
                 ))
                 .toList();
     }

@@ -82,6 +82,13 @@ export const routes: Routes = [
     loadComponent: () => import('./pages/crear-metrica-ia/crear-metrica-ia.component').then(m => m.CrearMetricaIAComponent),
     title: 'Crear métrica con IA — PRODOX AI'
   },
+  // ── Backlog (Product Owner — V39) ───────────────────────────────────────
+  {
+    path: 'backlog',
+    canActivate: [authGuard, proyectoGuard],
+    loadComponent: () => import('./pages/backlog/backlog.component').then(m => m.BacklogComponent),
+    title: 'Backlog — PRODOX AI'
+  },
   // ── Sprints ───────────────────────────────────────────────────────────
   {
     path: 'sprints',

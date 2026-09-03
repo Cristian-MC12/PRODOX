@@ -15,6 +15,7 @@ import { SprintDto } from '../../models/sprint.model';
 import { ProyectoMetricaDto } from '../../models/planeacion.model';
 import { VariableDto } from '../../models/variable.model';
 import { MetricaSeleccionada } from '../../models/seleccion.model';
+import { timeboxAbreviado } from '../../models/timebox.model';
 import { environment } from '../../../environments/environment';
 
 type Paso = 'metricas' | 'variables' | 'sprints';
@@ -108,7 +109,7 @@ type Paso = 'metricas' | 'variables' | 'sprints';
                      style="width: 36px; height: 36px; background: rgba(20, 184, 166, 0.1); border-radius: 50%; margin: 0 auto;">
                   <i class="bi bi-clock" style="font-size: 16px; color: #14B8A6;"></i>
                 </div>
-                <div class="fw-bold" style="font-size: 16px; color: #1F2937; line-height: 1.2;">{{ proyecto.timeBoxSemanas }} sem</div>
+                <div class="fw-bold" style="font-size: 16px; color: #1F2937; line-height: 1.2;">{{ timeboxAbreviado(proyecto) }}</div>
                 <div style="font-size: 10px; color: #9CA3AF; line-height: 1.2;">por iteración</div>
               </div>
 
@@ -589,6 +590,9 @@ export class PlaneacionComponent implements OnInit {
   variables: VariableDto[] = [];
   sprints: SprintDto[] = [];
   paso: Paso = 'metricas';
+
+  /** Expuesto al template para no repetir la lógica de unidades en cada vista. */
+  readonly timeboxAbreviado = timeboxAbreviado;
   cargando = true;
   busqueda = '';
   categoriaFiltro = '';

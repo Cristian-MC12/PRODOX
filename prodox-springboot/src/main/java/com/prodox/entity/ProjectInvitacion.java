@@ -32,6 +32,12 @@ public class ProjectInvitacion {
     @Column(nullable = false)
     private Boolean usado = false;
 
+    /** Rol por proyecto con el que se invitó a este correo (V39):
+     *  "scrum_member" (default) o "product_owner". Se aplica al ProjectMember
+     *  recién creado cuando la invitación se acepta (ver ProjectMemberService.unirse). */
+    @Column(nullable = false, length = 20)
+    private String rol = ProjectMember.ROL_SCRUM_MEMBER;
+
     /** Nullable: invitaciones creadas antes de V35 no la tienen y se tratan
      *  como no-expirables (ver ProjectMemberService). */
     @Column(name = "expires_at")

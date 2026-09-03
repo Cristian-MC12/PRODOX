@@ -84,6 +84,20 @@ public class SprintController {
         return ResponseEntity.ok(sprintService.finalizarReabierto(sprintId));
     }
 
+    /**
+     * Cierra el sprint actualmente en ejecución sin iniciar uno nuevo.
+     * Restringida al Scrum Master del proyecto. Útil cuando se quiere
+     * finalizar el último sprint sin crear uno nuevo.
+     */
+    @PatchMapping("/{sprintId}/cerrar")
+    public ResponseEntity<SprintDto> cerrarActual(
+            @PathVariable UUID sprintId,
+            Authentication auth) {
+        SprintDto sprintActual = sprintService.getById(sprintId);
+        validarScrumMaster(sprintActual.proyectoId(), auth);
+        return ResponseEntity.ok(sprintService.cerrarSprintActual(sprintId));
+    }
+
     /** Mismo patrón de autorización que AIInsightsService.validateProjectAccess. */
     private void validarAcceso(UUID proyectoId, Authentication auth) {
         String userId = auth.getName();

@@ -10,6 +10,7 @@ import { ProyectoService } from '../../services/proyecto.service';
 import { SprintService } from '../../services/sprint.service';
 import { ProjectMemberService } from '../../services/project-member.service';
 import { ProyectoDto } from '../../models/proyecto.model';
+import { timeboxAbreviado } from '../../models/timebox.model';
 
 @Component({
   selector: 'app-proyectos',
@@ -102,17 +103,36 @@ import { ProyectoDto } from '../../models/proyecto.model';
                   <input type="text" class="form-control form-control-sm"
                          placeholder="Breve descripción..." formControlName="descripcion">
                 </div>
-                <div class="col-md-4">
-                  <label class="form-label small fw-semibold">Time Box <span class="text-danger">*</span></label>
-                  <select class="form-select form-select-sm" formControlName="timeBoxSemanas"
-                          [class.is-invalid]="f['timeBoxSemanas'].invalid && f['timeBoxSemanas'].touched">
-                    <option value="">Seleccionar...</option>
-                    <option [value]="1">1 semana</option>
-                    <option [value]="2">2 semanas</option>
-                    <option [value]="3">3 semanas</option>
-                    <option [value]="4">4 semanas</option>
-                  </select>
-                  <div class="invalid-feedback">Requerido.</div>
+                <div class="col-12">
+                  <label class="form-label small fw-semibold">Timebox de la iteración <span class="text-danger">*</span></label>
+                  <div class="row g-2">
+                    <div class="col-md-3">
+                      <input type="number" class="form-control form-control-sm" min="1"
+                             placeholder="Duración" formControlName="timeboxDuracion"
+                             [class.is-invalid]="f['timeboxDuracion'].invalid && f['timeboxDuracion'].touched">
+                    </div>
+                    <div class="col-md-4">
+                      <select class="form-select form-select-sm" formControlName="timeboxUnidad">
+                        <option value="HORAS">Horas</option>
+                        <option value="DIAS">Días</option>
+                        <option value="SEMANAS">Semanas</option>
+                      </select>
+                    </div>
+                    @if (f['timeboxUnidad'].value === 'HORAS') {
+                      <div class="col-md-5">
+                        <input type="time" class="form-control form-control-sm"
+                               formControlName="horaInicio"
+                               [class.is-invalid]="horaInicioInvalida()">
+                        <div class="form-text">Hora de inicio del primer sprint</div>
+                      </div>
+                    }
+                  </div>
+                  @if (f['timeboxDuracion'].invalid && f['timeboxDuracion'].touched) {
+                    <div class="text-danger small mt-1">Duración requerida, mayor a 0.</div>
+                  }
+                  @if (horaInicioInvalida()) {
+                    <div class="text-danger small mt-1">Indicá la hora de inicio para un timebox en horas.</div>
+                  }
                 </div>
                 <div class="col-md-4">
                   <label class="form-label small fw-semibold">Número de Sprints <span class="text-danger">*</span></label>
@@ -194,7 +214,7 @@ import { ProyectoDto } from '../../models/proyecto.model';
                 </div>
                 <div class="card-body py-2">
                   <div class="small mb-1 text-muted">
-                    <i class="bi bi-clock me-1"></i>Time Box: <strong>{{ p.timeBoxSemanas }} sem</strong>
+                    <i class="bi bi-clock me-1"></i>Time Box: <strong>{{ timeboxAbreviado(p) }}</strong>
                     <span class="ms-2"><i class="bi bi-people me-1"></i>{{ p.totalMiembros }} miembro(s)</span>
                   </div>
                   <div class="small mb-1">
@@ -276,6 +296,14 @@ export class ProyectosComponent implements OnInit {
   proyectoAEliminar: ProyectoDto | null = null;
   eliminando = false;
 
+  /** V41 — controla cuándo mostrar el error de "falta hora de inicio"
+   *  (timeboxUnidad=HORAS): el campo solo existe en el DOM condicionalmente,
+   *  así que "touched" por sí solo no alcanza para decidir cuándo mostrarlo. */
+  intentoEnviar = false;
+
+  /** Expuesto al template para no repetir la lógica de unidades en cada vista. */
+  readonly timeboxAbreviado = timeboxAbreviado;
+
   constructor(
     public  auth: AuthService,
     private proyectoService: ProyectoService,
@@ -293,13 +321,15 @@ export class ProyectosComponent implements OnInit {
 
   ngOnInit(): void {
     this.form = this.fb.group({
-      nombre:         ['', Validators.required],
-      descripcion:    [''],
-      metodo:         ['', Validators.required],
-      timeBoxSemanas: ['', Validators.required],
-      numeroSprints:  [3, [Validators.required, Validators.min(1), Validators.max(20)]],
-      fechaInicio:    ['', Validators.required],
-      productGoal:    ['', Validators.required]
+      nombre:          ['', Validators.required],
+      descripcion:     [''],
+      metodo:          ['', Validators.required],
+      timeboxUnidad:   ['SEMANAS', Validators.required],
+      timeboxDuracion: [2, [Validators.required, Validators.min(1)]],
+      horaInicio:      [''],
+      numeroSprints:   [3, [Validators.required, Validators.min(1), Validators.max(20)]],
+      fechaInicio:     ['', Validators.required],
+      productGoal:     ['', Validators.required]
     });
     this.cargar();
   }
@@ -314,18 +344,32 @@ export class ProyectosComponent implements OnInit {
     });
   }
 
+  /** V41 — solo exige hora de inicio cuando el timebox está en horas; el
+   *  campo ni siquiera existe en el DOM para días/semanas. */
+  horaInicioInvalida(): boolean {
+    return this.intentoEnviar
+        && this.form.value.timeboxUnidad === 'HORAS'
+        && !this.form.value.horaInicio;
+  }
+
   crearProyecto(): void {
-    if (this.form.invalid) { this.form.markAllAsTouched(); return; }
+    this.intentoEnviar = true;
+    if (this.form.invalid || this.horaInicioInvalida()) {
+      this.form.markAllAsTouched();
+      return;
+    }
     this.creando = true;
     const val = this.form.value;
     this.proyectoService.crear({
-      nombre:         val.nombre,
-      descripcion:    val.descripcion ?? '',
-      metodo:         val.metodo,
-      timeBoxSemanas: Number(val.timeBoxSemanas),
-      numeroSprints:  Number(val.numeroSprints),
-      fechaInicio:    val.fechaInicio,
-      productGoal:    val.productGoal
+      nombre:          val.nombre,
+      descripcion:     val.descripcion ?? '',
+      metodo:          val.metodo,
+      timeboxUnidad:   val.timeboxUnidad,
+      timeboxDuracion: Number(val.timeboxDuracion),
+      horaInicio:      val.timeboxUnidad === 'HORAS' ? val.horaInicio : null,
+      numeroSprints:   Number(val.numeroSprints),
+      fechaInicio:     val.fechaInicio,
+      productGoal:     val.productGoal
     }).pipe(
       catchError(err => {
         this.showAlert(err?.error?.error ?? 'Error al crear el proyecto.', 'alert-danger');
@@ -336,7 +380,8 @@ export class ProyectosComponent implements OnInit {
       if (p) {
         this.proyectos = [p, ...this.proyectos];
         this.mostrarFormulario = false;
-        this.form.reset();
+        this.intentoEnviar = false;
+        this.form.reset({ timeboxUnidad: 'SEMANAS', timeboxDuracion: 2, numeroSprints: 3 });
         this.showAlert('Proyecto creado exitosamente.', 'alert-success');
       }
       this.creando = false;

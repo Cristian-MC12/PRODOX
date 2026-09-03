@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.prodox.dto.ai.AIInsightDto;
 import com.prodox.dto.ai.GenerateInsightsResultDto;
 import com.prodox.dto.ai.InsightEvidenceDto;
+import com.prodox.dto.ai.UpdateInsightDto;
 import com.prodox.dto.analytics.*;
 import com.prodox.entity.AIInsight;
 import com.prodox.entity.ProjectMember;
@@ -808,5 +809,38 @@ public class AIInsightsService {
         insightRepo.save(insight);
         
         log.info("Insight {} descartado por usuario {}", insightId, userId);
+    }
+
+    /**
+     * Actualiza los campos editables de un insight.
+     * Solo permite editar title, description y recommendation.
+     */
+    @Transactional
+    public AIInsightDto updateInsight(UUID insightId, UpdateInsightDto updateDto, String userId) {
+        AIInsight insight = insightRepo.findById(insightId)
+                .orElseThrow(() -> new IllegalArgumentException("Insight no encontrado"));
+        
+        validateProjectAccess(userId, insight.getProyectoId());
+        
+        // Validar campos requeridos
+        if (updateDto.title() == null || updateDto.title().trim().isEmpty()) {
+            throw new IllegalArgumentException("El título no puede estar vacío");
+        }
+        if (updateDto.description() == null || updateDto.description().trim().isEmpty()) {
+            throw new IllegalArgumentException("La descripción no puede estar vacía");
+        }
+        
+        // Actualizar campos (los nombres en la entidad están en español)
+        insight.setTitulo(updateDto.title().trim());
+        insight.setDescripcion(updateDto.description().trim());
+        insight.setRecomendacion(updateDto.recommendation() != null && !updateDto.recommendation().trim().isEmpty() 
+                ? updateDto.recommendation().trim() 
+                : null);
+        
+        AIInsight saved = insightRepo.save(insight);
+        
+        log.info("Insight {} actualizado por usuario {}", insightId, userId);
+        
+        return toDto(saved);
     }
 }

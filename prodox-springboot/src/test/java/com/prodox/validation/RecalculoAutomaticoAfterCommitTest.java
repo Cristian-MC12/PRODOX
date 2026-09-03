@@ -106,6 +106,7 @@ class RecalculoAutomaticoAfterCommitTest {
                 nuevo.setDescripcion("Proyecto aislado para validar la corrección del recálculo after-commit. No es dato real.");
                 nuevo.setMetodo("scrum");
                 nuevo.setTimeBoxSemanas(2);
+                nuevo.setTimeboxDuracion(2); // V41: timebox_duracion es NOT NULL; este test construye Proyecto directo, sin pasar por ProyectoService.
                 nuevo.setProductGoal("Sandbox de validación automática");
                 nuevo.setSprintGoal("Sandbox de validación automática");
                 nuevo.setNumeroSprints(4);

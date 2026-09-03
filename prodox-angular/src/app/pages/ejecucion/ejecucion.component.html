@@ -35,7 +35,7 @@
                     title="Ir al sprint anterior">
               <i class="bi bi-chevron-left me-1"></i>Sprint anterior
             </button>
-            <div style="min-width:260px" class="flex-grow-1 flex-sm-grow-0">
+            <div style="min-width:380px" class="flex-grow-1 flex-sm-grow-0">
               <label class="form-label small fw-semibold mb-1">Sprint</label>
               <select class="form-select form-select-sm"
                       [(ngModel)]="sprintSeleccionadoId"
@@ -254,7 +254,7 @@
                               <label class="form-label">Fecha de captura</label>
                               <input type="date" class="form-control"
                                      [(ngModel)]="v.fecha" [name]="'fecha-' + v.variableId"
-                                     [min]="sprintActual?.fechaInicio" [max]="sprintActual?.fechaFin ?? undefined">
+                                     [min]="sprintActual.fechaInicio" [max]="sprintActual.fechaFin ?? undefined">
                               @if (sprintActual) {
                                 <div class="form-hint">
                                   Permitido: {{ sprintActual.fechaInicio | date:'dd/MM/yyyy' }}
@@ -289,11 +289,11 @@
                                        [step]="v.escalaPaso ?? 0.01"
                                        [min]="v.escalaMin" [max]="v.escalaMax ?? null"
                                        [(ngModel)]="v.valorNum" [name]="'valor-' + v.variableId"
-                                       placeholder="0 – 100">
+                                       [placeholder]="getPlaceholderRango(v)">
                               } @else {
                                 <input type="number" class="form-control" step="0.01"
                                        [(ngModel)]="v.valorNum" [name]="'valor-' + v.variableId"
-                                       placeholder="0 – 100">
+                                       placeholder="Ingrese un valor numérico">
                               }
                             </div>
                           </div>

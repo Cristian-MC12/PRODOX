@@ -75,6 +75,7 @@ class CamposAcademicosVerificacionE2ETest {
         p.setNombre("Sandbox efimero FASE 11 test");
         p.setMetodo("scrum");
         p.setTimeBoxSemanas(1);
+        p.setTimeboxDuracion(1); // V41: timebox_duracion es NOT NULL; este test construye Proyecto directo, sin pasar por ProyectoService.
         p.setProductGoal("test");
         p.setSprintGoal("test");
         p.setScrumMasterId(userEmail);

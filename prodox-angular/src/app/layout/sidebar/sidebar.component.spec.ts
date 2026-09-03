@@ -225,34 +225,109 @@ describe('SidebarComponent', () => {
 
   it('debería mostrar el rol real del usuario autenticado (Scrum Member), no asumir siempre Scrum Master', () => {
     (mockAuthService.currentUser as jasmine.Spy).and.returnValue({ ...mockUser, role: 'scrum_member' });
-    // Corrección: esScrumMaster ya no depende del rol global de cuenta —
-    // depende de si el email coincide con el scrumMasterEmail del proyecto
-    // activo (aquí sigue siendo 'test@test.com' para ambos, así que sigue
-    // reconocido como Scrum Master de ESTE proyecto aunque su rol de cuenta
-    // ahora sea "scrum_member"). El caso real de un no-dueño se cubre abajo.
+    // V39: esScrumMaster ya no depende del rol global de cuenta ni de comparar
+    // emails — depende de ProyectoDto.miRol, el rol POR PROYECTO calculado por
+    // el backend a partir de ProjectMember.rol (aquí 'scrum_master' para ESTE
+    // proyecto, aunque su rol de cuenta ahora sea "scrum_member"). El caso de
+    // un no-SM en este proyecto se cubre abajo.
     component.proyectoActivo.set({
       id: 'proyecto-123', nombre: 'Proyecto Test', descripcion: 'Test', metodo: 'scrum',
       timeBoxSemanas: 2, numeroSprints: 5, fechaInicio: '2026-07-01', productGoal: 'Goal',
       sprintGoal: 'Sprint', estado: 'activo', scrumMasterEmail: 'test@test.com',
-      totalMiembros: 3, createdAt: '2026-07-01T00:00:00Z'
+      totalMiembros: 3, createdAt: '2026-07-01T00:00:00Z', miRol: 'scrum_master'
     });
     fixture.detectChanges();
 
     expect(component.nombreMostrado()).toBe('Test User');
     expect(component.esScrumMaster()).toBeTrue();
+    expect(component.rolLabel()).toBe('Scrum Master');
   });
 
-  it('un usuario cuyo email NO coincide con el scrumMasterEmail del proyecto activo no es reconocido como su Scrum Master, aunque su rol global de cuenta sea "scrum_master"', () => {
+  it('un usuario cuyo rol por proyecto NO es scrum_master no es reconocido como Scrum Master de ESE proyecto, aunque su rol global de cuenta sea "scrum_master"', () => {
     (mockAuthService.currentUser as jasmine.Spy).and.returnValue({ ...mockUser, email: 'no-es-el-creador@test.com', role: 'scrum_master' });
     component.proyectoActivo.set({
       id: 'proyecto-123', nombre: 'Proyecto Test', descripcion: 'Test', metodo: 'scrum',
       timeBoxSemanas: 2, numeroSprints: 5, fechaInicio: '2026-07-01', productGoal: 'Goal',
       sprintGoal: 'Sprint', estado: 'activo', scrumMasterEmail: 'test@test.com',
-      totalMiembros: 3, createdAt: '2026-07-01T00:00:00Z'
+      totalMiembros: 3, createdAt: '2026-07-01T00:00:00Z', miRol: 'scrum_member'
     });
     fixture.detectChanges();
 
     expect(component.esScrumMaster()).toBeFalse();
+    expect(component.rolLabel()).toBe('Scrum Member');
+  });
+
+  it('V39: un usuario con rol Product Owner en el proyecto activo se muestra como "Product Owner", nunca como "Scrum Member"', () => {
+    component.proyectoActivo.set({
+      id: 'proyecto-123', nombre: 'Proyecto Test', descripcion: 'Test', metodo: 'scrum',
+      timeBoxSemanas: 2, numeroSprints: 5, fechaInicio: '2026-07-01', productGoal: 'Goal',
+      sprintGoal: 'Sprint', estado: 'activo', scrumMasterEmail: 'test@test.com',
+      totalMiembros: 3, createdAt: '2026-07-01T00:00:00Z', miRol: 'product_owner'
+    });
+    fixture.detectChanges();
+
+    expect(component.esScrumMaster()).toBeFalse();
+    expect(component.rolLabel()).toBe('Product Owner');
+  });
+
+  it('Compatibilidad: sin miRol (backend no reiniciado o caché previa a V39), el Scrum Master real sigue mostrándose como tal', () => {
+    const { miRol, ...proyectoSinMiRol } = {
+      id: 'proyecto-123', nombre: 'Proyecto Test', descripcion: 'Test', metodo: 'scrum',
+      timeBoxSemanas: 2, numeroSprints: 5, fechaInicio: '2026-07-01', productGoal: 'Goal',
+      sprintGoal: 'Sprint', estado: 'activo', scrumMasterEmail: 'test@test.com',
+      totalMiembros: 3, createdAt: '2026-07-01T00:00:00Z', miRol: 'product_owner'
+    };
+    component.proyectoActivo.set(proyectoSinMiRol as any);
+    fixture.detectChanges();
+
+    // mockUser.email === 'test@test.com' === scrumMasterEmail: fallback debe reconocerlo como SM.
+    expect(component.esScrumMaster()).toBeTrue();
+    expect(component.rolLabel()).toBe('Scrum Master');
+  });
+
+  it('debería mostrar el enlace a Backlog cuando hay proyecto activo', () => {
+    component.proyectoActivo.set({
+      id: 'proyecto-123', nombre: 'Proyecto Test', descripcion: 'Test', metodo: 'scrum',
+      timeBoxSemanas: 2, numeroSprints: 5, fechaInicio: '2026-07-01', productGoal: 'Goal',
+      sprintGoal: 'Sprint', estado: 'activo', scrumMasterEmail: 'test@test.com',
+      totalMiembros: 3, createdAt: '2026-07-01T00:00:00Z', miRol: 'product_owner'
+    });
+    fixture.detectChanges();
+
+    const compiled = fixture.nativeElement;
+    const backlogLink = compiled.querySelector('a[routerLink="/backlog"]');
+    expect(backlogLink).toBeTruthy();
+    expect(backlogLink.textContent).toContain('Backlog');
+  });
+
+  it('Backlog NO es una 4ª fase: se muestra indentado (nav-subitem) como sub-ítem de Planeación, entre Planeación y Ejecución, y la sección sigue agrupando exactamente 3 fases', () => {
+    component.proyectoActivo.set({
+      id: 'proyecto-123', nombre: 'Proyecto Test', descripcion: 'Test', metodo: 'scrum',
+      timeBoxSemanas: 2, numeroSprints: 5, fechaInicio: '2026-07-01', productGoal: 'Goal',
+      sprintGoal: 'Sprint', estado: 'activo', scrumMasterEmail: 'test@test.com',
+      totalMiembros: 3, createdAt: '2026-07-01T00:00:00Z', miRol: 'product_owner'
+    });
+    fixture.detectChanges();
+
+    const compiled = fixture.nativeElement;
+    const backlogLink = compiled.querySelector('a[routerLink="/backlog"]') as HTMLAnchorElement;
+    expect(backlogLink.classList.contains('nav-subitem')).toBeTrue();
+
+    // Las 3 fases reales del proyecto no llevan la clase de sub-ítem.
+    ['/planeacion', '/ejecucion', '/evaluacion'].forEach(ruta => {
+      const link = compiled.querySelector(`a[routerLink="${ruta}"]`) as HTMLAnchorElement;
+      expect(link).toBeTruthy();
+      expect(link.classList.contains('nav-subitem')).toBeFalse();
+    });
+
+    // Orden: Planeación, luego Backlog (sub-ítem), luego Ejecución.
+    const links = Array.from(compiled.querySelectorAll('a.nav-link')) as HTMLAnchorElement[];
+    const rutas = links.map(a => a.getAttribute('routerLink'));
+    const idxPlaneacion = rutas.indexOf('/planeacion');
+    const idxBacklog = rutas.indexOf('/backlog');
+    const idxEjecucion = rutas.indexOf('/ejecucion');
+    expect(idxPlaneacion).toBeLessThan(idxBacklog);
+    expect(idxBacklog).toBeLessThan(idxEjecucion);
   });
 
   it('nombreMostrado: usa el correo como último recurso si el usuario no tiene nombre guardado', () => {

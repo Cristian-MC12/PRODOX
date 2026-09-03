@@ -4,6 +4,7 @@ import { RouterLink, RouterLinkActive, NavigationEnd, Router } from '@angular/ro
 import { CommonModule } from '@angular/common';
 import { AuthService } from '../../services/auth.service';
 import { ProyectoDto } from '../../models/proyecto.model';
+import { etiquetaRol, ROL_SCRUM_MASTER } from '../../models/project-role.model';
 import { filter, Subscription } from 'rxjs';
 
 @Component({
@@ -28,7 +29,7 @@ import { filter, Subscription } from 'rxjs';
 
       <!-- Project Card Container - Solo visible cuando NO está colapsado -->
       @if (proyectoActivo() && !collapsed()) {
-        <div class="px-3 project-card-wrapper" style="padding-bottom: 10px;">
+        <div class="px-3 project-card-wrapper" style="padding-bottom: 2px;">
           <div style="background: rgba(15, 23, 42, 0.6); border-radius: 8px; padding: 8px 10px;">
             <!-- Proyecto Activo -->
             <small class="text-uppercase d-block" style="font-size: 8px; letter-spacing: 0.05em; color: #FFFFFF; opacity: 0.5; margin-bottom: 5px;">
@@ -53,7 +54,7 @@ import { filter, Subscription } from 'rxjs';
               <div class="d-flex align-items-center justify-content-between">
                 <div class="d-flex align-items-center gap-2">
                   <i class="bi bi-award" style="font-size: 14px; color: #fff;"></i>
-                  <span style="font-size: 12px; font-weight: 500; color: #fff;">{{ esScrumMaster() ? 'Scrum Master' : 'Scrum Member' }}</span>
+                  <span style="font-size: 12px; font-weight: 500; color: #fff;">{{ rolLabel() }}</span>
                 </div>
                 <i class="bi bi-chevron-down" style="font-size: 10px; color: rgba(148, 163, 184, 0.4);"></i>
               </div>
@@ -63,10 +64,10 @@ import { filter, Subscription } from 'rxjs';
       }
 
       <!-- Nav links -->
-      <ul class="nav flex-column flex-grow-1" style="margin-top: 4px;">
+      <ul class="nav flex-column flex-grow-1" style="margin-top: 0px;">
         <!-- Separador Proyecto - Solo visible cuando NO está colapsado -->
         @if (!collapsed()) {
-          <li class="nav-item px-3" style="padding-top: 4px; padding-bottom: 2px;">
+          <li class="nav-item px-3" style="padding-top: 0px; padding-bottom: 2px;">
             <small class="text-muted text-uppercase" style="font-size:var(--text-2xs);letter-spacing:.05em">
               Proyecto
             </small>
@@ -113,7 +114,7 @@ import { filter, Subscription } from 'rxjs';
         @if (proyectoActivo()) {
           <!-- Separador de fase - Solo visible cuando NO está colapsado -->
           @if (!collapsed()) {
-            <li class="nav-item px-3" style="padding-top: 8px; padding-bottom: 2px;">
+            <li class="nav-item px-3" style="padding-top: 0px; padding-bottom: 2px;">
               <small class="text-muted text-uppercase" style="font-size:var(--text-2xs);letter-spacing:.05em">
                 Fases del proyecto
               </small>
@@ -121,11 +122,29 @@ import { filter, Subscription } from 'rxjs';
           }
 
           <li class="nav-item">
-            <a class="nav-link" routerLink="/planeacion" routerLinkActive="active" 
+            <a class="nav-link" routerLink="/planeacion" routerLinkActive="active"
                [title]="collapsed() ? 'Planeación' : ''">
               <i class="bi bi-layers"></i>
               @if (!collapsed()) {
                 <span>Planeación</span>
+              }
+            </a>
+          </li>
+
+          <!-- Backlog NO es una cuarta fase del proyecto — PRODOX tiene
+               exactamente 3 fases (Planeación, Ejecución, Evaluación). El
+               Backlog de producto es una funcionalidad DENTRO de Planeación,
+               por eso se muestra indentado como sub-ítem suyo (clase
+               nav-subitem) aunque conserve su propia ruta /backlog. Sigue
+               visible para todo miembro del proyecto (lectura garantizada
+               por el backend a cualquier miembro); solo el Product Owner ve,
+               dentro de la propia vista, las acciones de crear/editar/priorizar. -->
+          <li class="nav-item">
+            <a class="nav-link nav-subitem" routerLink="/backlog" routerLinkActive="active"
+               [title]="collapsed() ? 'Backlog' : ''">
+              <i class="bi bi-card-list"></i>
+              @if (!collapsed()) {
+                <span>Backlog</span>
               }
             </a>
           </li>
@@ -174,15 +193,10 @@ import { filter, Subscription } from 'rxjs';
                app-insights-quick-view. Ruta /ai-insights preservada e intacta,
                solo dejó de listarse aquí. -->
 
-          <li class="nav-item">
-            <a class="nav-link" routerLink="/ai-report" routerLinkActive="active" 
-               [title]="collapsed() ? 'Reportes' : ''">
-              <i class="bi bi-file-earmark-bar-graph"></i>
-              @if (!collapsed()) {
-                <span>Reportes</span>
-              }
-            </a>
-          </li>
+          <!-- Reportes: sin entrada propia (reorganización de navegación) —
+               su acceso ahora vive dentro de Dashboard como botón de acceso rápido,
+               junto a Insights IA y Retrospectiva. Ruta /ai-report preservada e
+               intacta, solo dejó de listarse aquí. -->
 
           <!-- Retrospectivas: sin entrada propia (reorganización de navegación) —
                su acceso ahora vive dentro de Dashboard (app-retrospective-panel).
@@ -196,18 +210,15 @@ import { filter, Subscription } from 'rxjs';
       </ul>
 
       <!-- User / logout -->
-      <div class="border-top p-3 user-section">
+      <div class="border-top user-section" style="padding: 0.5rem 1rem;">
         @if (!collapsed()) {
-          <small class="text-muted text-uppercase d-block mb-2" style="font-size:var(--text-2xs);letter-spacing:.05em">
-            General
-          </small>
           <div class="d-flex align-items-center gap-2 mb-2">
             <div class="user-avatar">
               {{ nombreMostrado().charAt(0).toUpperCase() }}
             </div>
             <div class="flex-grow-1">
               <strong class="d-block">{{ nombreMostrado() }}</strong>
-              <small class="text-muted d-block">{{ esScrumMaster() ? 'Scrum Master' : 'Scrum Member' }}</small>
+              <small class="text-muted d-block">{{ rolLabel() }}</small>
             </div>
             <i class="bi bi-three-dots-vertical"></i>
           </div>
@@ -272,13 +283,30 @@ export class SidebarComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Corrección: Scrum Master es siempre relativo al proyecto activo (su
-   * scrumMasterEmail, fijado por el backend al crearlo), nunca el rol
-   * global de cuenta — mismo patrón ya corregido en dashboard.component.ts
-   * (esScrumMasterDelProyecto).
+   * V39: el rol POR PROYECTO sale de ProyectoDto.miRol (calculado por el
+   * backend a partir de ProjectMember.rol), ya NO de comparar
+   * proyecto.scrumMasterEmail contra el email de la cuenta — ese email
+   * seguía siendo válido para distinguir SM de "no-SM", pero con un tercer
+   * rol (Product Owner) hace falta la fuente real, no una comparación que
+   * solo distingue dos casos.
+   *
+   * Fallback: si `miRol` todavía no llega (proyecto activo cacheado en
+   * localStorage ANTES de V39, o un backend que aún no fue reiniciado con
+   * este cambio), se recupera el criterio previo — comparar el email de la
+   * cuenta contra scrumMasterEmail — para no mostrarle "Scrum Member" a un
+   * Scrum Master real mientras esos datos se actualizan.
    */
   esScrumMaster(): boolean {
-    return this.proyectoActivo()?.scrumMasterEmail === this.auth.currentUser()?.email;
+    const proyecto = this.proyectoActivo();
+    if (proyecto?.miRol) return proyecto.miRol === ROL_SCRUM_MASTER;
+    return proyecto?.scrumMasterEmail === this.auth.currentUser()?.email;
+  }
+
+  /** Etiqueta a mostrar para el rol del usuario en el proyecto activo. */
+  rolLabel(): string {
+    const proyecto = this.proyectoActivo();
+    if (proyecto?.miRol) return etiquetaRol(proyecto.miRol);
+    return this.esScrumMaster() ? 'Scrum Master' : 'Scrum Member';
   }
 
   // El backend solo garantiza `nombre` para usuarios creados después de V33

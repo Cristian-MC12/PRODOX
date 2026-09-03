@@ -9,6 +9,8 @@ import { AuthService } from '../../services/auth.service';
 import { ProjectMemberService } from '../../services/project-member.service';
 import { ProjectMemberDto } from '../../models/project-member.model';
 import { ProyectoDto } from '../../models/proyecto.model';
+import { etiquetaRol, ROL_PRODUCT_OWNER, ROL_SCRUM_MASTER, ROL_SCRUM_MEMBER } from '../../models/project-role.model';
+import { timeboxAbreviado } from '../../models/timebox.model';
 
 @Component({
   selector: 'app-equipo',
@@ -73,7 +75,7 @@ import { ProyectoDto } from '../../models/proyecto.model';
                     {{ proyecto.metodo === 'scrum' ? 'Scrum' : 'XP' }}
                   </span>
                   <span class="badge bg-light text-dark border">
-                    {{ proyecto.timeBoxSemanas }} sem/iteración
+                    {{ timeboxAbreviado(proyecto) }}/iteración
                   </span>
                   <span class="badge" [class]="proyecto.estado === 'activo' ? 'bg-success' : 'bg-secondary'">
                     {{ proyecto.estado }}
@@ -117,11 +119,23 @@ import { ProyectoDto } from '../../models/proyecto.model';
                 Si tenés email configurado, se enviará automáticamente.
               </p>
               <div class="row g-2 align-items-end">
-                <div class="col-md-7">
+                <div class="col-md-5">
                   <label class="form-label small">Correo electrónico</label>
                   <input type="email" class="form-control form-control-sm"
                          placeholder="nombre@ejemplo.com"
                          [(ngModel)]="emailInvitar">
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label small">Rol en el proyecto</label>
+                  <select class="form-select form-select-sm" [(ngModel)]="rolInvitar">
+                    <option value="scrum_member">Scrum Member</option>
+                    @if (!hayProductOwner()) {
+                      <option value="product_owner">Product Owner</option>
+                    }
+                  </select>
+                  @if (hayProductOwner()) {
+                    <div class="form-text text-muted">Este proyecto ya tiene un Product Owner.</div>
+                  }
                 </div>
                 <div class="col-md-3">
                   <button class="btn btn-primary btn-sm w-100"
@@ -162,6 +176,9 @@ import { ProyectoDto } from '../../models/proyecto.model';
                       <th class="ps-3">Email</th>
                       <th>Rol</th>
                       <th>Desde</th>
+                      @if (esScrumMaster) {
+                        <th>Cambiar rol</th>
+                      }
                     </tr>
                   </thead>
                   <tbody>
@@ -175,14 +192,31 @@ import { ProyectoDto } from '../../models/proyecto.model';
                           }
                         </td>
                         <td class="align-middle text-nowrap">
-                          <span class="badge prox-badge-sm"
-                                [class]="m.rol === 'scrum_master' ? 'bg-primary' : 'bg-secondary'">
-                            {{ m.rol === 'scrum_master' ? 'Scrum Master' : 'Scrum Member' }}
+                          <span class="badge prox-badge-sm" [class]="badgeRol(m.rol)">
+                            {{ etiquetaRol(m.rol) }}
                           </span>
                         </td>
                         <td class="small text-muted align-middle text-nowrap">
                           {{ m.joinedAt | date:'dd/MM/yyyy' }}
                         </td>
+                        @if (esScrumMaster) {
+                          <td class="align-middle text-nowrap">
+                            @if (m.rol !== ROL_SCRUM_MASTER) {
+                              <select class="form-select form-select-sm"
+                                      style="width:auto;display:inline-block"
+                                      [ngModel]="m.rol"
+                                      [disabled]="cambiandoRolDe === m.userId"
+                                      (ngModelChange)="cambiarRolMiembro(m, $event)">
+                                <option [value]="ROL_SCRUM_MEMBER">Scrum Member</option>
+                                @if (puedeOfrecerProductOwner(m)) {
+                                  <option [value]="ROL_PRODUCT_OWNER">Product Owner</option>
+                                }
+                              </select>
+                            } @else {
+                              <span class="text-muted small">—</span>
+                            }
+                          </td>
+                        }
                       </tr>
                     }
                   </tbody>
@@ -204,9 +238,18 @@ export class EquipoComponent implements OnInit {
   enviando      = false;
   codigoInput   = '';
   emailInvitar  = '';
+  rolInvitar: 'scrum_member' | 'product_owner' = 'scrum_member';
   codigoGenerado = '';
+  cambiandoRolDe: string | null = null;
   alertMsg   = '';
   alertClass = 'alert-success';
+
+  /** Expuestos al template para no repetir literales de string en el HTML. */
+  readonly ROL_SCRUM_MASTER = ROL_SCRUM_MASTER;
+  readonly ROL_PRODUCT_OWNER = ROL_PRODUCT_OWNER;
+  readonly ROL_SCRUM_MEMBER = ROL_SCRUM_MEMBER;
+  readonly etiquetaRol = etiquetaRol;
+  readonly timeboxAbreviado = timeboxAbreviado;
 
   constructor(
     public  auth: AuthService,
@@ -215,13 +258,45 @@ export class EquipoComponent implements OnInit {
   ) {}
 
   /**
-   * Corrección: Scrum Master es siempre relativo a ESTE proyecto (su
-   * scrumMasterEmail, fijado por el backend al crearlo), nunca el rol
-   * global de cuenta — mismo patrón ya corregido en dashboard.component.ts
-   * (esScrumMasterDelProyecto) y ejecucion.component.ts.
+   * V39: el rol POR PROYECTO sale de ProyectoDto.miRol (calculado por el
+   * backend a partir de ProjectMember.rol), ya no de comparar
+   * proyecto.scrumMasterEmail contra el email de la cuenta — con un tercer
+   * rol (Product Owner) esa comparación solo alcanzaba para distinguir dos
+   * casos, no tres.
+   *
+   * Fallback: si `miRol` todavía no llega (proyecto activo cacheado en
+   * localStorage ANTES de V39, o un backend que aún no fue reiniciado con
+   * este cambio), se recupera el criterio previo — comparar el email de la
+   * cuenta contra scrumMasterEmail — para no ocultarle el panel de invitar a
+   * un Scrum Master real mientras esos datos se actualizan.
    */
   get esScrumMaster(): boolean {
+    if (this.proyecto?.miRol) return this.proyecto.miRol === ROL_SCRUM_MASTER;
     return this.proyecto?.scrumMasterEmail === this.auth.currentUser()?.email;
+  }
+
+  badgeRol(rol: string): string {
+    if (rol === ROL_SCRUM_MASTER) return 'bg-primary';
+    if (rol === ROL_PRODUCT_OWNER) return 'bg-info text-dark';
+    return 'bg-secondary';
+  }
+
+  /**
+   * Regla de negocio: a lo sumo un Product Owner activo por proyecto. Se
+   * calcula acá a partir de los miembros ya cargados (sin endpoint nuevo);
+   * el backend es quien realmente la garantiza (ProjectMemberService —
+   * invitar/unirse/cambiarRol — más un índice único parcial en base de
+   * datos), esto solo evita ofrecer en el selector una opción que el
+   * backend rechazaría igual.
+   */
+  hayProductOwner(): boolean {
+    return this.miembros.some(m => m.rol === ROL_PRODUCT_OWNER);
+  }
+
+  /** El propio Product Owner conserva la opción (para poder degradarlo);
+   *  cualquier otra fila la pierde mientras ya exista uno en el proyecto. */
+  puedeOfrecerProductOwner(m: ProjectMemberDto): boolean {
+    return !this.hayProductOwner() || m.rol === ROL_PRODUCT_OWNER;
   }
 
   ngOnInit(): void {
@@ -241,13 +316,19 @@ export class EquipoComponent implements OnInit {
     ).subscribe(m => {
       this.miembros = m;
       this.cargando = false;
+      // Si el select de invitar había quedado en "product_owner" (por ejemplo,
+      // otra pestaña acaba de asignar uno) y ya no corresponde ofrecerlo,
+      // se vuelve a scrum_member para no dejar seleccionada una opción inválida.
+      if (this.rolInvitar === 'product_owner' && this.hayProductOwner()) {
+        this.rolInvitar = 'scrum_member';
+      }
     });
   }
 
   invitar(): void {
     if (!this.emailInvitar.trim() || !this.proyecto) return;
     this.enviando = true;
-    this.memberService.invitar(this.proyecto.id, this.emailInvitar).pipe(
+    this.memberService.invitar(this.proyecto.id, this.emailInvitar, this.rolInvitar).pipe(
       catchError(err => {
         this.showAlert(err?.error?.error ?? 'Error al generar invitación.', 'alert-danger');
         this.enviando = false;
@@ -284,6 +365,32 @@ export class EquipoComponent implements OnInit {
         setTimeout(() => this.router.navigate(['/proyectos']), 2000);
       }
       this.procesando = false;
+    });
+  }
+
+  /**
+   * Cambia el rol de un miembro existente. La autorización real la hace el
+   * backend (solo el Scrum Master del proyecto — ver
+   * ProjectMemberService.cambiarRol); acá solo se refleja el resultado o el
+   * error, sin duplicar ninguna regla de negocio en el frontend.
+   */
+  cambiarRolMiembro(m: ProjectMemberDto, nuevoRol: string): void {
+    if (!this.proyecto || nuevoRol === m.rol) return;
+    const anterior = m.rol;
+    this.cambiandoRolDe = m.userId;
+    this.memberService.cambiarRol(this.proyecto.id, m.userId, nuevoRol as 'scrum_member' | 'product_owner').pipe(
+      catchError(err => {
+        this.showAlert(err?.error?.error ?? 'No se pudo cambiar el rol.', 'alert-danger');
+        m.rol = anterior;
+        this.cambiandoRolDe = null;
+        return of(null);
+      })
+    ).subscribe(actualizado => {
+      if (actualizado) {
+        m.rol = actualizado.rol;
+        this.showAlert(`Rol actualizado a ${etiquetaRol(actualizado.rol)}.`, 'alert-success');
+      }
+      this.cambiandoRolDe = null;
     });
   }
 

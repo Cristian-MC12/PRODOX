@@ -110,6 +110,7 @@ public class Fase1681EndToEndTest {
                 nuevo.setDescripcion("Proyecto aislado para validación automática de FASE 16.8.1. No es dato real.");
                 nuevo.setMetodo("scrum");
                 nuevo.setTimeBoxSemanas(2);
+                nuevo.setTimeboxDuracion(2); // V41: timebox_duracion es NOT NULL; este test construye Proyecto directo, sin pasar por ProyectoService.
                 nuevo.setProductGoal("Sandbox de validación automática");
                 nuevo.setSprintGoal("Sandbox de validación automática");
                 nuevo.setNumeroSprints(1);

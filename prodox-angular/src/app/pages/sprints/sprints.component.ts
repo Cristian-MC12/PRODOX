@@ -9,8 +9,9 @@ import { AuthService } from '../../services/auth.service';
 import { SprintService } from '../../services/sprint.service';
 import { SprintDto } from '../../models/sprint.model';
 import { ProyectoDto } from '../../models/proyecto.model';
+import { timeboxPalabraCompleta } from '../../models/timebox.model';
 
-type AccionSprint = 'cerrar' | 'reabrir' | 'finalizar';
+type AccionSprint = 'cerrar' | 'cerrar_actual' | 'reabrir' | 'finalizar';
 
 @Component({
   selector: 'app-sprints',
@@ -49,7 +50,7 @@ type AccionSprint = 'cerrar' | 'reabrir' | 'finalizar';
               <div class="vr"></div>
               <div>
                 <div class="text-muted small">Time Box</div>
-                <div class="fw-semibold">{{ proyecto.timeBoxSemanas }} semana(s)</div>
+                <div class="fw-semibold">{{ timeboxPalabraCompleta(proyecto) }}</div>
               </div>
               <div class="vr"></div>
               <div class="flex-grow-1">
@@ -152,6 +153,12 @@ type AccionSprint = 'cerrar' | 'reabrir' | 'finalizar';
                                     (click)="pedirFinalizar(s)">
                               <i class="bi bi-check2-circle me-1"></i>Finalizar
                             </button>
+                          } @else if (s.estado === 'en_ejecucion') {
+                            <button class="btn btn-outline-warning btn-sm py-0 px-2"
+                                    [disabled]="procesando"
+                                    (click)="pedirCerrarActual(s)">
+                              <i class="bi bi-check2-circle me-1"></i>Cerrar Sprint
+                            </button>
                           }
                         </td>
                       }
@@ -202,6 +209,9 @@ export class SprintsComponent implements OnInit {
   proyecto: ProyectoDto | null   = null;
   cargando        = true;
   nuevoSprintGoal = '';
+
+  /** Expuesto al template para no repetir la lógica de unidades en cada vista. */
+  readonly timeboxPalabraCompleta = timeboxPalabraCompleta;
   alertMsg   = '';
   alertClass = 'alert-success';
 
@@ -254,6 +264,11 @@ export class SprintsComponent implements OnInit {
     this.accionPendiente = { tipo: 'cerrar' };
   }
 
+  /** Cerrar el sprint actual sin iniciar uno nuevo. */
+  pedirCerrarActual(s: SprintDto): void {
+    this.accionPendiente = { tipo: 'cerrar_actual', sprint: s };
+  }
+
   pedirReabrir(s: SprintDto): void {
     this.accionPendiente = { tipo: 'reabrir', sprint: s };
   }
@@ -269,10 +284,11 @@ export class SprintsComponent implements OnInit {
 
   tituloAccion(): string {
     switch (this.accionPendiente?.tipo) {
-      case 'cerrar':    return 'Finalizar sprint';
-      case 'reabrir':   return 'Reabrir sprint';
-      case 'finalizar': return 'Finalizar sprint';
-      default:          return '';
+      case 'cerrar':        return 'Finalizar sprint';
+      case 'cerrar_actual': return 'Cerrar sprint actual';
+      case 'reabrir':       return 'Reabrir sprint';
+      case 'finalizar':     return 'Finalizar sprint';
+      default:              return '';
     }
   }
 
@@ -281,6 +297,9 @@ export class SprintsComponent implements OnInit {
     if (!accion) return '';
     if (accion.tipo === 'cerrar' && this.sprintActivo) {
       return `¿Seguro que querés finalizar el Sprint ${this.sprintActivo.numero} e iniciar el Sprint ${this.sprintActivo.numero + 1}?`;
+    }
+    if (accion.tipo === 'cerrar_actual' && accion.sprint) {
+      return `¿Seguro que querés cerrar el Sprint ${accion.sprint.numero}? Este sprint quedará finalizado.`;
     }
     if (accion.tipo === 'reabrir' && accion.sprint) {
       return `¿Seguro que querés reabrir el Sprint ${accion.sprint.numero}?`;
@@ -298,9 +317,11 @@ export class SprintsComponent implements OnInit {
 
     const obs = accion.tipo === 'cerrar'
       ? this.sprintService.cerrarEIniciarSiguiente(this.proyecto!.id, this.nuevoSprintGoal)
-      : accion.tipo === 'reabrir'
-        ? this.sprintService.reabrir(accion.sprint!.id)
-        : this.sprintService.finalizarReabierto(accion.sprint!.id);
+      : accion.tipo === 'cerrar_actual'
+        ? this.sprintService.cerrarSprintActual(accion.sprint!.id)
+        : accion.tipo === 'reabrir'
+          ? this.sprintService.reabrir(accion.sprint!.id)
+          : this.sprintService.finalizarReabierto(accion.sprint!.id);
 
     obs.pipe(
       catchError(err => {
@@ -313,6 +334,18 @@ export class SprintsComponent implements OnInit {
           localStorage.setItem('mpdia_sprint_activo', JSON.stringify(resultado));
           this.nuevoSprintGoal = '';
           this.showAlert(`Sprint ${resultado.numero} iniciado.`, 'alert-success');
+        } else if (accion.tipo === 'cerrar_actual') {
+          this.showAlert(`Sprint ${resultado.numero} cerrado.`, 'alert-success');
+          // Si era el sprint activo, limpiamos el localStorage
+          try {
+            const sprintActivo = localStorage.getItem('mpdia_sprint_activo');
+            if (sprintActivo) {
+              const parsed = JSON.parse(sprintActivo);
+              if (parsed.id === resultado.id) {
+                localStorage.removeItem('mpdia_sprint_activo');
+              }
+            }
+          } catch { /* ignore */ }
         } else if (accion.tipo === 'reabrir') {
           this.showAlert(`Sprint ${resultado.numero} reabierto.`, 'alert-success');
         } else {

@@ -376,6 +376,9 @@ import { environment } from '../../../environments/environment';
               <div class="col-12">
                 <label class="form-label small fw-semibold">
                   Objetivo de medición <span class="text-danger">*</span>
+                  <i class="bi bi-info-circle text-muted ms-1" 
+                     style="cursor: help"
+                     title="Define el propósito de esta métrica. ¿Qué insight o mejora esperas obtener al medirla?"></i>
                 </label>
                 <textarea class="form-control form-control-sm" rows="2"
                           placeholder="¿Qué se quiere lograr midiendo esta métrica?"
@@ -384,6 +387,9 @@ import { environment } from '../../../environments/environment';
               <div class="col-12">
                 <label class="form-label small fw-semibold">
                   Procedimiento / Fórmula <span class="text-danger">*</span>
+                  <i class="bi bi-info-circle text-muted ms-1" 
+                     style="cursor: help"
+                     title="Describe cómo se obtiene el valor de esta métrica. Incluye fórmulas matemáticas o pasos específicos para calcularla."></i>
                 </label>
                 <textarea class="form-control form-control-sm" rows="3"
                           placeholder="Fórmula o pasos para calcular el valor de la métrica..."
@@ -392,6 +398,9 @@ import { environment } from '../../../environments/environment';
               <div class="col-md-6">
                 <label class="form-label small fw-semibold">
                   Indicador y Variables <span class="text-danger">*</span>
+                  <i class="bi bi-info-circle text-muted ms-1" 
+                     style="cursor: help"
+                     title="Define el nombre del indicador y las variables que intervienen en su cálculo. Ej: 'Velocidad del equipo' medida en story points completados por sprint."></i>
                 </label>
                 <input type="text" class="form-control form-control-sm"
                        placeholder="Ej: Velocidad = SP completados / SP planificados"
@@ -400,10 +409,18 @@ import { environment } from '../../../environments/environment';
               <div class="col-12">
                 <label class="form-label small fw-semibold">
                   Escala de medición <span class="text-danger">*</span>
+                  <i class="bi bi-info-circle text-muted ms-1" 
+                     style="cursor: help"
+                     title="Define el rango y tipo de valores permitidos para esta métrica. Establece límites claros para mantener consistencia en las mediciones."></i>
                 </label>
                 <div class="row g-2 p-2 rounded" style="background-color:var(--background)">
                   <div class="col-md-3">
-                    <label class="form-label small text-muted mb-1">Tipo</label>
+                    <label class="form-label small text-muted mb-1">
+                      Tipo
+                      <i class="bi bi-info-circle-fill text-info ms-1" 
+                         style="cursor: help; font-size: 0.7rem"
+                         title="Numérica entera: solo números enteros (0, 1, 2, 5, 10). Numérica decimal: permite decimales (0.5, 1.25, 3.75)."></i>
+                    </label>
                     <select class="form-select form-select-sm" [(ngModel)]="form.escalaTipo">
                       <option [ngValue]="undefined">Sin definir</option>
                       <option value="NUMERICA_ENTERA">Numérica entera</option>
@@ -411,16 +428,31 @@ import { environment } from '../../../environments/environment';
                     </select>
                   </div>
                   <div class="col-md-3">
-                    <label class="form-label small text-muted mb-1">Mínimo</label>
+                    <label class="form-label small text-muted mb-1">
+                      Mínimo
+                      <i class="bi bi-info-circle-fill text-info ms-1" 
+                         style="cursor: help; font-size: 0.7rem"
+                         title="El valor más bajo permitido para esta métrica. Ej: 0 para porcentajes, 1 para conteos que no pueden ser cero."></i>
+                    </label>
                     <input type="number" class="form-control form-control-sm" [(ngModel)]="form.escalaMin">
                   </div>
                   <div class="col-md-3">
-                    <label class="form-label small text-muted mb-1">Máximo</label>
+                    <label class="form-label small text-muted mb-1">
+                      Máximo
+                      <i class="bi bi-info-circle-fill text-info ms-1" 
+                         style="cursor: help; font-size: 0.7rem"
+                         title="El valor más alto permitido. Ej: 100 para porcentajes, 10 para escalas de satisfacción. Desactívalo si no hay límite superior."></i>
+                    </label>
                     <input type="number" class="form-control form-control-sm"
                            [(ngModel)]="form.escalaMax" [disabled]="!!form.escalaSinLimite">
                   </div>
                   <div class="col-md-3">
-                    <label class="form-label small text-muted mb-1">Paso</label>
+                    <label class="form-label small text-muted mb-1">
+                      Paso
+                      <i class="bi bi-info-circle-fill text-info ms-1" 
+                         style="cursor: help; font-size: 0.7rem"
+                         title="Incremento mínimo entre valores. Ej: paso=1 permite 0,1,2,3... paso=5 permite 0,5,10,15... paso=0.5 permite 0, 0.5, 1.0, 1.5..."></i>
+                    </label>
                     <input type="number" class="form-control form-control-sm" step="0.01" min="0.01"
                            [(ngModel)]="form.escalaPaso">
                   </div>
@@ -428,11 +460,21 @@ import { environment } from '../../../environments/environment';
                     <div class="form-check mt-3">
                       <input class="form-check-input" type="checkbox" id="escalaSinLimite"
                              [(ngModel)]="form.escalaSinLimite" (ngModelChange)="onEscalaSinLimiteChange()">
-                      <label class="form-check-label small" for="escalaSinLimite">Sin límite superior</label>
+                      <label class="form-check-label small" for="escalaSinLimite">
+                        Sin límite superior
+                        <i class="bi bi-info-circle-fill text-info ms-1" 
+                           style="cursor: help; font-size: 0.7rem"
+                           title="Activa esto cuando la métrica no tiene un valor máximo definido. Ej: cantidad de bugs encontrados, tiempo de respuesta."></i>
+                      </label>
                     </div>
                   </div>
                   <div class="col-md-6">
-                    <label class="form-label small text-muted mb-1">Descripción de los valores (opcional)</label>
+                    <label class="form-label small text-muted mb-1">
+                      Descripción de los valores (opcional)
+                      <i class="bi bi-info-circle-fill text-info ms-1" 
+                         style="cursor: help; font-size: 0.7rem"
+                         title="Ayuda a interpretar los valores. Ej: '0=Malo, 5=Regular, 10=Excelente' o '0-30=Bajo, 31-70=Medio, 71-100=Alto'"></i>
+                    </label>
                     <input type="text" class="form-control form-control-sm"
                            placeholder="Ej: 0 = Muy malo; 10 = Excelente"
                            [(ngModel)]="form.escalaDescripcion">
@@ -445,6 +487,9 @@ import { environment } from '../../../environments/environment';
               <div class="col-md-6">
                 <label class="form-label small fw-semibold">
                   📅 Frecuencia de captura <span class="text-muted">(recomendada por IA)</span>
+                  <i class="bi bi-info-circle text-muted ms-1" 
+                     style="cursor: help"
+                     title="Define cuándo debe registrarse esta métrica. Al finalizar sprint es lo más común para métricas de equipo; diaria para métricas de seguimiento continuo; cuando ocurra el evento para métricas basadas en incidentes."></i>
                 </label>
                 <select class="form-select form-select-sm" [(ngModel)]="form.frecuenciaCaptura">
                   <option value="por_sprint">Al finalizar sprint</option>
@@ -461,6 +506,9 @@ import { environment } from '../../../environments/environment';
               <div class="col-md-6">
                 <label class="form-label small fw-semibold">
                   👥 Responsable de captura
+                  <i class="bi bi-info-circle text-muted ms-1" 
+                     style="cursor: help"
+                     title="Quién puede registrar valores para esta métrica. Equipo: cada miembro registra su propio valor (útil para métricas individuales como horas trabajadas). Scrum Master: solo él registra el valor (útil para métricas consolidadas del equipo)."></i>
                 </label>
                 <select class="form-select form-select-sm" [(ngModel)]="form.responsableCaptura">
                   <option value="EQUIPO">Equipo</option>
@@ -678,29 +726,40 @@ export class ParametrizacionComponent implements OnInit {
    * se inventa un valor.
    */
   usarDelTop(t: TopParametrizacion): void {
+    console.log('🔍 Datos de TopParametrizacion:', t);
+    
     this.form = {
-      objetivo:          t.objetivo,
-      procedimiento:     t.procedimiento,
-      indicadorVariable: t.indicadorVariable,
-      escala:            t.escala,
+      objetivo:          t.objetivo || '',
+      procedimiento:     t.procedimiento || '',
+      indicadorVariable: t.indicadorVariable || '',
+      escala:            t.escala || '',
       frecuenciaCaptura: t.frecuenciaCaptura || 'por_sprint',
       fuenteAcademica:   t.fuenteAcademica ?? undefined,
       formulaAcademica:  t.formulaAcademica ?? undefined,
       tipoOperacion:     t.tipoOperacion ?? undefined,
       unidadResultado:   t.unidadResultado ?? undefined,
-      escalaTipo:        t.escalaTipo,
-      escalaMin:         t.escalaMin,
-      escalaMax:         t.escalaMax,
-      escalaPaso:        t.escalaPaso,
-      escalaSinLimite:   t.escalaSinLimite,
-      escalaDescripcion: t.escalaDescripcion,
-      // El Top 3 no transporta responsableCaptura (es una elección del Scrum
-      // Master de ESTA parametrización, no algo que otro usuario haya
-      // propuesto) — se conserva la selección que ya tenía el formulario.
+      escalaTipo:        t.escalaTipo ?? undefined,
+      escalaMin:         t.escalaMin ?? undefined,
+      escalaMax:         t.escalaMax ?? undefined,
+      escalaPaso:        t.escalaPaso ?? undefined,
+      escalaSinLimite:   t.escalaSinLimite ?? false,
+      escalaDescripcion: t.escalaDescripcion ?? undefined,
       responsableCaptura: this.form.responsableCaptura || 'SCRUM_MASTER'
     };
+    
+    console.log('📝 Formulario después de copiar:', this.form);
+    
     this.errorEscala = '';
     this.propuestaElegida = null;
+    
+    // Hacer scroll hacia el formulario para que el usuario vea los campos llenados
+    setTimeout(() => {
+      const formulario = document.querySelector('[style*="Parametrización manual"]');
+      if (formulario) {
+        formulario.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 100);
+    
     // Incrementar el ranking de uso de esta parametrización
     if (this.metrica?.factorId) {
       this.rankingService.incrementarUso(this.metrica.factorId).pipe(catchError(() => of(null))).subscribe();

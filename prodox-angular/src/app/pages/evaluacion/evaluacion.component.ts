@@ -361,7 +361,7 @@ const FRECUENCIA_LABEL: Record<string, string> = {
             <div class="modal-content">
               <div class="modal-header">
                 <h5 class="modal-title">
-                  {{ detalleAbierto.variableDescripcion || detalleAbierto.variableNombre }}
+                  {{ detalleAbierto.variableNombre }}
                   <span class="badge ms-2 prox-badge-sm" [class]="badgeCat(detalleAbierto.categoria)">
                     {{ detalleAbierto.categoria }}
                   </span>
@@ -369,12 +369,54 @@ const FRECUENCIA_LABEL: Record<string, string> = {
                 <button type="button" class="btn-close" (click)="cerrarDetalle()"></button>
               </div>
               <div class="modal-body">
+                <!-- Descripción completa -->
+                <div class="alert alert-light border-0 bg-light mb-3 small">
+                  <i class="bi bi-info-circle me-2"></i>{{ detalleAbierto.variableDescripcion }}
+                </div>
+                
                 <div class="small text-muted mb-2 d-flex align-items-center gap-2 flex-wrap">
                   <span>Frecuencia de captura: <strong>{{ frecuenciaLabel(detalleAbierto.frecuenciaCaptura) }}</strong></span>
                   <span class="badge bg-light text-dark border">
                     {{ sprintFiltro === null ? 'Mostrando: todos los sprints (comparación)' : 'Mostrando: Sprint ' + sprintFiltro }}
                   </span>
                 </div>
+
+                <!-- Contribuciones por integrante -->
+                @if (calcularContribucionesPorIntegrante(detalleAbierto); as contribuciones) {
+                  @if (contribuciones.length > 0) {
+                    <div class="card border mb-3">
+                      <div class="card-body py-2">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                          <h6 class="mb-0 small fw-semibold">
+                            <i class="bi bi-people me-1"></i>Contribuciones por Integrante
+                            <span class="text-muted fw-normal" style="font-size: 0.7rem;">
+                              ({{ sprintFiltro === null ? 'todos los sprints' : 'Sprint ' + sprintFiltro }})
+                            </span>
+                          </h6>
+                          <span class="badge bg-primary">Total: {{ obtenerTotalGeneral(detalleAbierto) }}</span>
+                        </div>
+                        
+                        @for (contrib of contribuciones; track contrib.userId) {
+                          <div class="mb-2">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                              <div>
+                                <span class="small fw-medium">{{ contrib.userName }}</span>
+                                <span class="text-muted" style="font-size: 0.7rem;">({{ contrib.registros }} registro{{ contrib.registros !== 1 ? 's' : '' }})</span>
+                              </div>
+                              <span class="small fw-bold">{{ contrib.total }} <span class="text-muted">({{ contrib.porcentaje }}%)</span></span>
+                            </div>
+                            <div class="progress" style="height: 20px;">
+                              <div class="progress-bar" 
+                                   [style.width.%]="contrib.porcentaje"
+                                   [style.background]="'linear-gradient(90deg, #14B8A6 0%, #0D9488 100%)'">
+                              </div>
+                            </div>
+                          </div>
+                        }
+                      </div>
+                    </div>
+                  }
+                }
 
                 <app-evaluacion-metric-chart
                   [registros]="registrosParaVista(detalleAbierto)"
@@ -458,11 +500,77 @@ const FRECUENCIA_LABEL: Record<string, string> = {
                   </div>
                 </div>
 
-                <!-- Análisis textual determinístico -->
-                <div class="alert alert-light border mt-3 mb-0 small">
-                  <div class="fw-semibold mb-1"><i class="bi bi-file-text me-1"></i>Análisis</div>
-                  @for (p of analisisTexto(detalleAbierto); track $index) {
-                    <p class="mb-1">{{ p }}</p>
+                <!-- Evaluación para el equipo Scrum -->
+                @if (generarEvaluacionScrum(detalleAbierto); as evaluacion) {
+                  <div class="card border mt-3" 
+                       [class.border-success]="evaluacion.estado === 'favorable'"
+                       [class.border-danger]="evaluacion.estado === 'atencion'"
+                       [class.border-primary]="evaluacion.estado === 'observacion'"
+                       [class.border-secondary]="evaluacion.estado === 'insuficiente'">
+                    <div class="card-body py-3">
+                      <div class="d-flex align-items-center gap-2 mb-3">
+                        <span style="font-size: 1.5rem;">{{ evaluacion.icono }}</span>
+                        <h6 class="mb-0 fw-bold">{{ evaluacion.titulo }}</h6>
+                      </div>
+                      
+                      <div class="mb-3">
+                        <strong class="small text-muted">Resumen:</strong>
+                        <p class="mb-0">{{ evaluacion.resumen }}</p>
+                      </div>
+                      
+                      @if (evaluacion.positivo) {
+                        <div class="mb-3">
+                          <div class="d-flex align-items-start gap-2">
+                            <span class="text-success fw-bold">✓</span>
+                            <div>
+                              <strong class="text-success small">Lo positivo</strong>
+                              <p class="mb-0 small">{{ evaluacion.positivo }}</p>
+                            </div>
+                          </div>
+                        </div>
+                      }
+                      
+                      @if (evaluacion.mejora) {
+                        <div class="mb-3">
+                          <div class="d-flex align-items-start gap-2">
+                            <span class="text-warning fw-bold">⚠</span>
+                            <div>
+                              <strong class="text-warning small">Aspecto a mejorar</strong>
+                              <p class="mb-0 small">{{ evaluacion.mejora }}</p>
+                            </div>
+                          </div>
+                        </div>
+                      }
+                      
+                      <div class="alert alert-info mb-0 py-2 small">
+                        <div class="d-flex align-items-start gap-2">
+                          <span>💡</span>
+                          <div>
+                            <strong>Recomendación</strong>
+                            <p class="mb-0">{{ evaluacion.recomendacion }}</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                }
+
+                <!-- Datos técnicos detallados (colapsables) -->
+                <div class="mt-3">
+                  <button class="btn btn-sm btn-outline-secondary w-100" 
+                          type="button" 
+                          (click)="mostrarDatosTecnicos = !mostrarDatosTecnicos">
+                    <i class="bi" [class.bi-chevron-down]="!mostrarDatosTecnicos" [class.bi-chevron-up]="mostrarDatosTecnicos"></i>
+                    {{ mostrarDatosTecnicos ? 'Ocultar' : 'Ver' }} datos técnicos detallados
+                  </button>
+                  
+                  @if (mostrarDatosTecnicos) {
+                    <div class="alert alert-light border mt-2 mb-0 small">
+                      <div class="fw-semibold mb-1"><i class="bi bi-bar-chart me-1"></i>Análisis estadístico</div>
+                      @for (p of analisisTexto(detalleAbierto); track $index) {
+                        <p class="mb-1">{{ p }}</p>
+                      }
+                    </div>
                   }
                 </div>
 
@@ -512,6 +620,7 @@ export class EvaluacionComponent implements OnInit {
   sprintFiltro: number | null = null;
 
   detalleAbierto: MetricaEvaluacionDetalleDto | null = null;
+  mostrarDatosTecnicos = false; // Control para mostrar/ocultar datos estadísticos detallados
 
   constructor(
     public  router: Router,
@@ -674,6 +783,381 @@ export class EvaluacionComponent implements OnInit {
 
   // ── análisis textual determinístico ─────────────────────────────────
 
+  /**
+   * Genera una evaluación orientada al equipo Scrum que responde:
+   * "¿Cómo vamos? ¿Es positivo/negativo? ¿Qué significa? ¿Qué revisar? ¿Qué acción tomar?"
+   * 
+   * REGLA FUNDAMENTAL: Lenguaje práctico, NO técnico. Diferenciamos DATO → INTERPRETACIÓN → RECOMENDACIÓN
+   * Evitar: "tendencia", "promedio", porcentajes en análisis principal
+   * Lo positivo debe reflejar RESULTADOS, no solo "está registrando"
+   */
+  generarEvaluacionScrum(m: MetricaEvaluacionDetalleDto): {
+    estado: 'favorable' | 'atencion' | 'observacion' | 'insuficiente';
+    icono: string;
+    titulo: string;
+    resumen: string;
+    positivo: string;
+    mejora: string;
+    recomendacion: string;
+  } {
+    const e = m.estadisticas;
+    
+    // ═══════════════════════════════════════════════════════════
+    // CASO 1: Solo 1 registro (información insuficiente)
+    // ═══════════════════════════════════════════════════════════
+    if (e.totalRegistros === 1) {
+      return {
+        estado: 'insuficiente',
+        icono: '⚪',
+        titulo: 'Sin datos suficientes',
+        resumen: `Solo hay un registro disponible con valor ${e.primerValor}. Se necesita al menos una medición adicional para evaluar si hay cambios.`,
+        positivo: 'Se comenzó a medir esta métrica, lo cual permite empezar a hacer seguimiento.',
+        mejora: '',
+        recomendacion: `Registrar esta métrica en el próximo sprint para poder comparar y detectar si hay cambios que merezcan atención.`
+      };
+    }
+    
+    // ═══════════════════════════════════════════════════════════
+    // CASO 2: Exactamente 2 registros (cambio observable, patrón incipiente)
+    // ═══════════════════════════════════════════════════════════
+    if (e.totalRegistros === 2) {
+      // Detectar tipo de métrica
+      const nombreLower = m.variableNombre.toLowerCase();
+      const descripcionLower = (m.variableDescripcion || '').toLowerCase();
+      const textoCompleto = nombreLower + ' ' + descripcionLower;
+      
+      const esMetricaDeProblema = textoCompleto.includes('defecto') || 
+                                   textoCompleto.includes('error') || 
+                                   textoCompleto.includes('fallo') ||
+                                   textoCompleto.includes('incidencia') ||
+                                   textoCompleto.includes('problema') ||
+                                   textoCompleto.includes('retraso') ||
+                                   textoCompleto.includes('registrado') && textoCompleto.includes('durante');
+      
+      const esMetricaDeTiempo = textoCompleto.includes('tiempo') || 
+                                 textoCompleto.includes('duración') ||
+                                 textoCompleto.includes('plazo');
+      
+      let resumen = '';
+      let estado: 'favorable' | 'atencion' | 'observacion' | 'insuficiente' = 'observacion';
+      let icono = '🔵';
+      let titulo = 'Merece revisión';
+      
+      // Describir el cambio observado de forma clara
+      if (e.cambio > 0) {
+        const aumento = Math.abs(e.cambio);
+        
+        // Interpretación según tipo de métrica
+        if (esMetricaDeProblema) {
+          resumen = `Se registraron más defectos/problemas que en la medición anterior (de ${e.primerValor} a ${e.ultimoValor}). Esto merece atención porque puede indicar que el equipo está encontrando más problemas durante el desarrollo.`;
+          estado = 'atencion';
+          icono = '🔴';
+          titulo = 'Mejora necesaria';
+        } else if (esMetricaDeTiempo) {
+          resumen = `El tiempo aumentó de ${e.primerValor} a ${e.ultimoValor}, lo que representa ${aumento} unidades más. Esto merece atención porque puede indicar que las tareas están tomando más tiempo de lo esperado.`;
+          estado = 'atencion';
+          icono = '🔴';
+          titulo = 'Mejora necesaria';
+        } else {
+          resumen = `El valor pasó de ${e.primerValor} a ${e.ultimoValor}, aumentando ${aumento} unidades. Todavía hay pocos registros para confirmar si este comportamiento se mantendrá.`;
+          icono = '🔵';
+          titulo = 'Merece revisión';
+        }
+      } else if (e.cambio < 0) {
+        const reduccion = Math.abs(e.cambio);
+        
+        if (esMetricaDeProblema) {
+          resumen = `Se registraron menos defectos/problemas que en la medición anterior (de ${e.primerValor} a ${e.ultimoValor}). Esto puede ser una señal positiva si se mantiene en futuras mediciones.`;
+          estado = 'observacion';
+          icono = '🟢';
+          titulo = 'Buen progreso';
+        } else if (esMetricaDeTiempo) {
+          resumen = `El tiempo disminuyó de ${e.primerValor} a ${e.ultimoValor}, lo que representa ${reduccion} unidades menos. Esto puede indicar mejora en la velocidad o eficiencia.`;
+          estado = 'observacion';
+          icono = '🟢';
+          titulo = 'Buen progreso';
+        } else {
+          resumen = `El valor pasó de ${e.primerValor} a ${e.ultimoValor}, bajando ${reduccion} unidades. Todavía hay pocos registros para confirmar si este comportamiento se mantendrá.`;
+          icono = '🔵';
+          titulo = 'Merece revisión';
+        }
+      } else {
+        resumen = `Ambos registros muestran el mismo valor: ${e.primerValor}. Se necesitan más mediciones para observar cambios.`;
+        titulo = 'Sin cambios observables';
+      }
+      
+      // Lo positivo: debe ser útil y relevante según el contexto
+      let positivo = '';
+      if (e.cambio < 0 && (esMetricaDeProblema || esMetricaDeTiempo)) {
+        positivo = `El valor bajó respecto a la medición anterior, lo que puede indicar mejora si se sostiene.`;
+      } else if (e.cambio === 0) {
+        positivo = 'El resultado se mantuvo estable entre las dos mediciones.';
+      } else if (estado === 'atencion' && esMetricaDeProblema) {
+        // Ejemplo específico para defectos
+        positivo = 'El equipo está registrando los defectos, lo que permite identificar dónde están apareciendo los problemas.';
+      } else if (estado === 'atencion' && esMetricaDeTiempo) {
+        positivo = 'El equipo está midiendo el tiempo, lo que permite identificar cuándo las tareas toman más de lo esperado.';
+      } else if (estado === 'atencion') {
+        positivo = 'El equipo está registrando esta métrica, lo que permite identificar cambios que merecen atención.';
+      } else {
+        positivo = 'El seguimiento de esta métrica permite detectar cambios entre mediciones.';
+      }
+      
+      let mejora = '';
+      if (estado === 'atencion') {
+        if (esMetricaDeProblema) {
+          mejora = 'Revisar qué tipos de problemas están aumentando y si se concentran en alguna funcionalidad o etapa del desarrollo.';
+        } else if (esMetricaDeTiempo) {
+          mejora = 'Identificar qué está causando el aumento del tiempo y si hay obstáculos que puedan eliminarse.';
+        } else {
+          mejora = 'Analizar qué cambios recientes pueden estar relacionados con este aumento.';
+        }
+      } else if (estado === 'observacion' && icono === '🟢') {
+        mejora = 'Verificar qué acciones contribuyeron a esta reducción para mantenerlas en futuros sprints.';
+      } else {
+        mejora = 'Seguir registrando para poder identificar si hay patrones que merezcan atención.';
+      }
+      
+      let recomendacion = '';
+      if (estado === 'atencion') {
+        if (esMetricaDeProblema) {
+          recomendacion = `En el próximo sprint, clasificar los defectos por tipo o causa y revisar cuáles se repiten con mayor frecuencia. Con esa información, priorizar una o dos causas para intentar reducirlas.`;
+        } else if (esMetricaDeTiempo) {
+          recomendacion = `Analizar los casos donde el tiempo fue mayor y documentar qué los causó. En el próximo sprint, aplicar al menos una mejora concreta para reducir el tiempo en situaciones similares.`;
+        } else {
+          recomendacion = `Revisar con el equipo qué cambió entre la primera y segunda medición para entender el aumento.`;
+        }
+      } else {
+        recomendacion = `Registrar esta métrica en al menos dos sprints más para confirmar si el comportamiento observado se mantiene o cambia.`;
+      }
+      
+      return {
+        estado,
+        icono,
+        titulo,
+        resumen,
+        positivo,
+        mejora,
+        recomendacion
+      };
+    }
+    
+    // ═══════════════════════════════════════════════════════════
+    // CASO 3: 3 o más registros (patrón confirmado)
+    // ═══════════════════════════════════════════════════════════
+    
+    // Detectar tipo de métrica con más contexto
+    const nombreLower = m.variableNombre.toLowerCase();
+    const descripcionLower = (m.variableDescripcion || '').toLowerCase();
+    const textoCompleto = nombreLower + ' ' + descripcionLower;
+    
+    const esMetricaDeProblema = textoCompleto.includes('defecto') || 
+                                 textoCompleto.includes('error') || 
+                                 textoCompleto.includes('fallo') ||
+                                 textoCompleto.includes('incidencia') ||
+                                 textoCompleto.includes('problema') ||
+                                 textoCompleto.includes('retraso') ||
+                                 textoCompleto.includes('registrado') && textoCompleto.includes('durante');
+    
+    const esMetricaDeTiempo = textoCompleto.includes('tiempo') || 
+                               textoCompleto.includes('duración') ||
+                               textoCompleto.includes('plazo');
+    
+    const esMetricaDeResolucion = textoCompleto.includes('resuel') || 
+                                   textoCompleto.includes('complet') ||
+                                   textoCompleto.includes('cerrad');
+    
+    let estado: 'favorable' | 'atencion' | 'observacion' | 'insuficiente' = 'observacion';
+    let icono = '🔵';
+    let titulo = 'Merece revisión';
+    
+    // Determinar estado según comportamiento y tipo de métrica
+    if (e.tendencia === 'ascendente') {
+      if (esMetricaDeProblema || esMetricaDeTiempo) {
+        estado = 'atencion';
+        icono = '🔴';
+        titulo = 'Atención necesaria';
+      } else if (esMetricaDeResolucion) {
+        estado = 'favorable';
+        icono = '🟢';
+        titulo = 'Va bien';
+      } else {
+        estado = 'observacion';
+        icono = '🔵';
+        titulo = 'Merece revisión';
+      }
+    } else if (e.tendencia === 'descendente') {
+      if (esMetricaDeProblema || esMetricaDeTiempo) {
+        estado = 'favorable';
+        icono = '🟢';
+        titulo = 'Va bien';
+      } else if (esMetricaDeResolucion) {
+        estado = 'atencion';
+        icono = '🔴';
+        titulo = 'Atención necesaria';
+      } else {
+        estado = 'observacion';
+        icono = '🔵';
+        titulo = 'Merece revisión';
+      }
+    } else if (e.tendencia === 'estable') {
+      estado = 'observacion';
+      icono = '🟡';
+      titulo = 'Resultado estable';
+    }
+    
+    // Generar resumen claro y orientado a la acción
+    let resumen = '';
+    const cambioAbsoluto = Math.abs(e.cambio);
+    
+    if (e.tendencia === 'ascendente') {
+      if (estado === 'atencion' && esMetricaDeProblema) {
+        resumen = `Los problemas aumentaron de ${e.primerValor} a ${e.ultimoValor} (${cambioAbsoluto} unidades más). Esto merece atención porque indica que están apareciendo más problemas durante el desarrollo.`;
+      } else if (estado === 'atencion' && esMetricaDeTiempo) {
+        resumen = `El tiempo aumentó de ${e.primerValor} a ${e.ultimoValor} (${cambioAbsoluto} unidades más). Esto merece atención porque puede indicar que las tareas están tomando más tiempo de lo esperado.`;
+      } else if (estado === 'favorable') {
+        resumen = `El valor aumentó de ${e.primerValor} a ${e.ultimoValor}, lo que muestra que el equipo está mejorando en esta área.`;
+      } else {
+        resumen = `El valor pasó de ${e.primerValor} a ${e.ultimoValor}, aumentando ${cambioAbsoluto} unidades. Conviene revisar si este cambio es positivo o requiere atención según el contexto del equipo.`;
+      }
+    } else if (e.tendencia === 'descendente') {
+      if (estado === 'favorable' && esMetricaDeProblema) {
+        resumen = `Los problemas disminuyeron de ${e.primerValor} a ${e.ultimoValor} (${cambioAbsoluto} unidades menos). Esto es un resultado positivo que indica mejora.`;
+      } else if (estado === 'favorable' && esMetricaDeTiempo) {
+        resumen = `El tiempo disminuyó de ${e.primerValor} a ${e.ultimoValor} (${cambioAbsoluto} unidades menos). Esto muestra mejora en la velocidad o eficiencia.`;
+      } else if (estado === 'atencion') {
+        resumen = `El valor disminuyó de ${e.primerValor} a ${e.ultimoValor}. Conviene revisar qué está provocando esta reducción y si representa un problema.`;
+      } else {
+        resumen = `El valor pasó de ${e.primerValor} a ${e.ultimoValor}, bajando ${cambioAbsoluto} unidades. Conviene analizar si este cambio es positivo o requiere atención según el contexto del equipo.`;
+      }
+    } else {
+      resumen = `Los valores se mantienen estables, oscilando entre ${e.minimo} y ${e.maximo}. `;
+      if (e.variabilidad === 'baja') {
+        resumen += 'Los resultados son consistentes entre mediciones, lo que permite al equipo planear con mayor certeza.';
+      } else if (e.variabilidad === 'alta') {
+        resumen += 'Sin embargo, hay variaciones importantes entre mediciones, lo que sugiere factores inconsistentes que convendría revisar.';
+      } else {
+        resumen += 'No se observan cambios significativos que requieran acción inmediata.';
+      }
+    }
+    
+    // Generar "Lo positivo": debe ser útil y relevante
+    let positivo = '';
+    
+    if (estado === 'favorable') {
+      if (esMetricaDeProblema) {
+        positivo = `Los problemas han disminuido respecto a mediciones anteriores, lo que muestra que las acciones del equipo están funcionando.`;
+      } else if (esMetricaDeTiempo) {
+        positivo = `El tiempo ha bajado respecto a mediciones anteriores, lo que indica mejora en la velocidad o eficiencia.`;
+      } else if (esMetricaDeResolucion) {
+        positivo = `El equipo ha logrado aumentar su capacidad de resolución comparado con mediciones anteriores.`;
+      } else if (e.tendencia === 'descendente') {
+        positivo = `El valor ha disminuido respecto a la primera medición, lo que puede ser un resultado positivo.`;
+      } else if (e.tendencia === 'ascendente') {
+        positivo = `El valor ha aumentado respecto a la primera medición, mostrando mejora.`;
+      } else {
+        positivo = `Los resultados se mantienen consistentes entre mediciones.`;
+      }
+      
+      // Agregar consistencia si aplica
+      if (e.variabilidad === 'baja') {
+        positivo += ` Además, los valores son consistentes, lo que facilita la planeación.`;
+      }
+    } else if (estado === 'observacion') {
+      if (e.variabilidad === 'baja' && e.tendencia === 'estable') {
+        positivo = `Los resultados se mantienen estables y consistentes, lo que permite al equipo planear con mayor certeza.`;
+      } else if (e.tendencia === 'estable') {
+        positivo = `Los valores se mantienen en un rango conocido, sin cambios drásticos.`;
+      } else {
+        positivo = `El seguimiento de esta métrica permite identificar cambios y tomar decisiones informadas.`;
+      }
+    } else if (estado === 'atencion') {
+      // En situaciones de atención, mencionar el valor del seguimiento
+      if (esMetricaDeProblema) {
+        positivo = `El equipo está registrando los problemas, lo que permite identificar dónde están apareciendo y con qué frecuencia.`;
+      } else if (esMetricaDeTiempo) {
+        positivo = `El equipo está midiendo el tiempo, lo que permite identificar cuándo las tareas toman más de lo esperado.`;
+      } else if (e.variabilidad === 'baja') {
+        positivo = `Los valores son consistentes, lo que permite identificar patrones y tomar decisiones fundamentadas.`;
+      } else {
+        positivo = `El equipo está midiendo esta métrica de forma consistente, lo que permite detectar cambios que merecen atención.`;
+      }
+    } else {
+      positivo = `El seguimiento de esta métrica permite al equipo tomar decisiones informadas.`;
+    }    
+    // Aspecto a mejorar: directamente relacionado con la métrica
+    let mejora = '';
+    if (estado === 'atencion') {
+      if (esMetricaDeProblema) {
+        mejora = 'Revisar qué tipos de problemas están aumentando y si se concentran en alguna funcionalidad, etapa del desarrollo o miembro del equipo.';
+      } else if (esMetricaDeTiempo) {
+        mejora = 'Identificar qué está causando el aumento del tiempo: cuellos de botella, bloqueos, complejidad técnica o falta de claridad en requisitos.';
+      } else if (esMetricaDeResolucion) {
+        mejora = 'Analizar qué está afectando la capacidad de resolución: impedimentos, cambios en el equipo, mayor complejidad o sobrecarga de trabajo.';
+      } else {
+        mejora = 'Identificar qué factores están causando este cambio y determinar si requiere acción correctiva.';
+      }
+      
+      if (e.variabilidad === 'alta') {
+        mejora += ' Además, los valores varían mucho entre mediciones, lo que sugiere factores inconsistentes que convendría estabilizar.';
+      }
+    } else if (estado === 'observacion') {
+      if (e.tendencia === 'estable') {
+        mejora = 'Identificar si hay oportunidades de mejora que permitan conseguir resultados progresivamente mejores.';
+      } else {
+        mejora = 'Definir si el cambio observado representa algo positivo, negativo o neutral para el contexto del equipo.';
+      }
+      
+      if (e.variabilidad === 'alta') {
+        mejora += ' Los valores varían mucho entre mediciones, lo que indica factores inconsistentes que convendría revisar.';
+      }
+    } else if (estado === 'favorable') {
+      mejora = 'Identificar qué prácticas o acciones específicas contribuyeron a este resultado para mantenerlas o fortalecerlas.';
+      
+      if (e.variabilidad === 'alta') {
+        mejora += ' Los valores aún varían bastante entre mediciones, por lo que convendría buscar mayor consistencia.';
+      }
+    }
+    
+    // Recomendación: UNA acción concreta y realizable
+    let recomendacion = '';
+    if (estado === 'atencion') {
+      if (esMetricaDeProblema) {
+        recomendacion = `En el próximo sprint, clasificar cada problema registrado por tipo o causa raíz. Identificar los 2 o 3 más frecuentes y definir una acción concreta para reducirlos.`;
+      } else if (esMetricaDeTiempo) {
+        recomendacion = `Analizar los 3 casos donde el tiempo fue mayor y documentar qué los causó. En el próximo sprint, aplicar al menos una mejora concreta para reducir el tiempo en situaciones similares.`;
+      } else if (esMetricaDeResolucion) {
+        recomendacion = `En la próxima retrospectiva, revisar qué cambió desde las primeras mediciones. Identificar impedimentos actuales y definir una acción concreta para recuperar la capacidad anterior.`;
+      } else {
+        recomendacion = `En la próxima retrospectiva, discutir esta métrica con el equipo y decidir si el cambio observado requiere acción o solo seguimiento.`;
+      }
+    } else if (estado === 'observacion') {
+      if (e.tendencia === 'estable') {
+        recomendacion = `En la próxima retrospectiva, identificar al menos una pequeña mejora que el equipo pueda probar en el siguiente sprint para ver si impacta positivamente esta métrica.`;
+      } else if (e.variabilidad === 'alta') {
+        recomendacion = `Revisar qué factores causan las variaciones entre mediciones. En el próximo sprint, intentar estabilizar al menos uno de esos factores.`;
+      } else {
+        recomendacion = `Continuar midiendo durante los próximos 2 sprints. Si el cambio se mantiene en la misma dirección, revisarlo en retrospectiva para decidir si requiere acción.`;
+      }
+    } else if (estado === 'favorable') {
+      recomendacion = `Documentar qué prácticas específicas contribuyeron a este resultado. Continuar midiéndola para verificar que la mejora se sostiene y compartir el aprendizaje con el equipo.`;
+    }
+    
+    return {
+      estado,
+      icono,
+      titulo,
+      resumen,
+      positivo,
+      mejora,
+      recomendacion
+    };
+  }
+
+  /**
+   * DEPRECATED: Análisis textual técnico original.
+   * Se mantiene por compatibilidad pero ya no se usa en la UI principal.
+   */
   analisisTexto(m: MetricaEvaluacionDetalleDto): string[] {
     const e = m.estadisticas;
     const parrafos: string[] = [];
@@ -708,8 +1192,79 @@ export class EvaluacionComponent implements OnInit {
 
   // ── detalle (modal) ─────────────────────────────────────────────────
 
-  abrirDetalle(m: MetricaEvaluacionDetalleDto): void { this.detalleAbierto = m; }
-  cerrarDetalle(): void { this.detalleAbierto = null; }
+  abrirDetalle(m: MetricaEvaluacionDetalleDto): void { 
+    this.detalleAbierto = m;
+    this.mostrarDatosTecnicos = false; // Resetear al abrir
+  }
+  cerrarDetalle(): void { 
+    this.detalleAbierto = null;
+    this.mostrarDatosTecnicos = false; // Resetear al cerrar
+  }
+
+  // Calcular contribuciones por integrante
+  calcularContribucionesPorIntegrante(m: MetricaEvaluacionDetalleDto): Array<{userId: string, userName: string, total: number, porcentaje: number, registros: number}> {
+    const contribuciones = new Map<string, {total: number, registros: number}>();
+    let totalGeneral = 0;
+    
+    // Filtrar registros según sprint seleccionado
+    const registrosFiltrados = this.sprintFiltro !== null 
+      ? m.registros.filter(r => r.sprintId === this.obtenerSprintIdPorNumero(this.sprintFiltro!))
+      : m.registros;
+    
+    // Sumar valores por usuario
+    for (const registro of registrosFiltrados) {
+      if (registro.valor !== null && registro.userId) {
+        const actual = contribuciones.get(registro.userId) || {total: 0, registros: 0};
+        contribuciones.set(registro.userId, {
+          total: actual.total + registro.valor,
+          registros: actual.registros + 1
+        });
+        totalGeneral += registro.valor;
+      }
+    }
+    
+    // Convertir a array y calcular porcentajes
+    const resultado = Array.from(contribuciones.entries()).map(([userId, data]) => ({
+      userId,
+      userName: this.obtenerNombreUsuario(userId),
+      total: data.total,
+      registros: data.registros,
+      porcentaje: totalGeneral > 0 ? Math.round((data.total / totalGeneral) * 100) : 0
+    }));
+    
+    // Ordenar por total descendente
+    resultado.sort((a, b) => b.total - a.total);
+    
+    return resultado;
+  }
+  
+  // Obtener total general de contribuciones
+  obtenerTotalGeneral(m: MetricaEvaluacionDetalleDto): number {
+    const registrosFiltrados = this.sprintFiltro !== null 
+      ? m.registros.filter(r => r.sprintId === this.obtenerSprintIdPorNumero(this.sprintFiltro!))
+      : m.registros;
+      
+    return registrosFiltrados
+      .filter(r => r.valor !== null)
+      .reduce((sum, r) => sum + (r.valor || 0), 0);
+  }
+  
+  // Obtener nombre de usuario desde el email
+  obtenerNombreUsuario(userId: string): string {
+    // Extraer nombre del email (antes del @)
+    const emailMatch = userId.match(/^([^@]+)/);
+    if (emailMatch) {
+      return emailMatch[1];
+    }
+    return userId;
+  }
+  
+  // Obtener ID de sprint por número
+  obtenerSprintIdPorNumero(numero: number): string | null {
+    if (!this.detalleAbierto) return null;
+    const registro = this.detalleAbierto.registros.find(r => r.sprintNumero === numero);
+    return registro?.sprintId || null;
+  }
 
   // ── helpers visuales ─────────────────────────────────────────────────
 

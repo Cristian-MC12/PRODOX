@@ -197,17 +197,30 @@ export class EjecucionComponent implements OnInit {
    *    sprintActual.estado, que se recalcula igual que con el selector).
    */
   private get indiceSprintActual(): number {
-    if (!this.sprintActual) return -1;
-    return this.sprints.findIndex(s => s.id === this.sprintActual!.id);
+    if (!this.sprintActual) {
+      console.log('⚠️ sprintActual es null');
+      return -1;
+    }
+    const index = this.sprints.findIndex(s => s.id === this.sprintActual!.id);
+    console.log(`📍 Índice sprint actual: ${index}, Total sprints: ${this.sprints.length}`, {
+      sprintActualId: this.sprintActual.id,
+      sprintActualNumero: this.sprintActual.numero,
+      sprints: this.sprints.map(s => ({ id: s.id, numero: s.numero, estado: s.estado }))
+    });
+    return index;
   }
 
   get haySprintAnterior(): boolean {
-    return this.indiceSprintActual > 0;
+    const hay = this.indiceSprintActual > 0;
+    console.log(`⬅️ Hay sprint anterior: ${hay}`);
+    return hay;
   }
 
   get haySprintSiguiente(): boolean {
     const i = this.indiceSprintActual;
-    return i >= 0 && i < this.sprints.length - 1;
+    const hay = i >= 0 && i < this.sprints.length - 1;
+    console.log(`➡️ Hay sprint siguiente: ${hay} (índice: ${i}, total: ${this.sprints.length})`);
+    return hay;
   }
 
   irASprintAnterior(): void {
@@ -703,5 +716,23 @@ export class EjecucionComponent implements OnInit {
   /** true si YO ya registré mi propio valor para esta variable en el sprint actual. */
   yaRegistreMiValor(v: BloqueVariable): boolean {
     return v.capturas.some(c => c.userId === this.currentUserId);
+  }
+
+  /**
+   * Genera el placeholder dinámico para el input numérico según la escala parametrizada.
+   * Ejemplos:
+   * - "0 – 100" (escala con límite)
+   * - "0 – sin límite" (escala abierta)
+   * - "1 – 10" (rango personalizado)
+   */
+  getPlaceholderRango(v: BloqueVariable): string {
+    const min = v.escalaMin ?? 0;
+    const max = v.escalaMax;
+    
+    if (max == null || v.escalaSinLimite) {
+      return `${min} – sin límite`;
+    }
+    
+    return `${min} – ${max}`;
   }
 }

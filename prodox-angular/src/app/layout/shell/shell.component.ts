@@ -6,6 +6,7 @@ import { NotificacionesBellComponent } from '../notificaciones/notificaciones-be
 import { SprintService } from '../../services/sprint.service';
 import { ProyectoDto } from '../../models/proyecto.model';
 import { SprintDto } from '../../models/sprint.model';
+import { timeboxAbreviado } from '../../models/timebox.model';
 import { catchError, of } from 'rxjs';
 
 @Component({
@@ -51,7 +52,7 @@ import { catchError, of } from 'rxjs';
                       [class]="proyecto.metodo === 'scrum' ? 'bg-primary' : 'bg-info text-dark'">
                   {{ proyecto.metodo === 'scrum' ? 'Scrum' : 'XP' }}
                 </span>
-                <span class="text-muted">{{ proyecto.timeBoxSemanas }} sem/iteración</span>
+                <span class="text-muted">{{ timeboxAbreviado(proyecto) }}/iteración</span>
               </div>
               @if (sprint) {
                 <div class="vr d-none d-sm-block"></div>
@@ -91,6 +92,9 @@ export class ShellComponent implements OnInit {
 
   proyecto: ProyectoDto | null = null;
   sprint: SprintDto | null     = null;
+
+  /** Expuesto al template para no repetir la lógica de unidades en cada vista. */
+  readonly timeboxAbreviado = timeboxAbreviado;
 
   constructor(private sprintService: SprintService) {}
 

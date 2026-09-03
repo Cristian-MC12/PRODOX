@@ -54,6 +54,22 @@ public class Proyecto {
     @Column(name = "scrum_master_id", nullable = false)
     private String scrumMasterId;
 
+    /** Unidad del timebox de iteración: HORAS | DIAS | SEMANAS (V41). */
+    @Column(name = "timebox_unidad", nullable = false, length = 10)
+    private String timeboxUnidad = "SEMANAS";
+
+    /** Duración del timebox en la unidad indicada por timeboxUnidad (V41).
+     *  Para timeboxUnidad="SEMANAS" es el mismo valor que timeBoxSemanas —
+     *  ese campo legado se conserva sin cambios para AICopilotService,
+     *  CopilotToolsService y el email de invitación (fuera de este alcance). */
+    @Column(name = "timebox_duracion", nullable = false)
+    private Integer timeboxDuracion;
+
+    /** Hora de inicio del primer sprint — solo se usa (y se exige) cuando
+     *  timeboxUnidad="HORAS" (V41); null para días/semanas. */
+    @Column(name = "hora_inicio")
+    private java.time.LocalTime horaInicio;
+
     /** Equipo asociado (opcional al crear, se puede vincular después) */
     // teamId removed — membership is now managed per-project via ProjectMember
 
