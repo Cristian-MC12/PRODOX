@@ -11,7 +11,7 @@ import { SprintDto } from '../../models/sprint.model';
 import { ProyectoDto } from '../../models/proyecto.model';
 import { timeboxPalabraCompleta } from '../../models/timebox.model';
 
-type AccionSprint = 'cerrar' | 'cerrar_actual' | 'reabrir' | 'finalizar';
+type AccionSprint = 'cerrar' | 'cerrar_actual' | 'reabrir' | 'finalizar' | 'eliminar';
 
 @Component({
   selector: 'app-sprints',
@@ -159,6 +159,12 @@ type AccionSprint = 'cerrar' | 'cerrar_actual' | 'reabrir' | 'finalizar';
                                     (click)="pedirCerrarActual(s)">
                               <i class="bi bi-check2-circle me-1"></i>Cerrar Sprint
                             </button>
+                          } @else if (s.estado === 'pendiente') {
+                            <button class="btn btn-outline-danger btn-sm py-0 px-2"
+                                    [disabled]="procesando"
+                                    (click)="pedirEliminar(s)">
+                              <i class="bi bi-trash me-1"></i>Eliminar
+                            </button>
                           }
                         </td>
                       }
@@ -277,6 +283,10 @@ export class SprintsComponent implements OnInit {
     this.accionPendiente = { tipo: 'finalizar', sprint: s };
   }
 
+  pedirEliminar(s: SprintDto): void {
+    this.accionPendiente = { tipo: 'eliminar', sprint: s };
+  }
+
   cancelarAccion(): void {
     if (this.procesando) return;
     this.accionPendiente = null;
@@ -288,6 +298,7 @@ export class SprintsComponent implements OnInit {
       case 'cerrar_actual': return 'Cerrar sprint actual';
       case 'reabrir':       return 'Reabrir sprint';
       case 'finalizar':     return 'Finalizar sprint';
+      case 'eliminar':      return 'Eliminar sprint';
       default:              return '';
     }
   }
@@ -307,6 +318,9 @@ export class SprintsComponent implements OnInit {
     if (accion.tipo === 'finalizar' && accion.sprint) {
       return `¿Seguro que querés volver a finalizar el Sprint ${accion.sprint.numero}?`;
     }
+    if (accion.tipo === 'eliminar' && accion.sprint) {
+      return `¿Seguro que querés eliminar el Sprint ${accion.sprint.numero}? Esta acción no se puede deshacer.`;
+    }
     return '';
   }
 
@@ -321,7 +335,9 @@ export class SprintsComponent implements OnInit {
         ? this.sprintService.cerrarSprintActual(accion.sprint!.id)
         : accion.tipo === 'reabrir'
           ? this.sprintService.reabrir(accion.sprint!.id)
-          : this.sprintService.finalizarReabierto(accion.sprint!.id);
+          : accion.tipo === 'eliminar'
+            ? this.sprintService.eliminar(accion.sprint!.id)
+            : this.sprintService.finalizarReabierto(accion.sprint!.id);
 
     obs.pipe(
       catchError(err => {
@@ -348,6 +364,8 @@ export class SprintsComponent implements OnInit {
           } catch { /* ignore */ }
         } else if (accion.tipo === 'reabrir') {
           this.showAlert(`Sprint ${resultado.numero} reabierto.`, 'alert-success');
+        } else if (accion.tipo === 'eliminar') {
+          this.showAlert(`Sprint eliminado correctamente.`, 'alert-success');
         } else {
           this.showAlert(`Sprint ${resultado.numero} finalizado.`, 'alert-success');
         }

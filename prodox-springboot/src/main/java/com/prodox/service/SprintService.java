@@ -201,6 +201,20 @@ public class SprintService {
         return toDto(s, p);
     }
 
+    /**
+     * Elimina un sprint pendiente.
+     * Solo permite eliminar sprints en estado "pendiente".
+     */
+    @Transactional
+    public void eliminarSprint(UUID sprintId) {
+        Sprint s = sprintRepo.findById(sprintId)
+                .orElseThrow(() -> new IllegalArgumentException("Sprint no encontrado."));
+        if (!"pendiente".equals(s.getEstado())) {
+            throw new IllegalArgumentException("Solo se pueden eliminar sprints en estado pendiente.");
+        }
+        sprintRepo.delete(s);
+    }
+
     private void marcarFinalizado(Sprint s) {
         s.setEstado("finalizado");
         s.setCerradoAt(Instant.now());
