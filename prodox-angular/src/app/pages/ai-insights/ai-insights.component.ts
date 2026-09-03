@@ -374,10 +374,26 @@ export class AIInsightsComponent implements OnInit {
       return;
     }
 
+    // Verificar si las librerías están disponibles
     try {
-      // Usar importaciones dinámicas para optimizar el bundle
-      const { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } = await import('docx');
-      const { saveAs } = await import('file-saver');
+      // Intentar importar las librerías
+      const docx = await import('docx');
+      const fileSaver = await import('file-saver');
+      
+      // Si llegamos aquí, las librerías están disponibles
+      await this.generarDocumentoWord(docx, fileSaver);
+    } catch (error: any) {
+      console.error('Error al cargar librerías de exportación:', error);
+      
+      // Si falla la importación, ofrecer alternativa
+      this.showAlert('La exportación a Word no está disponible en este momento. Por favor, copia el contenido manualmente.', 'alert-warning');
+    }
+  }
+
+  private async generarDocumentoWord(docx: any, fileSaver: any): Promise<void> {
+    try {
+      const { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } = docx;
+      const { saveAs } = fileSaver;
 
       const doc = new Document({
         sections: [{
@@ -503,8 +519,8 @@ export class AIInsightsComponent implements OnInit {
 
       this.showAlert('Documento Word exportado correctamente', 'alert-success');
     } catch (error) {
-      console.error('Error exportando a Word:', error);
-      this.showAlert('Error al exportar a Word. Verificá que las dependencias estén instaladas.', 'alert-danger');
+      console.error('Error generando documento Word:', error);
+      this.showAlert('Error al generar el documento Word.', 'alert-danger');
     }
   }
 
