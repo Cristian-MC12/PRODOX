@@ -41,9 +41,4 @@ export class SprintService {
   cerrarSprintActual(sprintId: string): Observable<SprintDto> {
     return this.http.patch<SprintDto>(`${this.base}/${sprintId}/cerrar`, {});
   }
-
-  /** Elimina un sprint pendiente. */
-  eliminar(sprintId: string): Observable<void> {
-    return this.http.delete<void>(`${this.base}/${sprintId}`);
-  }
 }

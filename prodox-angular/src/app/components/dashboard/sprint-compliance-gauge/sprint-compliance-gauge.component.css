@@ -1,10 +1,11 @@
-/* Autor: Cristian Santiago Martinez Cordoba — PRODOX */
-.gauge-visual{display:flex;justify-content:center;align-items:center;padding:var(--space-3)}
-.gauge-canvas-wrap{position:relative;width:100%;max-width:180px;aspect-ratio:1/1}
+﻿/* Autor: Cristian Santiago Martinez Cordoba — PRODOX */
+.gauge-visual{display:flex;justify-content:center;align-items:center;padding:var(--space-2)}
+.gauge-canvas-wrap{position:relative;width:100%;max-width:120px;aspect-ratio:1/1}
 .gauge-center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none}
-.gauge-percentage{font-size:2rem;font-weight:700;color:var(--text-primary);line-height:1}
-.gauge-label{font-size:0.75rem;font-weight:500;color:var(--text-secondary)}
+.gauge-percentage{font-size:1.5rem;font-weight:700;color:var(--text-primary);line-height:1}
+.gauge-label{font-size:0.65rem;font-weight:500;color:var(--text-secondary);margin-top:0.25rem}
 @media (max-width:768px){
-  .gauge-canvas-wrap{max-width:140px}
-  .gauge-percentage{font-size:1.5rem}
+  .gauge-canvas-wrap{max-width:100px}
+  .gauge-percentage{font-size:1.25rem}
+  .gauge-label{font-size:0.6rem}
 }

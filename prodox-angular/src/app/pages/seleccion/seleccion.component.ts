@@ -1,4 +1,4 @@
-// Autor: Cristian Santiago Martinez Cordoba — PRODOX
+﻿// Autor: Cristian Santiago Martinez Cordoba â€” PRODOX
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -16,10 +16,10 @@ import { RankingMetrica } from '../../models/metric-ranking.model';
   standalone: true,
   imports: [CommonModule, FormsModule, ShellComponent],
   template: `
-    <app-shell title="Selección de Métricas">
+    <app-shell title="SelecciÃ³n de MÃ©tricas">
 
       <p class="text-muted small mb-3">
-        Seleccioná las métricas que vas a medir en este sprint y movelas al panel derecho.
+        SeleccionÃ¡ las mÃ©tricas que vas a medir en este sprint y movelas al panel derecho.
       </p>
 
       @if (alertMsg) {
@@ -47,10 +47,10 @@ import { RankingMetrica } from '../../models/metric-ranking.model';
       <!-- Dos paneles + flechas -->
       <div class="d-flex align-items-start gap-3">
 
-        <!-- Panel izquierdo: métricas del factor -->
+        <!-- Panel izquierdo: mÃ©tricas del factor -->
         <div class="card flex-grow-1" style="min-width:0">
           <div class="card-header small fw-semibold py-2">
-            <i class="bi bi-bar-chart-line me-1"></i>Métricas disponibles
+            <i class="bi bi-bar-chart-line me-1"></i>MÃ©tricas disponibles
             @if (factorSeleccionado) {
               <span class="badge ms-2" [class]="categoryBadge(factorSeleccionado)">
                 {{ factorSeleccionado }}
@@ -61,18 +61,18 @@ import { RankingMetrica } from '../../models/metric-ranking.model';
             @if (!factorSeleccionado) {
               <div class="text-center text-muted py-5 small">
                 <i class="bi bi-arrow-up fs-3 d-block mb-2 opacity-25"></i>
-                Seleccioná un factor para ver sus métricas.
+                SeleccionÃ¡ un factor para ver sus mÃ©tricas.
               </div>
             } @else if (metricasDisponibles.length === 0) {
               <div class="text-center text-muted py-5 small">
                 <i class="bi bi-inbox fs-3 d-block mb-2 opacity-25"></i>
-                No hay métricas para este factor.
+                No hay mÃ©tricas para este factor.
               </div>
             } @else {
               <table class="table table-sm table-hover mb-0">
                 <thead class="table-light sticky-top">
                   <tr>
-                    <th class="ps-3">Métrica</th>
+                    <th class="ps-3">MÃ©trica</th>
                     <th style="width:32px"></th>
                   </tr>
                 </thead>
@@ -129,23 +129,23 @@ import { RankingMetrica } from '../../models/metric-ranking.model';
           </button>
         </div>
 
-        <!-- Panel derecho: métricas seleccionadas -->
+        <!-- Panel derecho: mÃ©tricas seleccionadas -->
         <div class="card flex-grow-1" style="min-width:0">
           <div class="card-header small fw-semibold py-2 d-flex justify-content-between align-items-center">
-            <span><i class="bi bi-check2-square me-1"></i>Métricas seleccionadas</span>
+            <span><i class="bi bi-check2-square me-1"></i>MÃ©tricas seleccionadas</span>
             <span class="badge bg-primary rounded-pill">{{ seleccionadas.length }}</span>
           </div>
           <div style="height:320px;overflow-y:auto">
             @if (seleccionadas.length === 0) {
               <div class="text-center text-muted py-5 small">
                 <i class="bi bi-arrow-left-circle fs-3 d-block mb-2 opacity-25"></i>
-                Hacé click en una métrica para agregarla.
+                HacÃ© click en una mÃ©trica para agregarla.
               </div>
             } @else {
               <table class="table table-sm table-hover mb-0">
                 <thead class="table-light sticky-top">
                   <tr>
-                    <th class="ps-3">Métrica</th>
+                    <th class="ps-3">MÃ©trica</th>
                     <th>Factor</th>
                     <th style="width:32px"></th>
                   </tr>
@@ -208,10 +208,10 @@ export class SeleccionComponent implements OnInit {
     this.factorService.list().pipe(
       catchError(err => {
         if (err.status === 401 || err.status === 403) {
-          this.showAlert('Sesión expirada. Iniciá sesión nuevamente.', 'alert-warning');
+          this.showAlert('SesiÃ³n expirada. IniciÃ¡ sesiÃ³n nuevamente.', 'alert-warning');
           setTimeout(() => this.router.navigate(['/auth']), 2000);
         } else {
-          this.showAlert('Error al cargar las métricas. Verificá la conexión.', 'alert-danger');
+          this.showAlert('Error al cargar las mÃ©tricas. VerificÃ¡ la conexiÃ³n.', 'alert-danger');
         }
         return of([]);
       })
@@ -236,12 +236,12 @@ export class SeleccionComponent implements OnInit {
     this.metricasDisponibles = this.todas.filter(m => m.category === this.factorSeleccionado);
   }
 
-  /** Posición en el ranking (0-based), -1 si no está */
+  /** PosiciÃ³n en el ranking (0-based), -1 si no estÃ¡ */
   rankingPos(m: Factor): number {
     return this.ranking.findIndex(r => r.factorId === m.id);
   }
 
-  /** Usos de una métrica en el ranking */
+  /** Usos de una mÃ©trica en el ranking */
   rankingUsos(m: Factor): number {
     return this.ranking.find(r => r.factorId === m.id)?.usos ?? 0;
   }
@@ -251,7 +251,7 @@ export class SeleccionComponent implements OnInit {
   }
 
   mover(m: Factor): void {
-    // Si la métrica está en el ranking, incrementar su contador
+    // Si la mÃ©trica estÃ¡ en el ranking, incrementar su contador
     const enRanking = this.ranking.some(r => r.factorId === m.id);
     if (enRanking) {
       this.rankingService.incrementarUso(m.id).pipe(

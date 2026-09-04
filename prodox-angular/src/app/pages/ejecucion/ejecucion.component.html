@@ -118,6 +118,24 @@
               } @else if (m.variables.length === 0) {
                 <div class="text-muted small mb-0">Sin variables configuradas.</div>
               } @else {
+                <!-- Header de métrica (mostrado UNA vez por métrica) -->
+                <div class="metrica-header">
+                  <div class="metrica-icon" [ngClass]="obtenerClaseIcono(m.nombre)">
+                    <i class="bi" [ngClass]="obtenerIcono(m.nombre)"></i>
+                  </div>
+                  <div class="metrica-info">
+                    <h3 class="metrica-title">{{ m.nombre.toUpperCase() }}</h3>
+                    @if (sprintActual) {
+                      <div class="metrica-details">
+                        <div class="detail-item">
+                          <i class="bi bi-clock-history"></i>
+                          <span><strong>Sprint:</strong> Sprint {{ sprintActual.numero }} · {{ sprintActual.fechaInicio | date:'dd/MM/yyyy' }} - {{ sprintActual.fechaFin ? (sprintActual.fechaFin | date:'dd/MM/yyyy') : 'sin definir' }}</span>
+                        </div>
+                      </div>
+                    }
+                  </div>
+                </div>
+
                 @for (v of m.variables; track v.variableId) {
                   <div class="metrica-content">
                     @if (v.capturasHistoricas.length > 0) {
@@ -129,40 +147,26 @@
                         <span>{{ v.mostrarHistorial ? 'Ocultar' : 'Ver historial' }}</span>
                       </button>
                     }
-                    
-                    <!-- Header con icono e información -->
-                    <div class="metrica-header">
-                      <div class="metrica-icon" [ngClass]="obtenerClaseIcono(m.nombre)">
-                        <i class="bi" [ngClass]="obtenerIcono(m.nombre)"></i>
+
+                    <!-- Información específica de esta variable -->
+                    <div class="variable-info mb-3">
+                      <div class="detail-item">
+                        <i class="bi bi-question-circle"></i>
+                        <span><strong>¿Qué mide?</strong> {{ v.descripcion || 'Sumar los valores registrados de ' + v.nombre }}</span>
                       </div>
-                      <div class="metrica-info">
-                        <h3 class="metrica-title">{{ m.nombre.toUpperCase() }}</h3>
-                        <div class="metrica-details">
-                          <div class="detail-item">
-                            <i class="bi bi-question-circle"></i>
-                            <span><strong>¿Qué mide?</strong> {{ v.descripcion || 'Sumar los valores registrados de ' + v.nombre }}</span>
-                          </div>
-                          <div class="detail-item">
-                            <i class="bi bi-graph-up-arrow"></i>
-                            <span><strong>Valor esperado:</strong> 
-                              @if (v.tipoDato === 'numerico' && v.escalaMin != null) {
-                                Numérico, escala {{ v.escalaMin }}–{{ v.escalaMax ?? 'sin límite' }}
-                              } @else {
-                                {{ v.tipoDato }}{{ v.unidad ? ' (' + v.unidad + ')' : '' }}
-                              }
-                            </span>
-                          </div>
-                          <div class="detail-item">
-                            <i class="bi bi-calendar-range"></i>
-                            <span><strong>Frecuencia:</strong> {{ labelFrecuencia(v.frecuenciaCaptura) }}</span>
-                          </div>
-                          @if (sprintActual) {
-                            <div class="detail-item">
-                              <i class="bi bi-clock-history"></i>
-                              <span><strong>Sprint:</strong> Sprint {{ sprintActual.numero }} · {{ sprintActual.fechaInicio | date:'dd/MM/yyyy' }} - {{ sprintActual.fechaFin ? (sprintActual.fechaFin | date:'dd/MM/yyyy') : 'sin definir' }}</span>
-                            </div>
+                      <div class="detail-item">
+                        <i class="bi bi-graph-up-arrow"></i>
+                        <span><strong>Valor esperado:</strong> 
+                          @if (v.tipoDato === 'numerico' && v.escalaMin != null) {
+                            Numérico, escala {{ v.escalaMin }}–{{ v.escalaMax ?? 'sin límite' }}
+                          } @else {
+                            {{ v.tipoDato }}{{ v.unidad ? ' (' + v.unidad + ')' : '' }}
                           }
-                        </div>
+                        </span>
+                      </div>
+                      <div class="detail-item">
+                        <i class="bi bi-calendar-range"></i>
+                        <span><strong>Frecuencia:</strong> {{ labelFrecuencia(v.frecuenciaCaptura) }}</span>
                       </div>
                     </div>
 

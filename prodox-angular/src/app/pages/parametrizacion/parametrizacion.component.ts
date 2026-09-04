@@ -1,4 +1,4 @@
-// Autor: Cristian Santiago Martinez Cordoba — PRODOX
+﻿// Autor: Cristian Santiago Martinez Cordoba â€” PRODOX
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -18,28 +18,28 @@ import { environment } from '../../../environments/environment';
   standalone: true,
   imports: [CommonModule, FormsModule, ShellComponent],
   template: `
-    <app-shell title="Parametrización de Métrica">
+    <app-shell title="ParametrizaciÃ³n de MÃ©trica">
 
       @if (!metrica) {
         <div class="text-center py-5 text-muted">Cargando...</div>
       } @else {
 
-        <!-- Breadcrumb de navegación -->
+        <!-- Breadcrumb de navegaciÃ³n -->
         <nav aria-label="breadcrumb" class="mb-3">
           <ol class="breadcrumb small mb-0">
             <li class="breadcrumb-item">
               <a href="#" (click)="$event.preventDefault(); router.navigate(['/planeacion'])">
-                <i class="bi bi-layers me-1"></i>Planeación
+                <i class="bi bi-layers me-1"></i>PlaneaciÃ³n
               </a>
             </li>
             <li class="breadcrumb-item">
-              <a href="#" (click)="$event.preventDefault(); volver()">Resumen de Selección</a>
+              <a href="#" (click)="$event.preventDefault(); volver()">Resumen de SelecciÃ³n</a>
             </li>
             <li class="breadcrumb-item active">{{ metrica.metricaNombre }}</li>
           </ol>
         </nav>
 
-        <!-- Info de la métrica -->
+        <!-- Info de la mÃ©trica -->
         <div class="card mb-4 border-primary">
           <div class="card-body py-3">
             <div class="row align-items-center">
@@ -51,7 +51,7 @@ import { environment } from '../../../environments/environment';
                 </span>
               </div>
               <div class="col-md-6 mt-2 mt-md-0">
-                <div class="text-muted small">Métrica</div>
+                <div class="text-muted small">MÃ©trica</div>
                 <div class="fw-semibold">{{ metrica.metricaNombre }}</div>
                 <div class="text-muted small">{{ metrica.metricaDescripcion }}</div>
               </div>
@@ -59,7 +59,7 @@ import { environment } from '../../../environments/environment';
           </div>
         </div>
 
-        <!-- Estado de parametrización (FASE 16.6) -->
+        <!-- Estado de parametrizaciÃ³n (FASE 16.6) -->
         @if (estadoActual) {
           <div class="card mb-4" 
                [class.border-warning]="estadoActual === 'propuesta'" 
@@ -77,11 +77,11 @@ import { environment } from '../../../environments/environment';
                       <i class="bi bi-check-circle me-1"></i>Aprobada
                     }
                   </span>
-                  <span class="small text-muted">Versión {{ versionActual }}</span>
+                  <span class="small text-muted">VersiÃ³n {{ versionActual }}</span>
                   @if (estadoActual === 'propuesta' && ultimaVersionAprobadaInfo) {
                     <span class="small text-muted ms-2">
                       <i class="bi bi-info-circle me-1"></i>
-                      Versión aprobada vigente: v{{ ultimaVersionAprobadaInfo.version }} (se mantiene hasta que apruebes esta propuesta nueva)
+                      VersiÃ³n aprobada vigente: v{{ ultimaVersionAprobadaInfo.version }} (se mantiene hasta que apruebes esta propuesta nueva)
                     </span>
                   }
                 </div>
@@ -95,17 +95,17 @@ import { environment } from '../../../environments/environment';
                           <span class="spinner-border spinner-border-sm me-1"></span>
                           Aprobando...
                         } @else {
-                          <i class="bi bi-check-lg me-1"></i>Aprobar parametrización
+                          <i class="bi bi-check-lg me-1"></i>Aprobar parametrizaciÃ³n
                         }
                       </button>
                     } @else {
                       <span class="text-muted small">
-                        <i class="bi bi-hourglass-split me-1"></i>Pendiente de aprobación por el Scrum Master
+                        <i class="bi bi-hourglass-split me-1"></i>Pendiente de aprobaciÃ³n por el Scrum Master
                       </span>
                     }
                   } @else {
                     <span class="text-success small">
-                      <i class="bi bi-check-circle-fill me-1"></i>Parametrización lista para uso
+                      <i class="bi bi-check-circle-fill me-1"></i>ParametrizaciÃ³n lista para uso
                     </span>
                   }
                 </div>
@@ -119,12 +119,12 @@ import { environment } from '../../../environments/environment';
           </div>
         }
 
-        <!-- Ranking Top 3 de esta métrica -->
+        <!-- Ranking Top 3 de esta mÃ©trica -->
         @if (top3.length > 0) {
           <div class="card mb-4">
             <div class="card-header d-flex align-items-center gap-2">
               <i class="bi bi-trophy-fill text-warning"></i>
-              <span class="fw-semibold small">Top {{ top3.length }} parametrizaciones más usadas para esta métrica</span>
+              <span class="fw-semibold small">Top {{ top3.length }} parametrizaciones mÃ¡s usadas para esta mÃ©trica</span>
             </div>
             <div class="card-body p-0">
               <div class="table-responsive">
@@ -173,17 +173,17 @@ import { environment } from '../../../environments/environment';
           </div>
         }
 
-        <!-- Parametrización base de otro usuario (solo lectura) -->
+        <!-- ParametrizaciÃ³n base de otro usuario (solo lectura) -->
         @if (parametrizacionBase && top3.length === 0) {
           <div class="card mb-4 border-info">
             <div class="card-header d-flex align-items-center gap-2 bg-info bg-opacity-10">
               <i class="bi bi-person-check text-info fs-5"></i>
               <div>
-                <div class="fw-semibold small">Parametrización de referencia</div>
+                <div class="fw-semibold small">ParametrizaciÃ³n de referencia</div>
                 <div class="text-muted" style="font-size:0.75rem">
                   Creada por <strong>{{ parametrizacionBase.userEmail }}</strong>
                   el {{ parametrizacionBase.createdAt | date:'dd/MM/yyyy' }}.
-                  Podés usarla como base o crear la tuya propia.
+                  PodÃ©s usarla como base o crear la tuya propia.
                 </div>
               </div>
               <button class="btn btn-sm btn-outline-info ms-auto"
@@ -211,10 +211,10 @@ import { environment } from '../../../environments/environment';
           <div class="card-header d-flex align-items-center gap-2">
             <i class="bi bi-robot text-primary fs-5"></i>
             <div class="flex-grow-1">
-              <div class="fw-semibold small">AI — Asistente de parametrización</div>
+              <div class="fw-semibold small">AI â€” Asistente de parametrizaciÃ³n</div>
               <div class="text-muted" style="font-size:0.75rem">
-                La IA puede ayudarte a construir una parametrización para esta métrica
-                a partir de su definición y buenas prácticas de Scrum.
+                La IA puede ayudarte a construir una parametrizaciÃ³n para esta mÃ©trica
+                a partir de su definiciÃ³n y buenas prÃ¡cticas de Scrum.
               </div>
             </div>
           </div>
@@ -224,10 +224,10 @@ import { environment } from '../../../environments/environment';
                     (click)="generarPropuestas()">
               @if (generando) {
                 <span class="spinner-border spinner-border-sm me-2"></span>
-                Generando parametrización...
+                Generando parametrizaciÃ³n...
               } @else {
                 <i class="bi bi-stars me-2"></i>
-                Generar parametrización con GenAI
+                Generar parametrizaciÃ³n con GenAI
               }
             </button>
             @if (errorGenAI) {
@@ -248,7 +248,7 @@ import { environment } from '../../../environments/environment';
                   <div class="fw-semibold small">Propuesta generada por IA</div>
                   <div class="text-muted" style="font-size:0.72rem">
                     <i class="bi bi-exclamation-circle me-1"></i>
-                    <strong>Requiere validación humana</strong> — Revisá y ajustá según el contexto de tu equipo
+                    <strong>Requiere validaciÃ³n humana</strong> â€” RevisÃ¡ y ajustÃ¡ segÃºn el contexto de tu equipo
                   </div>
                 </div>
               </div>
@@ -288,8 +288,8 @@ import { environment } from '../../../environments/environment';
                     <div class="text-muted" style="font-size:0.72rem">
                       {{ propuestas[0].escalaTipo === 'NUMERICA_ENTERA' ? 'Entera' : 'Decimal' }},
                       {{ propuestas[0].escalaMin }}
-                      –
-                      {{ propuestas[0].escalaSinLimite ? 'sin límite' : propuestas[0].escalaMax }},
+                      â€“
+                      {{ propuestas[0].escalaSinLimite ? 'sin lÃ­mite' : propuestas[0].escalaMax }},
                       paso {{ propuestas[0].escalaPaso }}
                     </div>
                   }
@@ -297,14 +297,14 @@ import { environment } from '../../../environments/environment';
 
                 @if (propuestas[0].formulaAcademica) {
                   <dt class="col-sm-3 text-muted">
-                    <i class="bi bi-calculator me-1"></i>Fórmula académica
+                    <i class="bi bi-calculator me-1"></i>FÃ³rmula acadÃ©mica
                   </dt>
                   <dd class="col-sm-9"><code>{{ propuestas[0].formulaAcademica }}</code></dd>
                 }
 
                 @if (propuestas[0].tipoOperacion) {
                   <dt class="col-sm-3 text-muted">
-                    <i class="bi bi-gear me-1"></i>Tipo operación
+                    <i class="bi bi-gear me-1"></i>Tipo operaciÃ³n
                   </dt>
                   <dd class="col-sm-9"><span class="badge bg-secondary prox-badge-sm">{{ propuestas[0].tipoOperacion }}</span></dd>
                 }
@@ -318,7 +318,7 @@ import { environment } from '../../../environments/environment';
 
                 @if (propuestas[0].fuenteAcademica) {
                   <dt class="col-sm-3 text-muted">
-                    <i class="bi bi-book me-1"></i>Fuente académica
+                    <i class="bi bi-book me-1"></i>Fuente acadÃ©mica
                   </dt>
                   <dd class="col-sm-9 small text-muted">{{ propuestas[0].fuenteAcademica }}</dd>
                 }
@@ -326,14 +326,14 @@ import { environment } from '../../../environments/environment';
                 <dt class="col-sm-12 mt-2">
                   <div class="alert alert-info py-2 mb-0">
                     <i class="bi bi-info-circle me-1"></i>
-                    <strong>Justificación:</strong> {{ propuestas[0].justificacion }}
+                    <strong>JustificaciÃ³n:</strong> {{ propuestas[0].justificacion }}
                   </div>
                 </dt>
               </dl>
             </div>
             <div class="card-footer py-2 d-flex flex-wrap justify-content-between align-items-center gap-2">
               <span class="small text-muted">
-                <i class="bi bi-robot me-1"></i>Esta es una propuesta de IA, no una configuración oficial
+                <i class="bi bi-robot me-1"></i>Esta es una propuesta de IA, no una configuraciÃ³n oficial
               </span>
               <div class="d-flex flex-wrap gap-2">
                 <button class="btn btn-outline-primary btn-sm text-nowrap"
@@ -365,34 +365,34 @@ import { environment } from '../../../environments/environment';
           </div>
         }
 
-        <!-- Formulario de parametrización -->
+        <!-- Formulario de parametrizaciÃ³n -->
         <div class="card mb-4">
           <div class="card-header fw-semibold small">
             <i class="bi bi-pencil me-1"></i>
-            {{ propuestas.length > 0 ? 'Revisar y ajustar parametrización' : 'Parametrización manual' }}
+            {{ propuestas.length > 0 ? 'Revisar y ajustar parametrizaciÃ³n' : 'ParametrizaciÃ³n manual' }}
           </div>
           <div class="card-body">
             <div class="row g-3">
               <div class="col-12">
                 <label class="form-label small fw-semibold">
-                  Objetivo de medición <span class="text-danger">*</span>
+                  Objetivo de mediciÃ³n <span class="text-danger">*</span>
                   <i class="bi bi-info-circle text-muted ms-1" 
                      style="cursor: help"
-                     title="Define el propósito de esta métrica. ¿Qué insight o mejora esperas obtener al medirla?"></i>
+                     title="Define el propÃ³sito de esta mÃ©trica. Â¿QuÃ© insight o mejora esperas obtener al medirla?"></i>
                 </label>
                 <textarea class="form-control form-control-sm" rows="2"
-                          placeholder="¿Qué se quiere lograr midiendo esta métrica?"
+                          placeholder="Â¿QuÃ© se quiere lograr midiendo esta mÃ©trica?"
                           [(ngModel)]="form.objetivo"></textarea>
               </div>
               <div class="col-12">
                 <label class="form-label small fw-semibold">
-                  Procedimiento / Fórmula <span class="text-danger">*</span>
+                  Procedimiento / FÃ³rmula <span class="text-danger">*</span>
                   <i class="bi bi-info-circle text-muted ms-1" 
                      style="cursor: help"
-                     title="Describe cómo se obtiene el valor de esta métrica. Incluye fórmulas matemáticas o pasos específicos para calcularla."></i>
+                     title="Describe cÃ³mo se obtiene el valor de esta mÃ©trica. Incluye fÃ³rmulas matemÃ¡ticas o pasos especÃ­ficos para calcularla."></i>
                 </label>
                 <textarea class="form-control form-control-sm" rows="3"
-                          placeholder="Fórmula o pasos para calcular el valor de la métrica..."
+                          placeholder="FÃ³rmula o pasos para calcular el valor de la mÃ©trica..."
                           [(ngModel)]="form.procedimiento"></textarea>
               </div>
               <div class="col-md-6">
@@ -400,7 +400,7 @@ import { environment } from '../../../environments/environment';
                   Indicador y Variables <span class="text-danger">*</span>
                   <i class="bi bi-info-circle text-muted ms-1" 
                      style="cursor: help"
-                     title="Define el nombre del indicador y las variables que intervienen en su cálculo. Ej: 'Velocidad del equipo' medida en story points completados por sprint."></i>
+                     title="Define el nombre del indicador y las variables que intervienen en su cÃ¡lculo. Ej: 'Velocidad del equipo' medida en story points completados por sprint."></i>
                 </label>
                 <input type="text" class="form-control form-control-sm"
                        placeholder="Ej: Velocidad = SP completados / SP planificados"
@@ -408,10 +408,10 @@ import { environment } from '../../../environments/environment';
               </div>
               <div class="col-12">
                 <label class="form-label small fw-semibold">
-                  Escala de medición <span class="text-danger">*</span>
+                  Escala de mediciÃ³n <span class="text-danger">*</span>
                   <i class="bi bi-info-circle text-muted ms-1" 
                      style="cursor: help"
-                     title="Define el rango y tipo de valores permitidos para esta métrica. Establece límites claros para mantener consistencia en las mediciones."></i>
+                     title="Define el rango y tipo de valores permitidos para esta mÃ©trica. Establece lÃ­mites claros para mantener consistencia en las mediciones."></i>
                 </label>
                 <div class="row g-2 p-2 rounded" style="background-color:var(--background)">
                   <div class="col-md-3">
@@ -419,29 +419,29 @@ import { environment } from '../../../environments/environment';
                       Tipo
                       <i class="bi bi-info-circle-fill text-info ms-1" 
                          style="cursor: help; font-size: 0.7rem"
-                         title="Numérica entera: solo números enteros (0, 1, 2, 5, 10). Numérica decimal: permite decimales (0.5, 1.25, 3.75)."></i>
+                         title="NumÃ©rica entera: solo nÃºmeros enteros (0, 1, 2, 5, 10). NumÃ©rica decimal: permite decimales (0.5, 1.25, 3.75)."></i>
                     </label>
                     <select class="form-select form-select-sm" [(ngModel)]="form.escalaTipo">
                       <option [ngValue]="undefined">Sin definir</option>
-                      <option value="NUMERICA_ENTERA">Numérica entera</option>
-                      <option value="NUMERICA_DECIMAL">Numérica decimal</option>
+                      <option value="NUMERICA_ENTERA">NumÃ©rica entera</option>
+                      <option value="NUMERICA_DECIMAL">NumÃ©rica decimal</option>
                     </select>
                   </div>
                   <div class="col-md-3">
                     <label class="form-label small text-muted mb-1">
-                      Mínimo
+                      MÃ­nimo
                       <i class="bi bi-info-circle-fill text-info ms-1" 
                          style="cursor: help; font-size: 0.7rem"
-                         title="El valor más bajo permitido para esta métrica. Ej: 0 para porcentajes, 1 para conteos que no pueden ser cero."></i>
+                         title="El valor mÃ¡s bajo permitido para esta mÃ©trica. Ej: 0 para porcentajes, 1 para conteos que no pueden ser cero."></i>
                     </label>
                     <input type="number" class="form-control form-control-sm" [(ngModel)]="form.escalaMin">
                   </div>
                   <div class="col-md-3">
                     <label class="form-label small text-muted mb-1">
-                      Máximo
+                      MÃ¡ximo
                       <i class="bi bi-info-circle-fill text-info ms-1" 
                          style="cursor: help; font-size: 0.7rem"
-                         title="El valor más alto permitido. Ej: 100 para porcentajes, 10 para escalas de satisfacción. Desactívalo si no hay límite superior."></i>
+                         title="El valor mÃ¡s alto permitido. Ej: 100 para porcentajes, 10 para escalas de satisfacciÃ³n. DesactÃ­valo si no hay lÃ­mite superior."></i>
                     </label>
                     <input type="number" class="form-control form-control-sm"
                            [(ngModel)]="form.escalaMax" [disabled]="!!form.escalaSinLimite">
@@ -451,7 +451,7 @@ import { environment } from '../../../environments/environment';
                       Paso
                       <i class="bi bi-info-circle-fill text-info ms-1" 
                          style="cursor: help; font-size: 0.7rem"
-                         title="Incremento mínimo entre valores. Ej: paso=1 permite 0,1,2,3... paso=5 permite 0,5,10,15... paso=0.5 permite 0, 0.5, 1.0, 1.5..."></i>
+                         title="Incremento mÃ­nimo entre valores. Ej: paso=1 permite 0,1,2,3... paso=5 permite 0,5,10,15... paso=0.5 permite 0, 0.5, 1.0, 1.5..."></i>
                     </label>
                     <input type="number" class="form-control form-control-sm" step="0.01" min="0.01"
                            [(ngModel)]="form.escalaPaso">
@@ -461,16 +461,16 @@ import { environment } from '../../../environments/environment';
                       <input class="form-check-input" type="checkbox" id="escalaSinLimite"
                              [(ngModel)]="form.escalaSinLimite" (ngModelChange)="onEscalaSinLimiteChange()">
                       <label class="form-check-label small" for="escalaSinLimite">
-                        Sin límite superior
+                        Sin lÃ­mite superior
                         <i class="bi bi-info-circle-fill text-info ms-1" 
                            style="cursor: help; font-size: 0.7rem"
-                           title="Activa esto cuando la métrica no tiene un valor máximo definido. Ej: cantidad de bugs encontrados, tiempo de respuesta."></i>
+                           title="Activa esto cuando la mÃ©trica no tiene un valor mÃ¡ximo definido. Ej: cantidad de bugs encontrados, tiempo de respuesta."></i>
                       </label>
                     </div>
                   </div>
                   <div class="col-md-6">
                     <label class="form-label small text-muted mb-1">
-                      Descripción de los valores (opcional)
+                      DescripciÃ³n de los valores (opcional)
                       <i class="bi bi-info-circle-fill text-info ms-1" 
                          style="cursor: help; font-size: 0.7rem"
                          title="Ayuda a interpretar los valores. Ej: '0=Malo, 5=Regular, 10=Excelente' o '0-30=Bajo, 31-70=Medio, 71-100=Alto'"></i>
@@ -486,10 +486,10 @@ import { environment } from '../../../environments/environment';
               </div>
               <div class="col-md-6">
                 <label class="form-label small fw-semibold">
-                  📅 Frecuencia de captura <span class="text-muted">(recomendada por IA)</span>
+                  ðŸ“… Frecuencia de captura <span class="text-muted">(recomendada por IA)</span>
                   <i class="bi bi-info-circle text-muted ms-1" 
                      style="cursor: help"
-                     title="Define cuándo debe registrarse esta métrica. Al finalizar sprint es lo más común para métricas de equipo; diaria para métricas de seguimiento continuo; cuando ocurra el evento para métricas basadas en incidentes."></i>
+                     title="Define cuÃ¡ndo debe registrarse esta mÃ©trica. Al finalizar sprint es lo mÃ¡s comÃºn para mÃ©tricas de equipo; diaria para mÃ©tricas de seguimiento continuo; cuando ocurra el evento para mÃ©tricas basadas en incidentes."></i>
                 </label>
                 <select class="form-select form-select-sm" [(ngModel)]="form.frecuenciaCaptura">
                   <option value="por_sprint">Al finalizar sprint</option>
@@ -499,16 +499,16 @@ import { environment } from '../../../environments/environment';
                 </select>
               </div>
 
-              <!-- Revisión de captura por parametrización: alcance/responsable de
-                   captura, independiente de la fórmula/operación de arriba. El
+              <!-- RevisiÃ³n de captura por parametrizaciÃ³n: alcance/responsable de
+                   captura, independiente de la fÃ³rmula/operaciÃ³n de arriba. El
                    backend es la autoridad real (EjecucionService.validarPuedeRegistrar);
-                   esta selección solo decide qué queda guardado en la parametrización. -->
+                   esta selecciÃ³n solo decide quÃ© queda guardado en la parametrizaciÃ³n. -->
               <div class="col-md-6">
                 <label class="form-label small fw-semibold">
-                  👥 Responsable de captura
+                  ðŸ‘¥ Responsable de captura
                   <i class="bi bi-info-circle text-muted ms-1" 
                      style="cursor: help"
-                     title="Quién puede registrar valores para esta métrica. Equipo: cada miembro registra su propio valor (útil para métricas individuales como horas trabajadas). Scrum Master: solo él registra el valor (útil para métricas consolidadas del equipo)."></i>
+                     title="QuiÃ©n puede registrar valores para esta mÃ©trica. Equipo: cada miembro registra su propio valor (Ãºtil para mÃ©tricas individuales como horas trabajadas). Scrum Master: solo Ã©l registra el valor (Ãºtil para mÃ©tricas consolidadas del equipo)."></i>
                 </label>
                 <select class="form-select form-select-sm" [(ngModel)]="form.responsableCaptura">
                   <option value="EQUIPO">Equipo</option>
@@ -523,23 +523,23 @@ import { environment } from '../../../environments/environment';
                 </div>
               </div>
 
-              <!-- Campos académicos: información PROPUESTA/GENERADA por IA, nunca
-                   editable manualmente acá — se completan solo copiando una propuesta
+              <!-- Campos acadÃ©micos: informaciÃ³n PROPUESTA/GENERADA por IA, nunca
+                   editable manualmente acÃ¡ â€” se completan solo copiando una propuesta
                    de IA ("Copiar al formulario"), una entrada del ranking ("Usar") o
-                   la parametrización base ("Usar como base"). Un campo que la IA no
-                   generó se muestra explícitamente como "No definido", nunca como un
-                   input vacío que invite a completarlo a mano. -->
+                   la parametrizaciÃ³n base ("Usar como base"). Un campo que la IA no
+                   generÃ³ se muestra explÃ­citamente como "No definido", nunca como un
+                   input vacÃ­o que invite a completarlo a mano. -->
               <div class="col-12 mt-3">
                 <hr>
                 <h6 class="text-muted small mb-3">
                   <i class="bi bi-mortarboard me-1"></i>
-                  Campos académicos <span class="text-muted">(propuestos por IA — solo lectura)</span>
+                  Campos acadÃ©micos <span class="text-muted">(propuestos por IA â€” solo lectura)</span>
                 </h6>
               </div>
 
               <div class="col-12">
                 <dl class="row mb-0 small p-3 rounded" style="background-color:var(--background)">
-                  <dt class="col-sm-3 text-muted">Fórmula académica</dt>
+                  <dt class="col-sm-3 text-muted">FÃ³rmula acadÃ©mica</dt>
                   <dd class="col-sm-9">
                     @if (form.formulaAcademica) {
                       <code>{{ form.formulaAcademica }}</code>
@@ -548,7 +548,7 @@ import { environment } from '../../../environments/environment';
                     }
                   </dd>
 
-                  <dt class="col-sm-3 text-muted">Tipo de operación</dt>
+                  <dt class="col-sm-3 text-muted">Tipo de operaciÃ³n</dt>
                   <dd class="col-sm-9">
                     @if (form.tipoOperacion) {
                       <span class="badge bg-secondary prox-badge-sm">{{ form.tipoOperacion }}</span>
@@ -566,7 +566,7 @@ import { environment } from '../../../environments/environment';
                     }
                   </dd>
 
-                  <dt class="col-sm-3 text-muted">Fuente académica</dt>
+                  <dt class="col-sm-3 text-muted">Fuente acadÃ©mica</dt>
                   <dd class="col-sm-9 mb-0">
                     @if (form.fuenteAcademica) {
                       {{ form.fuenteAcademica }}
@@ -594,7 +594,7 @@ import { environment } from '../../../environments/environment';
                 } @else {
                   <i class="bi bi-floppy me-1"></i>
                 }
-                Guardar parametrización
+                Guardar parametrizaciÃ³n
               </button>
             </div>
           </div>
@@ -614,34 +614,34 @@ export class ParametrizacionComponent implements OnInit {
   generando  = false;
   guardando  = false;
   errorGenAI = '';
-  /** Corrección del manejo de escalas: error de validación de la escala estructurada. */
+  /** CorrecciÃ³n del manejo de escalas: error de validaciÃ³n de la escala estructurada. */
   errorEscala = '';
   
-  // FASE 16.6: Aprobación y versionado
+  // FASE 16.6: AprobaciÃ³n y versionado
   parametrizacionId: string | null = null;
   estadoActual: 'propuesta' | 'aprobada' | null = null;
   versionActual: number = 1;
   aprobando = false;
   /**
-   * FASE 16.10-D: respuesta completa de POST /guardar-propuesta (la parametrización
-   * ya persistida). Es la fuente de verdad al aprobar — evita reconstruir el request
+   * FASE 16.10-D: respuesta completa de POST /guardar-propuesta (la parametrizaciÃ³n
+   * ya persistida). Es la fuente de verdad al aprobar â€” evita reconstruir el request
    * desde `this.form`, que puede desincronizarse si el usuario regenera con GenAI o
-   * edita el formulario después de guardar. Si es null (p. ej. la propuesta pendiente
-   * viene de una sesión anterior y no se guardó en este ciclo de vida del componente),
+   * edita el formulario despuÃ©s de guardar. Si es null (p. ej. la propuesta pendiente
+   * viene de una sesiÃ³n anterior y no se guardÃ³ en este ciclo de vida del componente),
    * se conserva el comportamiento previo de usar `this.form` como respaldo.
    */
   propuestaPendiente: any = null;
   errorGuardar = '';
   errorAprobar = '';
-  // FASE 16.10-C: info de la última versión aprobada, se conserva visible
-  // aunque exista una propuesta nueva (aún sin aprobar) en curso.
+  // FASE 16.10-C: info de la Ãºltima versiÃ³n aprobada, se conserva visible
+  // aunque exista una propuesta nueva (aÃºn sin aprobar) en curso.
   ultimaVersionAprobadaInfo: { version: number } | null = null;
 
   form: Parametrizacion = {
     objetivo: '', procedimiento: '', indicadorVariable: '', escala: '', frecuenciaCaptura: 'por_sprint',
     // Valor por defecto conservador: preserva el comportamiento previo a esta
-    // revisión (todas las métricas quedaban "grupal"/solo Scrum Master) para
-    // quien no cambie explícitamente la selección.
+    // revisiÃ³n (todas las mÃ©tricas quedaban "grupal"/solo Scrum Master) para
+    // quien no cambie explÃ­citamente la selecciÃ³n.
     responsableCaptura: 'SCRUM_MASTER'
   };
 
@@ -657,14 +657,14 @@ export class ParametrizacionComponent implements OnInit {
   ) {}
 
   /**
-   * Revisión de navegación (rol): la aprobación real ya está protegida en el
+   * RevisiÃ³n de navegaciÃ³n (rol): la aprobaciÃ³n real ya estÃ¡ protegida en el
    * backend (ParametrizacionController exige Scrum Master del proyecto). Este
-   * getter solo decide qué botón mostrar — nunca es la autorización real.
+   * getter solo decide quÃ© botÃ³n mostrar â€” nunca es la autorizaciÃ³n real.
    *
-   * Corrección: Scrum Master es siempre relativo al proyecto activo (su
+   * CorrecciÃ³n: Scrum Master es siempre relativo al proyecto activo (su
    * scrumMasterEmail, fijado por el backend al crearlo), nunca el rol
    * global de cuenta (auth.currentUser()?.role, usado solo para decidir
-   * quién puede CREAR un proyecto nuevo) — mismo patrón ya corregido en
+   * quiÃ©n puede CREAR un proyecto nuevo) â€” mismo patrÃ³n ya corregido en
    * dashboard.component.ts (esScrumMasterDelProyecto).
    */
   get esScrumMaster(): boolean {
@@ -686,18 +686,18 @@ export class ParametrizacionComponent implements OnInit {
         this.form = { ...this.metrica.parametrizacion };
         this.propuestaElegida = this.metrica.parametrizacion.propuestaElegida ?? null;
       }
-      // Cargar parametrización base del backend si existe
+      // Cargar parametrizaciÃ³n base del backend si existe
       if (this.metrica) {
         const metricaId = this.metrica.factorId;
         
-        // FASE 16.6: Cargar estado de parametrización desde backend
+        // FASE 16.6: Cargar estado de parametrizaciÃ³n desde backend
         const proyectoActivo = localStorage.getItem('mpdia_proyecto_activo');
         const proyectoId = proyectoActivo ? JSON.parse(proyectoActivo)?.id : null;
         if (proyectoId) {
           this.cargarEstadoParametrizacion(metricaId, proyectoId);
         }
         
-        // Buscar primero por metricaId (flujo Planeación), luego por factorId (flujo Selección)
+        // Buscar primero por metricaId (flujo PlaneaciÃ³n), luego por factorId (flujo SelecciÃ³n)
         this.rankingService.getTop3ByMetricaId(metricaId).pipe(
           catchError(() => of([] as TopParametrizacion[]))
         ).subscribe(top => {
@@ -718,15 +718,15 @@ export class ParametrizacionComponent implements OnInit {
   }
 
   /**
-   * Copiar una entrada del top 3 al formulario. Reutiliza la parametrización
+   * Copiar una entrada del top 3 al formulario. Reutiliza la parametrizaciÃ³n
    * COMPLETA (antes solo copiaba objetivo/procedimiento/indicadorVariable/
-   * escala y descartaba el resto, incluidos los campos académicos y la
-   * frecuencia de captura ya definidos — bug corregido acá). Un campo que
-   * realmente está vacío en el original se conserva vacío/undefined, nunca
+   * escala y descartaba el resto, incluidos los campos acadÃ©micos y la
+   * frecuencia de captura ya definidos â€” bug corregido acÃ¡). Un campo que
+   * realmente estÃ¡ vacÃ­o en el original se conserva vacÃ­o/undefined, nunca
    * se inventa un valor.
    */
   usarDelTop(t: TopParametrizacion): void {
-    console.log('🔍 Datos de TopParametrizacion:', t);
+    console.log('ðŸ” Datos de TopParametrizacion:', t);
     
     this.form = {
       objetivo:          t.objetivo || '',
@@ -747,28 +747,28 @@ export class ParametrizacionComponent implements OnInit {
       responsableCaptura: this.form.responsableCaptura || 'SCRUM_MASTER'
     };
     
-    console.log('📝 Formulario después de copiar:', this.form);
+    console.log('ðŸ“ Formulario despuÃ©s de copiar:', this.form);
     
     this.errorEscala = '';
     this.propuestaElegida = null;
     
     // Hacer scroll hacia el formulario para que el usuario vea los campos llenados
     setTimeout(() => {
-      const formulario = document.querySelector('[style*="Parametrización manual"]');
+      const formulario = document.querySelector('[style*="ParametrizaciÃ³n manual"]');
       if (formulario) {
         formulario.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }
     }, 100);
     
-    // Incrementar el ranking de uso de esta parametrización
+    // Incrementar el ranking de uso de esta parametrizaciÃ³n
     if (this.metrica?.factorId) {
       this.rankingService.incrementarUso(this.metrica.factorId).pipe(catchError(() => of(null))).subscribe();
     }
   }
 
   /**
-   * FASE 16.6: Cargar estado de parametrización desde backend
-   * Obtiene la última versión aprobada para mostrar estado/versión/badge
+   * FASE 16.6: Cargar estado de parametrizaciÃ³n desde backend
+   * Obtiene la Ãºltima versiÃ³n aprobada para mostrar estado/versiÃ³n/badge
    */
   cargarEstadoParametrizacion(metricaId: string, proyectoId: string): void {
     this.http.get<any>(
@@ -782,12 +782,12 @@ export class ParametrizacionComponent implements OnInit {
         this.parametrizacionId = parametrizacion.id;
         // GET /ultima-aprobada solo devuelve versiones con status "aprobada".
         // Se conserva esta info para mostrarla aunque luego se guarde una
-        // propuesta nueva (siguiente versión, todavía sin aprobar).
+        // propuesta nueva (siguiente versiÃ³n, todavÃ­a sin aprobar).
         this.ultimaVersionAprobadaInfo = { version: parametrizacion.version };
-        // Precargar el formulario con la parametrización aprobada vigente
+        // Precargar el formulario con la parametrizaciÃ³n aprobada vigente
         // para que el usuario pueda revisarla/modificarla antes de guardar
-        // una nueva propuesta (no se sobreescribe si el usuario ya editó
-        // el formulario manualmente después de esta carga).
+        // una nueva propuesta (no se sobreescribe si el usuario ya editÃ³
+        // el formulario manualmente despuÃ©s de esta carga).
         this.form = {
           objetivo: parametrizacion.objetivo,
           procedimiento: parametrizacion.procedimiento,
@@ -804,13 +804,13 @@ export class ParametrizacionComponent implements OnInit {
           escalaPaso: parametrizacion.escalaPaso ?? undefined,
           escalaSinLimite: parametrizacion.escalaSinLimite ?? undefined,
           escalaDescripcion: parametrizacion.escalaDescripcion ?? undefined,
-          // Precarga el alcance/responsable REAL de la última versión aprobada
-          // de esta métrica — a diferencia del Top 3/base, esta sí es la
-          // parametrización vigente de la MISMA métrica+proyecto.
+          // Precarga el alcance/responsable REAL de la Ãºltima versiÃ³n aprobada
+          // de esta mÃ©trica â€” a diferencia del Top 3/base, esta sÃ­ es la
+          // parametrizaciÃ³n vigente de la MISMA mÃ©trica+proyecto.
           responsableCaptura: parametrizacion.responsableCaptura || 'SCRUM_MASTER'
         };
       } else {
-        // No existe parametrización aprobada aún
+        // No existe parametrizaciÃ³n aprobada aÃºn
         this.estadoActual = null;
         this.versionActual = 1;
         this.parametrizacionId = null;
@@ -820,8 +820,8 @@ export class ParametrizacionComponent implements OnInit {
   }
 
   /**
-   * Copiar la parametrización base al formulario para editarla. Reutiliza
-   * la parametrización COMPLETA — mismo criterio que usarDelTop().
+   * Copiar la parametrizaciÃ³n base al formulario para editarla. Reutiliza
+   * la parametrizaciÃ³n COMPLETA â€” mismo criterio que usarDelTop().
    */
   usarBase(): void {
     if (!this.parametrizacionBase) return;
@@ -842,8 +842,8 @@ export class ParametrizacionComponent implements OnInit {
       escalaPaso:        b.escalaPaso,
       escalaSinLimite:   b.escalaSinLimite,
       escalaDescripcion: b.escalaDescripcion,
-      // La base no transporta responsableCaptura — se conserva la selección
-      // que ya tenía el formulario (misma razón que usarDelTop()).
+      // La base no transporta responsableCaptura â€” se conserva la selecciÃ³n
+      // que ya tenÃ­a el formulario (misma razÃ³n que usarDelTop()).
       responsableCaptura: this.form.responsableCaptura || 'SCRUM_MASTER'
     };
     this.propuestaElegida = null;
@@ -866,7 +866,7 @@ export class ParametrizacionComponent implements OnInit {
         this.propuestas = p;
         this.generando = false;
         // Si la propuesta tiene solo 1 elemento, no auto-aplicar
-        // Esperar confirmación explícita del usuario
+        // Esperar confirmaciÃ³n explÃ­cita del usuario
       },
       error: () => { this.errorGenAI = 'Error al conectar con GenAI.'; this.generando = false; }
     });
@@ -887,9 +887,9 @@ export class ParametrizacionComponent implements OnInit {
       tipoOperacion:     p.tipoOperacion || '',
       unidadResultado:   p.unidadResultado || '',
       nombreVariable:    p.nombreVariable || '',
-      propuestaElegida:  0,  // índice 0 ya que ahora solo hay 1 propuesta
-      // Corrección del manejo de escalas: la IA propone una escala estructurada
-      // coherente con la métrica (nunca 0-10 forzado) — el Scrum Master puede
+      propuestaElegida:  0,  // Ã­ndice 0 ya que ahora solo hay 1 propuesta
+      // CorrecciÃ³n del manejo de escalas: la IA propone una escala estructurada
+      // coherente con la mÃ©trica (nunca 0-10 forzado) â€” el Scrum Master puede
       // ajustarla en el formulario antes de guardar/aprobar.
       escalaTipo:        p.escalaTipo,
       escalaMin:         p.escalaMin,
@@ -897,9 +897,9 @@ export class ParametrizacionComponent implements OnInit {
       escalaPaso:        p.escalaPaso,
       escalaSinLimite:   p.escalaSinLimite,
       escalaDescripcion: p.escalaDescripcion,
-      // GenAI no propone responsableCaptura (es una decisión organizacional
-      // del Scrum Master, no algo que la IA deba inferir) — se conserva la
-      // selección que ya tenía el formulario.
+      // GenAI no propone responsableCaptura (es una decisiÃ³n organizacional
+      // del Scrum Master, no algo que la IA deba inferir) â€” se conserva la
+      // selecciÃ³n que ya tenÃ­a el formulario.
       responsableCaptura: this.form.responsableCaptura || 'SCRUM_MASTER'
     };
     this.errorEscala = '';
@@ -915,7 +915,7 @@ export class ParametrizacionComponent implements OnInit {
    * (las 3 tarjetas fueron reemplazadas por 1 propuesta)
    */
   elegirPropuesta(idx: number, p: PropuestaGenAI): void {
-    // Este método ya no se llama desde el template pero se mantiene
+    // Este mÃ©todo ya no se llama desde el template pero se mantiene
     // para no romper si hay referencias en otros lugares
     this.usarPropuesta(p);
   }
@@ -940,9 +940,9 @@ export class ParametrizacionComponent implements OnInit {
   }
 
   /**
-   * Corrección del manejo de escalas: si se marca "Sin límite superior", el
-   * máximo deja de ser obligatorio/editable — se limpia para que nunca se
-   * envíe un valor inconsistente con escalaSinLimite=true.
+   * CorrecciÃ³n del manejo de escalas: si se marca "Sin lÃ­mite superior", el
+   * mÃ¡ximo deja de ser obligatorio/editable â€” se limpia para que nunca se
+   * envÃ­e un valor inconsistente con escalaSinLimite=true.
    */
   onEscalaSinLimiteChange(): void {
     if (this.form.escalaSinLimite) {
@@ -952,9 +952,9 @@ export class ParametrizacionComponent implements OnInit {
 
   /**
    * Espeja ParametrizacionService.validarEscalaEstructurada() en el backend:
-   * misma autoridad, pero acá se ejecuta ANTES de enviar la petición para que
+   * misma autoridad, pero acÃ¡ se ejecuta ANTES de enviar la peticiÃ³n para que
    * el Scrum Master vea el error de inmediato, sin esperar un 400 del servidor.
-   * El backend sigue siendo la autoridad final — esta validación es una
+   * El backend sigue siendo la autoridad final â€” esta validaciÃ³n es una
    * comodidad de UI, nunca un sustituto de la del servidor.
    */
   private validarEscala(): boolean {
@@ -966,11 +966,11 @@ export class ParametrizacionComponent implements OnInit {
       return true; // no estructurada: compatibilidad, se permite (ver backend)
     }
     if (!escalaTipo) {
-      this.errorEscala = 'Seleccioná el tipo de escala.';
+      this.errorEscala = 'SeleccionÃ¡ el tipo de escala.';
       return false;
     }
     if (escalaMin == null) {
-      this.errorEscala = 'El mínimo de la escala es obligatorio.';
+      this.errorEscala = 'El mÃ­nimo de la escala es obligatorio.';
       return false;
     }
     if (escalaPaso == null || escalaPaso <= 0) {
@@ -979,18 +979,18 @@ export class ParametrizacionComponent implements OnInit {
     }
     if (!escalaSinLimite) {
       if (escalaMax == null) {
-        this.errorEscala = 'El máximo de la escala es obligatorio (o marcá "Sin límite superior").';
+        this.errorEscala = 'El mÃ¡ximo de la escala es obligatorio (o marcÃ¡ "Sin lÃ­mite superior").';
         return false;
       }
       if (escalaMax < escalaMin) {
-        this.errorEscala = 'El máximo no puede ser menor que el mínimo.';
+        this.errorEscala = 'El mÃ¡ximo no puede ser menor que el mÃ­nimo.';
         return false;
       }
     }
     if (escalaTipo === 'NUMERICA_ENTERA') {
       const esEntero = (n: number) => Number.isInteger(n);
       if (!esEntero(escalaMin) || !esEntero(escalaPaso) || (!escalaSinLimite && !esEntero(escalaMax!))) {
-        this.errorEscala = 'Para escala numérica entera, mínimo/máximo/paso deben ser números enteros.';
+        this.errorEscala = 'Para escala numÃ©rica entera, mÃ­nimo/mÃ¡ximo/paso deben ser nÃºmeros enteros.';
         return false;
       }
     }
@@ -1003,21 +1003,21 @@ export class ParametrizacionComponent implements OnInit {
     if (!f.escalaTipo || f.escalaMin == null) {
       return f.escala || 'Escala no definida';
     }
-    const tipo = f.escalaTipo === 'NUMERICA_ENTERA' ? 'Numérica entera' : 'Numérica decimal';
-    const rango = f.escalaSinLimite ? `${f.escalaMin} o más` : `${f.escalaMin} a ${f.escalaMax}`;
+    const tipo = f.escalaTipo === 'NUMERICA_ENTERA' ? 'NumÃ©rica entera' : 'NumÃ©rica decimal';
+    const rango = f.escalaSinLimite ? `${f.escalaMin} o mÃ¡s` : `${f.escalaMin} a ${f.escalaMax}`;
     const paso = f.escalaPaso != null ? `, paso ${f.escalaPaso}` : '';
     return `${tipo}, ${rango}${paso}`;
   }
 
   guardar(): void {
     if (!this.metrica) return;
-    // Corrección de duplicados en Verificación: reentrada bloqueada sobre el estado
-    // real del componente, no solo sobre [disabled]="guardando" del template — dos
-    // clics muy rápidos pueden invocar guardar() dos veces antes de que Angular
-    // refleje el atributo disabled en el DOM (mismo patrón ya aplicado en
-    // resumen-seleccion.component.ts:aceptar()). La protección real y definitiva
+    // CorrecciÃ³n de duplicados en VerificaciÃ³n: reentrada bloqueada sobre el estado
+    // real del componente, no solo sobre [disabled]="guardando" del template â€” dos
+    // clics muy rÃ¡pidos pueden invocar guardar() dos veces antes de que Angular
+    // refleje el atributo disabled en el DOM (mismo patrÃ³n ya aplicado en
+    // resumen-seleccion.component.ts:aceptar()). La protecciÃ³n real y definitiva
     // contra duplicados sigue estando en el backend (MetricRankingService), esto
-    // es solo una mejora de UX que evita una petición HTTP innecesaria.
+    // es solo una mejora de UX que evita una peticiÃ³n HTTP innecesaria.
     if (this.guardando) return;
     if (!this.validarEscala()) return;
     this.guardando = true;
@@ -1043,22 +1043,22 @@ export class ParametrizacionComponent implements OnInit {
       escala:            escalaTexto,
       metricaBaseId:     this.parametrizacionBase?.id ?? null,
       proyectoId:        proyectoId,
-      metricaId:         this.metrica.factorId,  // desde Planeación, factorId contiene el metricaId
-      // FASE 11: propagar los campos académicos completados en este formulario — antes se
+      metricaId:         this.metrica.factorId,  // desde PlaneaciÃ³n, factorId contiene el metricaId
+      // FASE 11: propagar los campos acadÃ©micos completados en este formulario â€” antes se
       // descartaban al llegar a MetricRankingService.guardar().
       tipoOperacion:     this.form.tipoOperacion ?? null,
       formulaAcademica:  this.form.formulaAcademica ?? null,
       unidadResultado:   this.form.unidadResultado ?? null,
       fuenteAcademica:   this.form.fuenteAcademica ?? null,
-      // Revisión de frecuencia de captura: antes no se enviaba acá, por lo que el
-      // backend la persistía siempre como "por_sprint" sin importar lo elegido
+      // RevisiÃ³n de frecuencia de captura: antes no se enviaba acÃ¡, por lo que el
+      // backend la persistÃ­a siempre como "por_sprint" sin importar lo elegido
       // en el selector de arriba (ver MetricRankingService.guardarPorMetrica()).
       frecuenciaCaptura: this.form.frecuenciaCaptura || 'por_sprint',
-      // Revisión de captura por parametrización: independiente de
-      // tipoOperacion — decide QUIÉN captura, no CÓMO se calcula.
+      // RevisiÃ³n de captura por parametrizaciÃ³n: independiente de
+      // tipoOperacion â€” decide QUIÃ‰N captura, no CÃ“MO se calcula.
       responsableCaptura: this.form.responsableCaptura || 'SCRUM_MASTER',
-      // Corrección del manejo de escalas: fuente de verdad estructurada que
-      // Ejecución usará para mostrar y validar los valores.
+      // CorrecciÃ³n del manejo de escalas: fuente de verdad estructurada que
+      // EjecuciÃ³n usarÃ¡ para mostrar y validar los valores.
       escalaTipo:        this.form.escalaTipo,
       escalaMin:         this.form.escalaMin,
       escalaMax:         this.form.escalaMax,
@@ -1093,12 +1093,12 @@ export class ParametrizacionComponent implements OnInit {
   }
   
   // ========================================
-  // FASE 16.6: APROBACIÓN Y VERSIONADO
+  // FASE 16.6: APROBACIÃ“N Y VERSIONADO
   // ========================================
   
   /**
    * Guarda la propuesta generada por IA con estado "propuesta".
-   * NO aprueba automáticamente - requiere acción explícita del usuario.
+   * NO aprueba automÃ¡ticamente - requiere acciÃ³n explÃ­cita del usuario.
    */
   guardarPropuesta(): void {
     if (!this.metrica || !this.propuestas[0]) return;
@@ -1118,7 +1118,7 @@ export class ParametrizacionComponent implements OnInit {
     }
 
     const request = {
-      metricaId: this.metrica.factorId,  // factorId contiene el metricaId en Planeación
+      metricaId: this.metrica.factorId,  // factorId contiene el metricaId en PlaneaciÃ³n
       proyectoId: proyectoId,
       objetivo: this.form.objetivo,
       procedimiento: this.form.procedimiento,
@@ -1129,8 +1129,8 @@ export class ParametrizacionComponent implements OnInit {
       formulaAcademica: this.form.formulaAcademica || null,
       tipoOperacion: this.form.tipoOperacion || null,
       unidadResultado: this.form.unidadResultado || null,
-      // Revisión de captura por parametrización: independiente de
-      // tipoOperacion — decide QUIÉN captura, no CÓMO se calcula.
+      // RevisiÃ³n de captura por parametrizaciÃ³n: independiente de
+      // tipoOperacion â€” decide QUIÃ‰N captura, no CÃ“MO se calcula.
       responsableCaptura: this.form.responsableCaptura || 'SCRUM_MASTER',
       nombreVariable: this.form.nombreVariable || null,
       propuestaIAJson: JSON.stringify(this.propuestas[0]),
@@ -1155,13 +1155,13 @@ export class ParametrizacionComponent implements OnInit {
           this.parametrizacionId = parametrizacion.id;
           this.estadoActual = parametrizacion.status;
           this.versionActual = parametrizacion.version;
-          // FASE 16.10-D: la respuesta de guardar-propuesta es la parametrización
-          // ya persistida (incluye todos los campos académicos) — se conserva como
+          // FASE 16.10-D: la respuesta de guardar-propuesta es la parametrizaciÃ³n
+          // ya persistida (incluye todos los campos acadÃ©micos) â€” se conserva como
           // fuente de verdad para el momento de aprobar.
           this.propuestaPendiente = parametrizacion;
           this.guardando = false;
 
-          // Scroll al área de aprobación
+          // Scroll al Ã¡rea de aprobaciÃ³n
           setTimeout(() => {
             const estadoCard = document.querySelector('.border-warning');
             estadoCard?.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -1171,9 +1171,9 @@ export class ParametrizacionComponent implements OnInit {
   }
   
   /**
-   * Aprueba formalmente la parametrización.
+   * Aprueba formalmente la parametrizaciÃ³n.
    * Cambia el estado de "propuesta" a "aprobada".
-   * Crea snapshot para reproducibilidad de cálculos futuros.
+   * Crea snapshot para reproducibilidad de cÃ¡lculos futuros.
    */
   aprobarParametrizacion(): void {
     if (!this.parametrizacionId) return;
@@ -1185,7 +1185,7 @@ export class ParametrizacionComponent implements OnInit {
 
     // FASE 16.10-D: usar la propuesta realmente persistida (guardar-propuesta),
     // NO el estado en memoria de this.form, que puede haberse desincronizado
-    // por una regeneración GenAI o edición posterior sin volver a guardar.
+    // por una regeneraciÃ³n GenAI o ediciÃ³n posterior sin volver a guardar.
     const fuente = this.propuestaPendiente ?? this.form;
     const request = {
       objetivo: fuente.objetivo,
@@ -1197,15 +1197,15 @@ export class ParametrizacionComponent implements OnInit {
       formulaAcademica: fuente.formulaAcademica || null,
       tipoOperacion: fuente.tipoOperacion || null,
       unidadResultado: fuente.unidadResultado || null,
-      // Revisión de captura por parametrización: prioriza lo que el Scrum
+      // RevisiÃ³n de captura por parametrizaciÃ³n: prioriza lo que el Scrum
       // Master tiene seleccionado en el formulario ahora mismo (puede haber
       // cambiado el alcance antes de aprobar) sobre lo ya guardado como
-      // propuesta — mismo criterio que la escala, justo abajo.
+      // propuesta â€” mismo criterio que la escala, justo abajo.
       responsableCaptura: this.form.responsableCaptura || fuente.responsableCaptura || 'SCRUM_MASTER',
       nombreVariable: fuente.nombreVariable || null,
-      // Corrección del manejo de escalas: prioriza lo que el Scrum Master tiene
+      // CorrecciÃ³n del manejo de escalas: prioriza lo que el Scrum Master tiene
       // en el formulario ahora mismo (puede haber ajustado la escala propuesta
-      // por la IA antes de aprobar) sobre lo que ya se guardó como propuesta.
+      // por la IA antes de aprobar) sobre lo que ya se guardÃ³ como propuesta.
       escalaTipo: this.form.escalaTipo ?? fuente.escalaTipo ?? null,
       escalaMin: this.form.escalaMin ?? fuente.escalaMin ?? null,
       escalaMax: this.form.escalaMax ?? fuente.escalaMax ?? null,
@@ -1219,8 +1219,8 @@ export class ParametrizacionComponent implements OnInit {
         this.errorAprobar = err.status === 403 
           ? 'No tienes permiso para aprobar parametrizaciones en este proyecto'
           : err.status === 404
-          ? 'Parametrización no encontrada'
-          : 'Error al aprobar la parametrización';
+          ? 'ParametrizaciÃ³n no encontrada'
+          : 'Error al aprobar la parametrizaciÃ³n';
         this.aprobando = false;
         return of(null);
       }))
@@ -1230,7 +1230,7 @@ export class ParametrizacionComponent implements OnInit {
           this.versionActual = parametrizacion.version;
           this.aprobando = false;
           
-          // Guardar también en localStorage para compatibilidad con Fase 16.5
+          // Guardar tambiÃ©n en localStorage para compatibilidad con Fase 16.5
           if (this.metrica) {
             this.seleccionService.parametrizar(this.metrica.id, {
               ...this.form,
