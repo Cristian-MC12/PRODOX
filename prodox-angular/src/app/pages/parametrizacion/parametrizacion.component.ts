@@ -1,4 +1,4 @@
-// Autor: Cristian Santiago Martinez Cordoba â€” PRODOX
+// Autor: Cristian Santiago Martinez Cordoba — PRODOX
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -211,7 +211,7 @@ import { environment } from '../../../environments/environment';
           <div class="card-header d-flex align-items-center gap-2">
             <i class="bi bi-robot text-primary fs-5"></i>
             <div class="flex-grow-1">
-              <div class="fw-semibold small">AI â€” Asistente de parametrización</div>
+              <div class="fw-semibold small">AI — Asistente de parametrización</div>
               <div class="text-muted" style="font-size:0.75rem">
                 La IA puede ayudarte a construir una parametrización para esta métrica
                 a partir de su definición y buenas prácticas de Scrum.
@@ -248,7 +248,7 @@ import { environment } from '../../../environments/environment';
                   <div class="fw-semibold small">Propuesta generada por IA</div>
                   <div class="text-muted" style="font-size:0.72rem">
                     <i class="bi bi-exclamation-circle me-1"></i>
-                    <strong>Requiere validación humana</strong> â€” Revisá y ajustá según el contexto de tu equipo
+                    <strong>Requiere validación humana</strong> — Revisá y ajustá según el contexto de tu equipo
                   </div>
                 </div>
               </div>
@@ -288,7 +288,7 @@ import { environment } from '../../../environments/environment';
                     <div class="text-muted" style="font-size:0.72rem">
                       {{ propuestas[0].escalaTipo === 'NUMERICA_ENTERA' ? 'Entera' : 'Decimal' }},
                       {{ propuestas[0].escalaMin }}
-                      â€“
+                      —
                       {{ propuestas[0].escalaSinLimite ? 'sin límite' : propuestas[0].escalaMax }},
                       paso {{ propuestas[0].escalaPaso }}
                     </div>
@@ -486,7 +486,7 @@ import { environment } from '../../../environments/environment';
               </div>
               <div class="col-md-6">
                 <label class="form-label small fw-semibold">
-                  ðŸ“… Frecuencia de captura <span class="text-muted">(recomendada por IA)</span>
+                  🔍… Frecuencia de captura <span class="text-muted">(recomendada por IA)</span>
                   <i class="bi bi-info-circle text-muted ms-1" 
                      style="cursor: help"
                      title="Define cuándo debe registrarse esta métrica. Al finalizar sprint es lo más común para métricas de equipo; diaria para métricas de seguimiento continuo; cuando ocurra el evento para métricas basadas en incidentes."></i>
@@ -524,7 +524,7 @@ import { environment } from '../../../environments/environment';
               </div>
 
               <!-- Campos académicos: Información PROPUESTA/GENERADA por IA, nunca
-                   editable manualmente acá â€” se completan solo copiando una propuesta
+                   editable manualmente acá — se completan solo copiando una propuesta
                    de IA ("Copiar al formulario"), una entrada del ranking ("Usar") o
                    la parametrización base ("Usar como base"). Un campo que la IA no
                    generó se muestra explícitamente como "No definido", nunca como un
@@ -533,7 +533,7 @@ import { environment } from '../../../environments/environment';
                 <hr>
                 <h6 class="text-muted small mb-3">
                   <i class="bi bi-mortarboard me-1"></i>
-                  Campos académicos <span class="text-muted">(propuestos por IA â€” solo lectura)</span>
+                  Campos académicos <span class="text-muted">(propuestos por IA — solo lectura)</span>
                 </h6>
               </div>
 
@@ -624,7 +624,7 @@ export class ParametrizacionComponent implements OnInit {
   aprobando = false;
   /**
    * FASE 16.10-D: respuesta completa de POST /guardar-propuesta (la parametrización
-   * ya persistida). Es la fuente de verdad al aprobar â€” evita reconstruir el request
+   * ya persistida). Es la fuente de verdad al aprobar — evita reconstruir el request
    * desde `this.form`, que puede desincronizarse si el usuario regenera con GenAI o
    * edita el formulario después de guardar. Si es null (p. ej. la propuesta pendiente
    * viene de una sesión anterior y no se guardó en este ciclo de vida del componente),
@@ -659,12 +659,12 @@ export class ParametrizacionComponent implements OnInit {
   /**
    * revisión de navegación (rol): la aprobación real ya está protegida en el
    * backend (ParametrizacionController exige Scrum Master del proyecto). Este
-   * getter solo decide qué botón mostrar â€” nunca es la autorización real.
+   * getter solo decide qué botón mostrar — nunca es la autorización real.
    *
    * Corrección: Scrum Master es siempre relativo al proyecto activo (su
    * scrumMasterEmail, fijado por el backend al crearlo), nunca el rol
    * global de cuenta (auth.currentUser()?.role, usado solo para decidir
-   * quién puede CREAR un proyecto nuevo) â€” mismo patrón ya corregido en
+   * quién puede CREAR un proyecto nuevo) — mismo patrón ya corregido en
    * dashboard.component.ts (esScrumMasterDelProyecto).
    */
   get esScrumMaster(): boolean {
@@ -721,12 +721,12 @@ export class ParametrizacionComponent implements OnInit {
    * Copiar una entrada del top 3 al formulario. Reutiliza la parametrización
    * COMPLETA (antes solo copiaba objetivo/procedimiento/indicadorVariable/
    * escala y descartaba el resto, incluidos los campos académicos y la
-   * frecuencia de captura ya definidos â€” bug corregido acá). Un campo que
+   * frecuencia de captura ya definidos — bug corregido acá). Un campo que
    * realmente está vacío en el original se conserva vacío/undefined, nunca
    * se inventa un valor.
    */
   usarDelTop(t: TopParametrizacion): void {
-    console.log('ðŸ” Datos de TopParametrizacion:', t);
+    console.log('🔍 Datos de TopParametrizacion:', t);
     
     this.form = {
       objetivo:          t.objetivo || '',
@@ -747,7 +747,7 @@ export class ParametrizacionComponent implements OnInit {
       responsableCaptura: this.form.responsableCaptura || 'SCRUM_MASTER'
     };
     
-    console.log('ðŸ“ Formulario después de copiar:', this.form);
+    console.log('🔍 Formulario después de copiar:', this.form);
     
     this.errorEscala = '';
     this.propuestaElegida = null;
@@ -805,7 +805,7 @@ export class ParametrizacionComponent implements OnInit {
           escalaSinLimite: parametrizacion.escalaSinLimite ?? undefined,
           escalaDescripcion: parametrizacion.escalaDescripcion ?? undefined,
           // Precarga el alcance/responsable REAL de la última versión aprobada
-          // de esta métrica â€” a diferencia del Top 3/base, esta sí es la
+          // de esta métrica — a diferencia del Top 3/base, esta sí es la
           // parametrización vigente de la MISMA métrica+proyecto.
           responsableCaptura: parametrizacion.responsableCaptura || 'SCRUM_MASTER'
         };
@@ -821,7 +821,7 @@ export class ParametrizacionComponent implements OnInit {
 
   /**
    * Copiar la parametrización base al formulario para editarla. Reutiliza
-   * la parametrización COMPLETA â€” mismo criterio que usarDelTop().
+   * la parametrización COMPLETA — mismo criterio que usarDelTop().
    */
   usarBase(): void {
     if (!this.parametrizacionBase) return;
@@ -842,7 +842,7 @@ export class ParametrizacionComponent implements OnInit {
       escalaPaso:        b.escalaPaso,
       escalaSinLimite:   b.escalaSinLimite,
       escalaDescripcion: b.escalaDescripcion,
-      // La base no transporta responsableCaptura â€” se conserva la Selección
+      // La base no transporta responsableCaptura — se conserva la Selección
       // que ya tenía el formulario (misma razón que usarDelTop()).
       responsableCaptura: this.form.responsableCaptura || 'SCRUM_MASTER'
     };
@@ -889,7 +889,7 @@ export class ParametrizacionComponent implements OnInit {
       nombreVariable:    p.nombreVariable || '',
       propuestaElegida:  0,  // índice 0 ya que ahora solo hay 1 propuesta
       // Corrección del manejo de escalas: la IA propone una escala estructurada
-      // coherente con la métrica (nunca 0-10 forzado) â€” el Scrum Master puede
+      // coherente con la métrica (nunca 0-10 forzado) — el Scrum Master puede
       // ajustarla en el formulario antes de guardar/aprobar.
       escalaTipo:        p.escalaTipo,
       escalaMin:         p.escalaMin,
@@ -898,7 +898,7 @@ export class ParametrizacionComponent implements OnInit {
       escalaSinLimite:   p.escalaSinLimite,
       escalaDescripcion: p.escalaDescripcion,
       // GenAI no propone responsableCaptura (es una decisión organizacional
-      // del Scrum Master, no algo que la IA deba inferir) â€” se conserva la
+      // del Scrum Master, no algo que la IA deba inferir) — se conserva la
       // Selección que ya tenía el formulario.
       responsableCaptura: this.form.responsableCaptura || 'SCRUM_MASTER'
     };
@@ -941,7 +941,7 @@ export class ParametrizacionComponent implements OnInit {
 
   /**
    * Corrección del manejo de escalas: si se marca "Sin límite superior", el
-   * máximo deja de ser obligatorio/editable â€” se limpia para que nunca se
+   * máximo deja de ser obligatorio/editable — se limpia para que nunca se
    * envíe un valor inconsistente con escalaSinLimite=true.
    */
   onEscalaSinLimiteChange(): void {
@@ -954,7 +954,7 @@ export class ParametrizacionComponent implements OnInit {
    * Espeja ParametrizacionService.validarEscalaEstructurada() en el backend:
    * misma autoridad, pero acá se ejecuta ANTES de enviar la petición para que
    * el Scrum Master vea el error de inmediato, sin esperar un 400 del servidor.
-   * El backend sigue siendo la autoridad final â€” esta validación es una
+   * El backend sigue siendo la autoridad final — esta validación es una
    * comodidad de UI, nunca un sustituto de la del servidor.
    */
   private validarEscala(): boolean {
@@ -1012,7 +1012,7 @@ export class ParametrizacionComponent implements OnInit {
   guardar(): void {
     if (!this.metrica) return;
     // Corrección de duplicados en Verificación: reentrada bloqueada sobre el estado
-    // real del componente, no solo sobre [disabled]="guardando" del template â€” dos
+    // real del componente, no solo sobre [disabled]="guardando" del template — dos
     // clics muy rápidos pueden invocar guardar() dos veces antes de que Angular
     // refleje el atributo disabled en el DOM (mismo patrón ya aplicado en
     // resumen-seleccion.component.ts:aceptar()). La protección real y definitiva
@@ -1044,7 +1044,7 @@ export class ParametrizacionComponent implements OnInit {
       metricaBaseId:     this.parametrizacionBase?.id ?? null,
       proyectoId:        proyectoId,
       metricaId:         this.metrica.factorId,  // desde Planeación, factorId contiene el metricaId
-      // FASE 11: propagar los campos académicos completados en este formulario â€” antes se
+      // FASE 11: propagar los campos académicos completados en este formulario — antes se
       // descartaban al llegar a MetricRankingService.guardar().
       tipoOperacion:     this.form.tipoOperacion ?? null,
       formulaAcademica:  this.form.formulaAcademica ?? null,
@@ -1055,7 +1055,7 @@ export class ParametrizacionComponent implements OnInit {
       // en el selector de arriba (ver MetricRankingService.guardarPorMetrica()).
       frecuenciaCaptura: this.form.frecuenciaCaptura || 'por_sprint',
       // revisión de captura por parametrización: independiente de
-      // tipoOperacion â€” decide QUIÉN captura, no CÃ“MO se calcula.
+      // tipoOperacion — decide QUIÉN captura, no CÃ“MO se calcula.
       responsableCaptura: this.form.responsableCaptura || 'SCRUM_MASTER',
       // Corrección del manejo de escalas: fuente de verdad estructurada que
       // Ejecución usará para mostrar y validar los valores.
@@ -1130,7 +1130,7 @@ export class ParametrizacionComponent implements OnInit {
       tipoOperacion: this.form.tipoOperacion || null,
       unidadResultado: this.form.unidadResultado || null,
       // revisión de captura por parametrización: independiente de
-      // tipoOperacion â€” decide QUIÉN captura, no CÃ“MO se calcula.
+      // tipoOperacion — decide QUIÉN captura, no CÃ“MO se calcula.
       responsableCaptura: this.form.responsableCaptura || 'SCRUM_MASTER',
       nombreVariable: this.form.nombreVariable || null,
       propuestaIAJson: JSON.stringify(this.propuestas[0]),
@@ -1156,7 +1156,7 @@ export class ParametrizacionComponent implements OnInit {
           this.estadoActual = parametrizacion.status;
           this.versionActual = parametrizacion.version;
           // FASE 16.10-D: la respuesta de guardar-propuesta es la parametrización
-          // ya persistida (incluye todos los campos académicos) â€” se conserva como
+          // ya persistida (incluye todos los campos académicos) — se conserva como
           // fuente de verdad para el momento de aprobar.
           this.propuestaPendiente = parametrizacion;
           this.guardando = false;
@@ -1200,7 +1200,7 @@ export class ParametrizacionComponent implements OnInit {
       // revisión de captura por parametrización: prioriza lo que el Scrum
       // Master tiene seleccionado en el formulario ahora mismo (puede haber
       // cambiado el alcance antes de aprobar) sobre lo ya guardado como
-      // propuesta â€” mismo criterio que la escala, justo abajo.
+      // propuesta — mismo criterio que la escala, justo abajo.
       responsableCaptura: this.form.responsableCaptura || fuente.responsableCaptura || 'SCRUM_MASTER',
       nombreVariable: fuente.nombreVariable || null,
       // Corrección del manejo de escalas: prioriza lo que el Scrum Master tiene
