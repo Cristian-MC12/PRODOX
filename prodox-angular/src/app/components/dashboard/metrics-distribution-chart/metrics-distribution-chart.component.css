@@ -1,16 +1,117 @@
-/* Autor: Cristian Santiago Martinez Cordoba — PRODOX */
-.distribution-content{display:flex;align-items:center;justify-content:center;gap:var(--space-4);flex-wrap:wrap;padding:var(--space-3)}
-.donut-canvas-wrap{position:relative;width:100%;max-width:180px;aspect-ratio:1/1}
-.donut-center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none}
-.donut-center-text{font-size:1.75rem;font-weight:700;color:var(--text-primary);line-height:1}
-.donut-center-label{font-size:0.65rem;font-weight:500;color:var(--text-secondary)}
-.distribution-legend{display:flex;flex-direction:column;gap:var(--space-2)}
-.legend-item{display:flex;align-items:center;gap:var(--space-2);cursor:pointer;transition:transform .2s ease}
-.legend-item:hover{transform:translateX(2px)}
-.legend-color{width:10px;height:10px;border-radius:3px;flex-shrink:0}
-.legend-details{flex:1;min-width:0}
-.legend-label{font-size:0.75rem;font-weight:600;color:var(--text-primary);margin-bottom:2px;display:block}
-.legend-value{font-size:1rem;font-weight:700;color:var(--text-primary);margin-right:var(--space-1)}
-.legend-percentage{font-size:0.7rem;color:var(--text-secondary)}
-.empty-chart{text-align:center;padding:var(--space-6) var(--space-4);color:var(--text-secondary)}
-.empty-chart i{font-size:3rem;color:var(--border);margin-bottom:var(--space-3);display:block}
+﻿/* Autor: Cristian Santiago Martinez Cordoba — PRODOX */
+.distribution-content {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  padding: var(--space-2);
+}
+
+.donut-canvas-wrap {
+  position: relative;
+  width: 100%;
+  max-width: 120px;
+  aspect-ratio: 1/1;
+}
+
+.donut-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.donut-center-text {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1;
+}
+
+.donut-center-label {
+  font-size: 0.65rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.distribution-legend {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  cursor: pointer;
+  transition: transform .2s ease;
+}
+
+.legend-item:hover {
+  transform: translateX(2px);
+}
+
+.legend-color {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.legend-details {
+  flex: 1;
+  min-width: 0;
+}
+
+.legend-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 2px;
+  display: block;
+}
+
+.legend-value {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-right: var(--space-1);
+}
+
+.legend-percentage {
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+}
+
+.empty-chart {
+  text-align: center;
+  padding: var(--space-6) var(--space-4);
+  color: var(--text-secondary);
+}
+
+.empty-chart i {
+  font-size: 3rem;
+  color: var(--border);
+  margin-bottom: var(--space-3);
+  display: block;
+}
+
+@media (max-width: 768px) {
+  .donut-canvas-wrap {
+    max-width: 100px;
+  }
+  
+  .donut-center-text {
+    font-size: 1.25rem;
+  }
+  
+  .distribution-content {
+    padding: var(--space-1);
+    gap: var(--space-2);
+  }
+}

@@ -98,21 +98,6 @@ public class SprintController {
         return ResponseEntity.ok(sprintService.cerrarSprintActual(sprintId));
     }
 
-    /**
-     * Elimina un sprint pendiente.
-     * Restringida al Scrum Master del proyecto.
-     * Solo permite eliminar sprints en estado "pendiente".
-     */
-    @DeleteMapping("/{sprintId}")
-    public ResponseEntity<Void> eliminar(
-            @PathVariable UUID sprintId,
-            Authentication auth) {
-        SprintDto sprintActual = sprintService.getById(sprintId);
-        validarScrumMaster(sprintActual.proyectoId(), auth);
-        sprintService.eliminarSprint(sprintId);
-        return ResponseEntity.noContent().build();
-    }
-
     /** Mismo patrón de autorización que AIInsightsService.validateProjectAccess. */
     private void validarAcceso(UUID proyectoId, Authentication auth) {
         String userId = auth.getName();

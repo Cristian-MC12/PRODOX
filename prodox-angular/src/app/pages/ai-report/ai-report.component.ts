@@ -1,4 +1,4 @@
-// Autor: Cristian Santiago Martinez Cordoba — PRODOX
+﻿// Autor: Cristian Santiago Martinez Cordoba â€” PRODOX
 import { Component, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -11,6 +11,8 @@ import { ProyectoDto } from '../../models/proyecto.model';
 import { SprintDto } from '../../models/sprint.model';
 import { AISprintReport } from '../../models/ai-reports.model';
 import { LimpiarMarkdownIAPipe } from '../../core/limpiar-markdown-ia.pipe';
+import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType, Table, TableRow, TableCell, WidthType } from 'docx';
+import { saveAs } from 'file-saver';
 
 @Component({
   selector: 'app-ai-report',
@@ -30,7 +32,14 @@ export class AIReportComponent implements OnInit {
   generating = signal(false);
   alertMsg = signal('');
   alertClass = signal('alert-info');
-  generationStep = signal('');
+    generationStep = signal('');
+
+  // Estado de edición
+  editing = false;
+  editedResumen = '';
+  editedLogros = '';
+  editedDesafios = '';
+  editedRecomendaciones = '';
 
   constructor(
     public router: Router,
@@ -79,10 +88,10 @@ export class AIReportComponent implements OnInit {
     this.report = null;
     let hadError = false;
 
-    // Simular pasos de generación
+    // Simular pasos de generaciÃ³n
     setTimeout(() => this.updateGenerationProgress('Analizando datos del sprint...'), 1000);
-    setTimeout(() => this.updateGenerationProgress('Procesando métricas...'), 3000);
-    setTimeout(() => this.updateGenerationProgress('Generando análisis con IA...'), 5000);
+    setTimeout(() => this.updateGenerationProgress('Procesando mÃ©tricas...'), 3000);
+    setTimeout(() => this.updateGenerationProgress('Generando anÃ¡lisis con IA...'), 5000);
 
     this.reportService.generateSprintReport(this.selectedSprintId)
       .pipe(
@@ -96,16 +105,16 @@ export class AIReportComponent implements OnInit {
           } else if (err.status === 403) {
             this.showAlert('No tienes permisos para generar reportes en este proyecto', 'alert-danger');
           } else if (err.status === 429) {
-            this.showAlert('Has alcanzado temporalmente el límite de generación. Intenta nuevamente más tarde.', 'alert-warning');
+            this.showAlert('Has alcanzado temporalmente el lÃ­mite de generaciÃ³n. Intenta nuevamente mÃ¡s tarde.', 'alert-warning');
           } else if (err.status === 503) {
-            // FASE 23: antes esto caía en el "else" genérico y, peor, algunos
-            // fallos de Gemini ni siquiera llegaban acá porque el backend
-            // devolvía un HTTP 500 opaco (ver AIReportService.generateReport).
+            // FASE 23: antes esto caÃ­a en el "else" genÃ©rico y, peor, algunos
+            // fallos de Gemini ni siquiera llegaban acÃ¡ porque el backend
+            // devolvÃ­a un HTTP 500 opaco (ver AIReportService.generateReport).
             // Ahora el backend distingue este caso y el mensaje del propio
             // error ya es claro para el usuario (ej. cuota de IA agotada).
-            this.showAlert(err.error?.error || 'El servicio de IA no está disponible en este momento. Intenta nuevamente en unos segundos.', 'alert-warning');
+            this.showAlert(err.error?.error || 'El servicio de IA no estÃ¡ disponible en este momento. Intenta nuevamente en unos segundos.', 'alert-warning');
           } else {
-            this.showAlert('Error al generar el reporte. Intentá nuevamente.', 'alert-danger');
+            this.showAlert('Error al generar el reporte. IntentÃ¡ nuevamente.', 'alert-danger');
           }
           
           return of(null);

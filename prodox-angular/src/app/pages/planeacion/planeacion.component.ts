@@ -46,10 +46,10 @@ type Paso = 'metricas' | 'variables' | 'sprints';
         @if (proyecto) {
           <div class="d-flex align-items-center gap-2">
             <button class="btn d-flex align-items-center gap-2"
-                    style="background: #8B5CF6; color: white; border: none; border-radius: 8px; padding: 10px 18px; font-size: 14px; font-weight: 500; box-shadow: 0 2px 8px rgba(139, 92, 246, 0.3);"
+                    style="background: #8B5CF6; color: white; border: none; border-radius: 6px; padding: 6px 12px; font-size: 13px; font-weight: 500; box-shadow: 0 2px 6px rgba(139, 92, 246, 0.3); white-space: nowrap;"
                     (click)="router.navigate(['/crear-metrica-ia'])"
                     title="Crear métrica con Inteligencia Artificial">
-              <i class="bi bi-stars" style="font-size: 18px;"></i>
+              <i class="bi bi-stars" style="font-size: 16px;"></i>
               Crear métrica con IA
             </button>
           </div>
@@ -403,7 +403,7 @@ type Paso = 'metricas' | 'variables' | 'sprints';
                   <!-- Botón compacto (fijo) -->
                   @if (historialSeleccionadas.length > 0) {
                     <button class="btn w-100 d-flex align-items-center justify-content-center gap-2"
-                            style="background: #0891B2; color: white; border: none; border-radius: 8px; padding: 8px 12px; font-size: 13px; font-weight: 500; box-shadow: 0 1px 3px rgba(8, 145, 178, 0.2); flex-shrink: 0; margin-top: 12px;"
+                            style="background: #0891B2; color: white; border: none; border-radius: 6px; padding: 8px 12px; font-size: 13px; font-weight: 500; box-shadow: 0 1px 3px rgba(8, 145, 178, 0.2); flex-shrink: 0; margin-top: 12px;"
                             (click)="router.navigate(['/resumen-seleccion'])">
                       Revisar y enviar al Scrum Master
                       <i class="bi bi-arrow-right" style="font-size: 14px;"></i>
