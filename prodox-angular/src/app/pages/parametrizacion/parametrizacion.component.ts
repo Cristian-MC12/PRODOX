@@ -505,7 +505,7 @@ import { environment } from '../../../environments/environment';
                    esta Selección solo decide qué queda guardado en la parametrización. -->
               <div class="col-md-6">
                 <label class="form-label small fw-semibold">
-                  ðŸ‘¥ Responsable de captura
+                  👥 Responsable de captura
                   <i class="bi bi-info-circle text-muted ms-1" 
                      style="cursor: help"
                      title="Quién puede registrar valores para esta métrica. Equipo: cada miembro registra su propio valor (útil para métricas individuales como horas trabajadas). Scrum Master: solo él registra el valor (útil para métricas consolidadas del equipo)."></i>
