@@ -1,4 +1,4 @@
-﻿// Autor: Cristian Santiago Martinez Cordoba â€” PRODOX
+// Autor: Cristian Santiago Martinez Cordoba â€” PRODOX
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -16,7 +16,7 @@ import { RankingMetrica } from '../../models/metric-ranking.model';
   standalone: true,
   imports: [CommonModule, FormsModule, ShellComponent],
   template: `
-    <app-shell title="SelecciÃ³n de MÃ©tricas">
+    <app-shell title="Selección de Métricas">
 
       <p class="text-muted small mb-3">
         SeleccionÃ¡ las mÃ©tricas que vas a medir en este sprint y movelas al panel derecho.
