@@ -1,4 +1,4 @@
-﻿// Autor: Cristian Santiago Martinez Cordoba â€” PRODOX
+// Autor: Cristian Santiago Martinez Cordoba â€” PRODOX
 import { Component, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -88,10 +88,10 @@ export class AIReportComponent implements OnInit {
     this.report = null;
     let hadError = false;
 
-    // Simular pasos de generaciÃ³n
+    // Simular pasos de generación
     setTimeout(() => this.updateGenerationProgress('Analizando datos del sprint...'), 1000);
-    setTimeout(() => this.updateGenerationProgress('Procesando mÃ©tricas...'), 3000);
-    setTimeout(() => this.updateGenerationProgress('Generando anÃ¡lisis con IA...'), 5000);
+    setTimeout(() => this.updateGenerationProgress('Procesando métricas...'), 3000);
+    setTimeout(() => this.updateGenerationProgress('Generando análisis con IA...'), 5000);
 
     this.reportService.generateSprintReport(this.selectedSprintId)
       .pipe(
@@ -105,16 +105,16 @@ export class AIReportComponent implements OnInit {
           } else if (err.status === 403) {
             this.showAlert('No tienes permisos para generar reportes en este proyecto', 'alert-danger');
           } else if (err.status === 429) {
-            this.showAlert('Has alcanzado temporalmente el lÃ­mite de generaciÃ³n. Intenta nuevamente mÃ¡s tarde.', 'alert-warning');
+            this.showAlert('Has alcanzado temporalmente el límite de generación. Intenta nuevamente más tarde.', 'alert-warning');
           } else if (err.status === 503) {
-            // FASE 23: antes esto caÃ­a en el "else" genÃ©rico y, peor, algunos
-            // fallos de Gemini ni siquiera llegaban acÃ¡ porque el backend
-            // devolvÃ­a un HTTP 500 opaco (ver AIReportService.generateReport).
+            // FASE 23: antes esto caía en el "else" genérico y, peor, algunos
+            // fallos de Gemini ni siquiera llegaban acá porque el backend
+            // devolvía un HTTP 500 opaco (ver AIReportService.generateReport).
             // Ahora el backend distingue este caso y el mensaje del propio
             // error ya es claro para el usuario (ej. cuota de IA agotada).
-            this.showAlert(err.error?.error || 'El servicio de IA no estÃ¡ disponible en este momento. Intenta nuevamente en unos segundos.', 'alert-warning');
+            this.showAlert(err.error?.error || 'El servicio de IA no está disponible en este momento. Intenta nuevamente en unos segundos.', 'alert-warning');
           } else {
-            this.showAlert('Error al generar el reporte. IntentÃ¡ nuevamente.', 'alert-danger');
+            this.showAlert('Error al generar el reporte. Intentá nuevamente.', 'alert-danger');
           }
           
           return of(null);
