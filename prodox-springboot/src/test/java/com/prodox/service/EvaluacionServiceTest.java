@@ -482,6 +482,40 @@ class EvaluacionServiceTest {
         assertThat(dto.registros()).hasSize(1);
     }
 
+    // Corrección de auditoría (Dashboard/Evaluación, Fase 5-6): igual que
+    // estado="error", un ResultadoMetrica vigente con estado="incompleto"
+    // (ver ResultadoMetrica.estado: "calculado | error | incompleto") tampoco
+    // debe llegar a resultadosCalculados como un punto numérico válido. El
+    // filtro de resultadosCalculadosDeLaMetrica() ya es una lista blanca
+    // (solo pasa "calculado"), así que "incompleto" queda excluido por el
+    // mismo mecanismo que "error" — este test deja esa cobertura explícita.
+    @Test
+    @DisplayName("Corrección de auditoría: ResultadoMetrica vigente con estado=\"incompleto\" se excluye de resultadosCalculados")
+    void evaluarDetalle_resultadoVigenteConEstadoIncompleto_seExcluyeDeResultadosCalculados() {
+        Variable variable = crearVariable("satisfaccion_cliente", "Satisfacción del cliente");
+        Sprint sprint = crearSprint(1);
+        RegistroValor r1 = crearRegistro(variable, new BigDecimal("80"), Instant.now());
+
+        com.prodox.entity.ResultadoMetrica resultadoIncompleto = new com.prodox.entity.ResultadoMetrica();
+        resultadoIncompleto.setId(UUID.randomUUID());
+        resultadoIncompleto.setSprintId(sprintId);
+        resultadoIncompleto.setResultado(BigDecimal.ZERO);
+        resultadoIncompleto.setEstado("incompleto");
+        resultadoIncompleto.setCalculadoAt(Instant.now());
+        resultadoIncompleto.setVigente(true);
+
+        when(variableRepo.findByProyectoIdAndActivaTrue(proyectoId)).thenReturn(List.of(variable));
+        when(sprintRepo.findByProyectoIdOrderByNumeroDesc(proyectoId)).thenReturn(List.of(sprint));
+        when(registroRepo.findByVariable_IdOrderByRegistradoAtAsc(variable.getId())).thenReturn(List.of(r1));
+        when(resultadoMetricaRepo.findByProyectoIdAndMetrica_IdAndVigenteTrue(proyectoId, variable.getMetrica().getId()))
+                .thenReturn(List.of(resultadoIncompleto));
+
+        MetricaEvaluacionDetalleDto dto = service.evaluarDetalle(proyectoId).get(0);
+
+        assertThat(dto.resultadosCalculados()).isEmpty();
+        assertThat(dto.registros()).hasSize(1);
+    }
+
     @Test
     @DisplayName("Sin ResultadoMetrica calculado todavía: resultadosCalculados viene vacía (cae a 'registros' en el frontend)")
     void evaluarDetalle_sinResultadoCalculado_resultadosCalculadosVacia() {

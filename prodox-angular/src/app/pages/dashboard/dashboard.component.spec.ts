@@ -305,9 +305,15 @@ describe('DashboardComponent', () => {
     }, 100);
   });
 
-  it('debería calcular sprint compliance', () => {
-    component.projectOverview = mockOverview;
+  // Corrección de auditoría (Dashboard/Evaluación): mockOverview.promedioHistorico
+  // tiene 2 categorías ('Significado', 'Flexibilidad') — con la regla corregida
+  // (ver dashboard.component.ts.hasComplianceData()), 2+ categorías heterogéneas
+  // ya NO producen un compliance válido, así que este test usa explícitamente
+  // una sola categoría para seguir probando el cálculo básico.
+  it('debería calcular sprint compliance con una sola categoría (única combinación matemáticamente válida)', () => {
+    component.projectOverview = { ...mockOverview, promedioHistorico: { Significado: 72 } };
     const compliance = component.getSprintCompliance();
+    expect(compliance).toBe(72);
     expect(compliance).toBeGreaterThan(0);
     expect(compliance).toBeLessThanOrEqual(100);
   });
@@ -315,10 +321,11 @@ describe('DashboardComponent', () => {
   it('NO debe multiplicar por 10 el promedio (bug del 503%)', () => {
     // promedioHistorico ya viene en escala 0-100 (ver EvaluacionService /
     // Variable.escalaMin-Max) — dividir entre 10 y volver a multiplicar por
-    // 100 inflaba el valor real x10 (ej: 50.3 -> 503%). El promedio de estos
-    // dos valores es 68.5 -> debe redondear a 69, nunca a 685+.
-    component.projectOverview = { ...mockOverview, promedioHistorico: { A: 50, B: 51 } };
-    expect(component.getSprintCompliance()).toBe(51); // avg(50,51)=50.5 -> round 51
+    // 100 inflaba el valor real x10 (ej: 50.3 -> 503%). Con una sola categoría
+    // (única combinación válida tras la corrección de mezcla de escalas, ver
+    // hasComplianceData()), 50.3 debe redondear a 50, nunca a 503.
+    component.projectOverview = { ...mockOverview, promedioHistorico: { A: 50.3 } };
+    expect(component.getSprintCompliance()).toBe(50);
   });
 
   it('nunca debe devolver un porcentaje mayor a 100 ni NaN', () => {
@@ -327,6 +334,43 @@ describe('DashboardComponent', () => {
 
     component.projectOverview = { ...mockOverview, promedioHistorico: {} };
     expect(component.getSprintCompliance()).toBe(0);
+  });
+
+  // ════════════════════════════════════════════════════════════════════
+  // Corrección de auditoría (Dashboard/Evaluación): el Dashboard promediaba
+  // directamente categorías con escalas/unidades distintas (ej. Velocidad en
+  // Story Points junto con Satisfacción en %) para producir un único
+  // "Cumplimiento" Bueno/Regular/Malo — matemáticamente inválido sin
+  // normalizar. Caso real: proyecto "Creación de un avatar Xabi".
+  // ════════════════════════════════════════════════════════════════════
+
+  it('con 2+ categorías heterogéneas (ej. Story Points de Velocidad y % de Satisfacción): NO promedia directamente, compliance no disponible', () => {
+    // Valores elegidos a propósito para que un promedio directo diera un
+    // número "creíble" (20 Story Points + 85% -> promedio ingenuo 52.5) —
+    // el punto es que ESE número no debe calcularse en absoluto, sin
+    // importar qué tan razonable luzca.
+    component.projectOverview = {
+      ...mockOverview,
+      promedioHistorico: { Velocidad: 20, Satisfaccion: 85 }
+    };
+
+    expect(component.hasComplianceData()).toBeFalse();
+    expect(component.getSprintCompliance()).toBe(0);
+  });
+
+  it('categoría sin resultados (promedioHistorico vacío): compliance no disponible, sin división por cero', () => {
+    component.projectOverview = { ...mockOverview, promedioHistorico: {} };
+
+    expect(component.hasComplianceData()).toBeFalse();
+    expect(() => component.getSprintCompliance()).not.toThrow();
+    expect(component.getSprintCompliance()).toBe(0);
+  });
+
+  it('con exactamente una categoría: compliance SÍ está disponible y refleja ese único valor', () => {
+    component.projectOverview = { ...mockOverview, promedioHistorico: { Flexibilidad: 78 } };
+
+    expect(component.hasComplianceData()).toBeTrue();
+    expect(component.getSprintCompliance()).toBe(78);
   });
 
   it('getTotalMetricas cuenta solo métricas aprobadas del proyecto (no el catálogo global)', () => {

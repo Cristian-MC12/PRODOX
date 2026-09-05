@@ -277,15 +277,28 @@ public class AgileAnalyticsService {
 
             for (Sprint sprint : sprints) {
                 List<EvaluacionSprintDto> evals = evaluacionesPorSprint.get(sprint.getId());
-                BigDecimal promedio = evals.stream()
+                List<BigDecimal> promediosDeLaCategoria = evals.stream()
                         .filter(e -> cat.equals(e.categoria()))
                         .map(EvaluacionSprintDto::promedio)
+                        .toList();
+
+                // Corrección de auditoría (Dashboard/Evaluación): antes se dividía
+                // siempre entre evals.stream().filter(...).count(), sin comprobar
+                // si ese conteo era cero — si esta categoría no tenía NINGUNA
+                // evaluación en este sprint puntual (mientras SÍ las tenía en
+                // otros sprints de la serie), la división lanzaba
+                // ArithmeticException y tumbaba TODA la respuesta de tendencias
+                // (todas las categorías, no solo la afectada). Se omite el punto
+                // de este sprint para esta categoría en vez de dividir por cero
+                // o inventar un valor (0 o el promedio de otros sprints) — el
+                // Dashboard sigue funcionando, solo con un punto menos en la serie.
+                if (promediosDeLaCategoria.isEmpty()) {
+                    continue;
+                }
+
+                BigDecimal promedio = promediosDeLaCategoria.stream()
                         .reduce(BigDecimal.ZERO, BigDecimal::add)
-                        .divide(
-                                BigDecimal.valueOf(evals.stream().filter(e -> cat.equals(e.categoria())).count()),
-                                2,
-                                RoundingMode.HALF_UP
-                        );
+                        .divide(BigDecimal.valueOf(promediosDeLaCategoria.size()), 2, RoundingMode.HALF_UP);
 
                 dataPoints.add(new TrendAnalysisDto.SprintDataPoint(
                         sprint.getNumero(),
@@ -553,11 +566,28 @@ public class AgileAnalyticsService {
                     valoresPorCategoria.computeIfAbsent(cat, k -> new ArrayList<>()).add(val)
             );
 
-            // Score general del sprint (promedio de todas las categorías)
-            if (!promedios.isEmpty()) {
-                BigDecimal scoreGeneral = promedios.values().stream()
-                        .reduce(BigDecimal.ZERO, BigDecimal::add)
-                        .divide(BigDecimal.valueOf(promedios.size()), 2, RoundingMode.HALF_UP);
+            // Score general del sprint — Corrección de auditoría (Dashboard/
+            // Evaluación): antes se promediaba SIEMPRE entre todas las
+            // categorías del sprint (promedios.values()...divide(promedios.size())),
+            // sin importar cuántas hubiera. Cada categoría es el promedio de
+            // EvaluacionSprintDto.promedio de variables potencialmente distintas
+            // (ej. Velocidad en Story Points bajo una categoría, Satisfacción en
+            // % bajo otra) — promediar 2+ categorías entre sí mezcla escalas y
+            // unidades heterogéneas sin ninguna normalización, lo cual no tiene
+            // sentido matemático (caso real: "Creación de un avatar Xabi").
+            //
+            // El sistema no propaga unidad/escala hasta este nivel (EvaluacionSprintDto
+            // solo trae categoria+promedio, sin tipoOperacion/unidadResultado —
+            // esa información vive en MetricParametrizacion/Variable pero nunca
+            // llega hasta aquí), así que la única combinación verificablemente
+            // segura con los datos disponibles es "una sola categoría" — ahí no
+            // hay mezcla que evaluar, el "score general" es, literalmente, esa
+            // única categoría. Con 2+ categorías se prefiere NO fabricar un
+            // score (el sprint simplemente no participa en mejorSprint/peorSprint,
+            // que ya toleran quedar en null más abajo) en vez de inventar una
+            // agregación sin respaldo matemático.
+            if (promedios.size() == 1) {
+                BigDecimal scoreGeneral = promedios.values().iterator().next();
                 scoresPorSprint.put(sprint, scoreGeneral);
             }
         }

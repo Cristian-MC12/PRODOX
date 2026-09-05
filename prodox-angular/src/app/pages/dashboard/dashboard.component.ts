@@ -370,30 +370,34 @@ export class DashboardComponent implements OnInit, AfterViewChecked, OnDestroy {
   // ─────────────────────────────────────────────────────────────
 
   /**
-   * Promedio general de las categorías evaluadas (promedioHistorico, ya
-   * agregado por el backend en AgileAnalyticsService.getProjectOverview).
+   * Corrección de auditoría (Dashboard/Evaluación): promedioHistorico trae UN
+   * valor por categoría (ej. "Significado", "Flexibilidad"...), cada uno el
+   * promedio crudo de RegistroValor.valorNum de las variables de esa
+   * categoría, en la escala que cada variable haya definido. El backend NO
+   * propaga unidad/escala/tipoOperacion hasta este nivel — dos categorías
+   * pueden representar magnitudes completamente distintas (ej. Velocidad en
+   * Story Points vs. Satisfacción en %, caso real verificado en auditoría).
    *
-   * IMPORTANTE: promedioHistorico NO tiene una escala fija definida por el
-   * backend — es el promedio crudo de EvaluacionSprintDto.promedio, que a su
-   * vez es el promedio de RegistroValor.valorNum tal cual lo capturó el
-   * equipo, en la escala que cada variable haya definido (variables.escala_min/
-   * escala_max). En los datos reales verificados, las variables activas con
-   * captura usan escala 0-100, así que el promedio YA es un porcentaje válido
-   * — NO hay que volver a escalarlo (el bug anterior asumía una escala 0-10
-   * fija con /10*100, lo que producía valores como 503%).
+   * Promediar 2+ categorías entre sí (lo que hacía este método antes) mezcla
+   * esas escalas/unidades heterogéneas sin ninguna normalización — no tiene
+   * sentido matemático, sin importar qué tan "razonable" luzca el resultado.
+   * Como no existe una forma de normalizar esas categorías con la
+   * información disponible (ver AgileAnalyticsService.getProjectOverview()),
+   * el único caso en el que "el promedio general" es matemáticamente válido
+   * es cuando hay EXACTAMENTE una categoría — ahí no hay mezcla, el "general"
+   * es, literalmente, ese único valor. Con 0 o 2+ categorías se prefiere no
+   * mostrar un número (hasComplianceData()=false, ver plantilla) en vez de
+   * fabricar una clasificación Bueno/Regular/Malo sin respaldo matemático.
    *
-   * Se deja clampeado a [0,100] y protegido contra NaN/Infinity como defensa
-   * ante datos fuera de rango (nunca como sustituto de corregir la fórmula).
+   * Se mantiene el clamp a [0,100] y la protección contra NaN/Infinity como
+   * defensa ante datos fuera de rango — nunca como sustituto de esta regla.
    */
   getSprintCompliance(): number {
-    if (!this.projectOverview || !this.projectOverview.promedioHistorico) {
+    if (!this.hasComplianceData()) {
       return 0;
     }
 
-    const valores = Object.values(this.projectOverview.promedioHistorico);
-    if (valores.length === 0) return 0;
-
-    const promedio = valores.reduce((sum, val) => sum + val, 0) / valores.length;
+    const promedio = Object.values(this.projectOverview!.promedioHistorico)[0];
 
     if (!Number.isFinite(promedio)) return 0;
 
@@ -401,8 +405,10 @@ export class DashboardComponent implements OnInit, AfterViewChecked, OnDestroy {
   }
 
   hasComplianceData(): boolean {
-    return !!this.projectOverview?.promedioHistorico
-      && Object.keys(this.projectOverview.promedioHistorico).length > 0;
+    if (!this.projectOverview?.promedioHistorico) return false;
+    // Exactamente una categoría: única combinación verificable como "sin
+    // mezcla de unidades" con la información que expone el backend hoy.
+    return Object.keys(this.projectOverview.promedioHistorico).length === 1;
   }
 
   // ─────────────────────────────────────────────────────────────
