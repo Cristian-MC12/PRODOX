@@ -1057,6 +1057,129 @@ class MetricaAcademicaServiceTest {
         verifyNoInteractions(geminiService);
     }
 
+    // ════════════════════════════════════════════════════════════════════
+    // Corrección de auditoría (riesgo detectado tras CalculoMetricaService.
+    // persistirResultadoError()): un ResultadoMetrica con estado="error" o
+    // "incompleto" tiene resultado=BigDecimal.ZERO — un valor técnico
+    // placeholder, NUNCA un dato real. solicitarInterpretacionIA() y
+    // obtenerHistorico() deben tratarlo como "no hay resultado válido",
+    // nunca como si fuera un 0 calculado de verdad.
+    // ════════════════════════════════════════════════════════════════════
+
+    // A) estado="calculado" sigue funcionando exactamente igual (regresión
+    // explícita, complementaria a solicitarInterpretacionIA_conResultadoValido_
+    // retornaInterpretacion): confirma explícitamente que el nuevo chequeo de
+    // estado no interfiere con el camino feliz.
+    @Test
+    void solicitarInterpretacionIA_conEstadoCalculado_llamaAGeminiYRetornaInterpretacion() {
+        UUID resultadoId = UUID.randomUUID();
+        ResultadoMetrica resultado = crearResultado(new BigDecimal("7"), Instant.now());
+        resultado.setEstado("calculado");
+
+        when(projectMemberRepository.existsByProyectoIdAndUserId(proyectoId, userEmail)).thenReturn(true);
+        when(resultadoRepo.findById(resultadoId)).thenReturn(Optional.of(resultado));
+        when(resultadoRepo.findByMetrica_IdAndProyectoIdOrderByCalculadoAtDesc(any(), any()))
+            .thenReturn(List.of(resultado));
+        when(parametrizacionRepo.findById(any())).thenReturn(Optional.empty());
+        when(geminiService.generate(anyString()))
+            .thenReturn("El equipo registró 7 problemas reportados...");
+
+        InterpretacionIADto interpretacion = service.solicitarInterpretacionIA(resultadoId);
+
+        assertNotNull(interpretacion);
+        assertEquals(0, interpretacion.resultado().compareTo(new BigDecimal("7")));
+        verify(geminiService, times(1)).generate(anyString());
+    }
+
+    // B) estado="error": no debe llamar a Gemini, no debe inventar una
+    // interpretación del 0 placeholder, y debe fallar de forma controlada con
+    // un mensaje que incluya el motivo del fallo (mensajeError) para que el
+    // consumidor sepa por qué no hay resultado que interpretar.
+    @Test
+    void solicitarInterpretacionIA_conEstadoError_noLlamaAGeminiYLanzaExcepcionControlada() {
+        UUID resultadoId = UUID.randomUUID();
+        ResultadoMetrica resultado = crearResultado(BigDecimal.ZERO, Instant.now());
+        resultado.setEstado("error");
+        resultado.setMensajeError("No hay valores para resolver variables");
+
+        when(projectMemberRepository.existsByProyectoIdAndUserId(proyectoId, userEmail)).thenReturn(true);
+        when(resultadoRepo.findById(resultadoId)).thenReturn(Optional.of(resultado));
+
+        IllegalStateException ex = assertThrows(
+            IllegalStateException.class,
+            () -> service.solicitarInterpretacionIA(resultadoId)
+        );
+
+        assertTrue(ex.getMessage().contains("No existe un resultado calculado válido"));
+        assertTrue(ex.getMessage().contains("No hay valores para resolver variables"));
+        verifyNoInteractions(geminiService);
+        // Validación de solo lectura: el ResultadoMetrica nunca se modifica.
+        verify(resultadoRepo, never()).save(any());
+    }
+
+    // C) estado="incompleto": mismo comportamiento seguro que estado="error",
+    // aunque no haya un mensajeError específico que citar.
+    @Test
+    void solicitarInterpretacionIA_conEstadoIncompleto_noLlamaAGeminiYLanzaExcepcionControlada() {
+        UUID resultadoId = UUID.randomUUID();
+        ResultadoMetrica resultado = crearResultado(BigDecimal.ZERO, Instant.now());
+        resultado.setEstado("incompleto");
+        resultado.setMensajeError(null);
+
+        when(projectMemberRepository.existsByProyectoIdAndUserId(proyectoId, userEmail)).thenReturn(true);
+        when(resultadoRepo.findById(resultadoId)).thenReturn(Optional.of(resultado));
+
+        IllegalStateException ex = assertThrows(
+            IllegalStateException.class,
+            () -> service.solicitarInterpretacionIA(resultadoId)
+        );
+
+        assertTrue(ex.getMessage().contains("No existe un resultado calculado válido"));
+        assertTrue(ex.getMessage().contains("todavía no se completó"));
+        verifyNoInteractions(geminiService);
+        verify(resultadoRepo, never()).save(any());
+    }
+
+    // D) obtenerHistorico(): un resultado vigente/histórico con estado="error"
+    // (resultado=0 placeholder) NUNCA debe aparecer en el histórico numérico —
+    // solo los resultados con estado="calculado".
+    @Test
+    void obtenerHistorico_excluyeResultadosConEstadoError() {
+        ResultadoMetrica calculado = crearResultado(new BigDecimal("7"), Instant.now());
+        ResultadoMetrica error = crearResultado(BigDecimal.ZERO, Instant.now().minusSeconds(50));
+        error.setEstado("error");
+        error.setMensajeError("No hay valores para resolver variables");
+
+        when(projectMemberRepository.existsByProyectoIdAndUserId(proyectoId, userEmail)).thenReturn(true);
+        when(resultadoRepo.findByMetrica_IdAndProyectoIdOrderByCalculadoAtDesc(metricaId, proyectoId))
+            .thenReturn(List.of(calculado, error));
+
+        List<ResultadoMetricaDto> historico = service.obtenerHistorico(metricaId, proyectoId);
+
+        assertEquals(1, historico.size());
+        assertEquals("calculado", historico.get(0).estado());
+        assertEquals(0, historico.get(0).resultado().compareTo(new BigDecimal("7")));
+    }
+
+    // D.2) Caso límite: si TODOS los resultados de la métrica están en
+    // estado="error" (nunca hubo un cálculo exitoso), el histórico debe quedar
+    // vacío — nunca debe devolver los ceros placeholder como si fueran datos.
+    @Test
+    void obtenerHistorico_todosConEstadoError_retornaListaVacia() {
+        ResultadoMetrica error1 = crearResultado(BigDecimal.ZERO, Instant.now());
+        error1.setEstado("error");
+        ResultadoMetrica error2 = crearResultado(BigDecimal.ZERO, Instant.now().minusSeconds(30));
+        error2.setEstado("error");
+
+        when(projectMemberRepository.existsByProyectoIdAndUserId(proyectoId, userEmail)).thenReturn(true);
+        when(resultadoRepo.findByMetrica_IdAndProyectoIdOrderByCalculadoAtDesc(metricaId, proyectoId))
+            .thenReturn(List.of(error1, error2));
+
+        List<ResultadoMetricaDto> historico = service.obtenerHistorico(metricaId, proyectoId);
+
+        assertTrue(historico.isEmpty());
+    }
+
     // ========================================
     // Métodos Auxiliares
     // ========================================

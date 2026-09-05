@@ -388,15 +388,35 @@ public class MetricaAcademicaService {
     }
     
     /**
-     * Obtiene el histórico de resultados de una métrica en un proyecto.
+     * Obtiene el histórico de resultados CALCULADOS (estado="calculado") de una
+     * métrica en un proyecto.
+     *
+     * Corrección de auditoría (riesgo detectado tras implementar estado="error"
+     * en CalculoMetricaService.persistirResultadoError()): antes este método
+     * devolvía TODAS las filas de resultados_metricas sin filtrar, mezclando
+     * resultados con estado="error" (resultado=BigDecimal.ZERO, un valor técnico
+     * placeholder, nunca un dato real) en el mismo histórico numérico que los
+     * resultados válidos. Un consumidor que no revisara el campo `estado` de
+     * cada elemento podía terminar tratando ese 0 como si fuera un valor
+     * calculado real. Se filtra aquí, en el origen, para que el contrato del
+     * histórico sea siempre "solo resultados numéricos válidos" — sin cambiar
+     * el tipo de retorno ni el endpoint (GET /{metricaId}/historico sigue
+     * devolviendo List<ResultadoMetricaDto>), así que ningún consumidor
+     * existente que ya asumía "todo lo que llega es válido" se rompe: antes
+     * podía recibir un 0 falso camuflado de resultado, ahora simplemente no lo
+     * recibe. Si en el futuro el frontend necesita mostrar que hubo un intento
+     * de cálculo fallido para algún sprint, debe consultarse por separado (ej.
+     * un endpoint o campo nuevo dedicado a errores) — no mezclándolo con este
+     * histórico numérico.
      */
     public List<ResultadoMetricaDto> obtenerHistorico(UUID metricaId, UUID proyectoId) {
         validarMiembroProyecto(getUserId(), proyectoId);
 
         List<ResultadoMetrica> resultados = resultadoRepo
             .findByMetrica_IdAndProyectoIdOrderByCalculadoAtDesc(metricaId, proyectoId);
-        
+
         return resultados.stream()
+            .filter(r -> "calculado".equals(r.getEstado()))
             .map(r -> new ResultadoMetricaDto(
                 r.getId(),
                 r.getMetrica().getId(),
@@ -420,12 +440,32 @@ public class MetricaAcademicaService {
     /**
      * Solicita interpretación IA de un resultado ya calculado.
      * Gemini NO calcula, solo interpreta.
+     *
+     * Corrección de auditoría (riesgo detectado tras implementar estado="error"
+     * en CalculoMetricaService.persistirResultadoError()): antes este método no
+     * comprobaba el estado del ResultadoMetrica antes de enviarlo a Gemini. Un
+     * resultado con estado="error" tiene resultado=BigDecimal.ZERO (placeholder
+     * técnico, nunca un dato real) — sin este chequeo, se le pedía a la IA
+     * interpretar ese 0 como si fuera un valor real calculado, generando una
+     * interpretación inventada sobre un dato que nunca existió. Ahora se
+     * rechaza ANTES de construir el prompt o llamar a Gemini, y ANTES de tocar
+     * el ResultadoMetrica (esta validación es de solo lectura: nunca modifica
+     * la fila).
      */
     public InterpretacionIADto solicitarInterpretacionIA(UUID resultadoId) {
         ResultadoMetrica resultado = resultadoRepo.findById(resultadoId)
             .orElseThrow(() -> new IllegalArgumentException("Resultado no encontrado"));
 
         validarMiembroProyecto(getUserId(), resultado.getProyectoId());
+
+        if (!"calculado".equals(resultado.getEstado())) {
+            throw new IllegalStateException(
+                "No existe un resultado calculado válido para interpretar (estado actual: '"
+                    + resultado.getEstado() + "'). "
+                    + (resultado.getMensajeError() != null && !resultado.getMensajeError().isBlank()
+                        ? "El último intento de cálculo falló: " + resultado.getMensajeError()
+                        : "El cálculo de esta métrica todavía no se completó."));
+        }
 
         // Obtener histórico para contexto
         List<ResultadoMetrica> historico = resultadoRepo

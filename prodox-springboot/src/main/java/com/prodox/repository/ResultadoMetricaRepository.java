@@ -65,6 +65,22 @@ public interface ResultadoMetricaRepository extends JpaRepository<ResultadoMetri
     );
 
     /**
+     * Corrección de auditoría (parte B): TODOS los resultados vigentes para una
+     * combinación proyecto+métrica+sprint, sin importar la versión de
+     * parametrización que los produjo. La regla funcional es "a lo sumo un
+     * vigente por proyecto+métrica+sprint" — el método de arriba (scopeado
+     * también por versión) no la garantiza por sí solo: el índice único parcial
+     * de V37 (idx_resultado_vigente_unico) todavía incluye parametrizacion_version,
+     * por lo que a nivel de esquema pueden coexistir vigentes de versiones
+     * distintas (ver CalculoMetricaService.invalidarResultadosVigentes()). Se
+     * devuelve List, no Optional, precisamente porque hoy puede haber más de una
+     * fila — este método es el que permite detectarlas todas para invalidarlas.
+     */
+    List<ResultadoMetrica> findByProyectoIdAndMetrica_IdAndSprintIdAndVigenteTrue(
+        UUID proyectoId, UUID metricaId, UUID sprintId
+    );
+
+    /**
      * Histórico vigente de una métrica en un proyecto, uno por sprint, para
      * alimentar Evaluación/gráficas con el resultado ya calculado en vez de
      * RegistroValor crudo. Fuente del nuevo endpoint GET /api/metricas/{id}/resultados.

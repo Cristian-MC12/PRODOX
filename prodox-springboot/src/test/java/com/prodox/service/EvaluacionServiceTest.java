@@ -447,6 +447,41 @@ class EvaluacionServiceTest {
         assertThat(dto.registros()).hasSize(1);
     }
 
+    // Corrección de auditoría (parte C): un ResultadoMetrica vigente con
+    // estado="error" (ver CalculoMetricaService.persistirResultadoError()) NUNCA
+    // debe llegar a resultadosCalculados como si fuera un punto numérico válido
+    // — su campo `resultado` es BigDecimal.ZERO, un valor técnico placeholder,
+    // no un resultado real. Debe excluirse igual que "sin resultado calculado
+    // todavía" (test siguiente), cayendo al mismo fallback de 'registros'.
+    @Test
+    @DisplayName("Corrección de auditoría (parte C): ResultadoMetrica vigente con estado=\"error\" se excluye de resultadosCalculados, nunca se muestra como 0 válido")
+    void evaluarDetalle_resultadoVigenteConEstadoError_seExcluyeDeResultadosCalculados() {
+        Variable variable = crearVariable("satisfaccion_cliente", "Satisfacción del cliente");
+        Sprint sprint = crearSprint(1);
+        RegistroValor r1 = crearRegistro(variable, new BigDecimal("80"), Instant.now());
+
+        com.prodox.entity.ResultadoMetrica resultadoError = new com.prodox.entity.ResultadoMetrica();
+        resultadoError.setId(UUID.randomUUID());
+        resultadoError.setSprintId(sprintId);
+        resultadoError.setResultado(BigDecimal.ZERO); // placeholder técnico, nunca un resultado real
+        resultadoError.setEstado("error");
+        resultadoError.setMensajeError("No hay valores para resolver variables");
+        resultadoError.setCalculadoAt(Instant.now());
+        resultadoError.setVigente(true);
+
+        when(variableRepo.findByProyectoIdAndActivaTrue(proyectoId)).thenReturn(List.of(variable));
+        when(sprintRepo.findByProyectoIdOrderByNumeroDesc(proyectoId)).thenReturn(List.of(sprint));
+        when(registroRepo.findByVariable_IdOrderByRegistradoAtAsc(variable.getId())).thenReturn(List.of(r1));
+        when(resultadoMetricaRepo.findByProyectoIdAndMetrica_IdAndVigenteTrue(proyectoId, variable.getMetrica().getId()))
+                .thenReturn(List.of(resultadoError));
+
+        MetricaEvaluacionDetalleDto dto = service.evaluarDetalle(proyectoId).get(0);
+
+        assertThat(dto.resultadosCalculados()).isEmpty();
+        // 'registros' (trazabilidad cruda) sigue disponible como fallback del frontend.
+        assertThat(dto.registros()).hasSize(1);
+    }
+
     @Test
     @DisplayName("Sin ResultadoMetrica calculado todavía: resultadosCalculados viene vacía (cae a 'registros' en el frontend)")
     void evaluarDetalle_sinResultadoCalculado_resultadosCalculadosVacia() {

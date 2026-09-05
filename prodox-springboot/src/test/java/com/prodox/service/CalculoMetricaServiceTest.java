@@ -24,6 +24,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.transaction.PlatformTransactionManager;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -34,7 +35,6 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.when;
 
 /**
@@ -56,6 +56,12 @@ class CalculoMetricaServiceTest {
     @Mock private RegistroValorRepository registroRepo;
     @Mock private ResultadoMetricaRepository resultadoRepo;
     @Mock private ProjectMemberRepository projectMemberRepo;
+    // Corrección de auditoría (parte C): persistirResultadoError() usa una
+    // transacción REQUIRES_NEW propia vía TransactionTemplate. Con un mock,
+    // getTransaction()/commit() son no-op (devuelven null/no hacen nada), pero
+    // el callback SÍ se ejecuta con normalidad — suficiente para que las
+    // llamadas a resultadoRepo dentro de él (también mockeado) se verifiquen.
+    @Mock private PlatformTransactionManager transactionManager;
 
     private CalculoMetricaService service;
 
@@ -68,7 +74,7 @@ class CalculoMetricaServiceTest {
         service = new CalculoMetricaService(
                 metricaRepo, proyectoRepo, sprintRepo, parametrizacionRepo,
                 variableRepo, registroRepo, resultadoRepo, projectMemberRepo,
-                new FormulaEvaluator(), new ObjectMapper());
+                new FormulaEvaluator(), new ObjectMapper(), transactionManager);
 
         metricaId  = UUID.randomUUID();
         proyectoId = UUID.randomUUID();
@@ -204,6 +210,29 @@ class CalculoMetricaServiceTest {
         when(projectMemberRepo.existsByProyectoIdAndUserId(proyectoId, userId)).thenReturn(true);
     }
 
+    /**
+     * Corrección de auditoría (parte C): antes, un fallo de cálculo NO dejaba
+     * ningún rastro en resultados_metricas (resultadoRepo.save() nunca se
+     * llamaba) — solo la excepción, que en el camino automático terminaba en
+     * log.debug(). Ahora persistirResultadoError() SIEMPRE guarda un
+     * ResultadoMetrica con estado="error" antes de relanzar la excepción
+     * original (la ruta manual vía CalculoMetricaController sigue devolviendo el
+     * error estructurado de siempre — este método no cambia esa asserción, solo
+     * agrega la verificación del nuevo registro persistido).
+     */
+    private ResultadoMetrica assertResultadoErrorPersistido() {
+        var captor = org.mockito.ArgumentCaptor.forClass(ResultadoMetrica.class);
+        org.mockito.Mockito.verify(resultadoRepo, org.mockito.Mockito.times(1)).save(captor.capture());
+        ResultadoMetrica guardado = captor.getValue();
+
+        assertThat(guardado.getEstado()).isEqualTo("error");
+        assertThat(guardado.getMensajeError()).isNotBlank();
+        // Placeholder técnico obligatorio por la columna NOT NULL — nunca un resultado real.
+        assertThat(guardado.getResultado()).isEqualByComparingTo(BigDecimal.ZERO);
+        assertThat(guardado.getVigente()).isTrue();
+        return guardado;
+    }
+
     @Test
     @DisplayName("SUMA: tres miembros registran 2, 3 y 4 -> resultado 9 (ya agregaba todo, sin cambios)")
     void calcularMetrica_suma_tresMiembros_sumaTodosLosRegistros() {
@@ -219,8 +248,8 @@ class CalculoMetricaServiceTest {
                 registro(v, new BigDecimal("3"), "maria", Instant.parse("2026-01-02T00:00:00Z")),
                 registro(v, new BigDecimal("2"), "juan", Instant.parse("2026-01-01T00:00:00Z"))
         ));
-        when(resultadoRepo.findByProyectoIdAndMetrica_IdAndSprintIdAndParametrizacionVersionAndVigenteTrue(
-                proyectoId, metricaId, sprintId, 1)).thenReturn(Optional.empty());
+        when(resultadoRepo.findByProyectoIdAndMetrica_IdAndSprintIdAndVigenteTrue(
+                proyectoId, metricaId, sprintId)).thenReturn(List.of());
         when(resultadoRepo.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         var dto = service.calcularMetrica(metricaId, new CalcularMetricaRequest(proyectoId, sprintId), "juan");
@@ -243,8 +272,8 @@ class CalculoMetricaServiceTest {
                 registro(v, new BigDecimal("60"), "pedro", Instant.parse("2026-01-02T00:00:00Z")),
                 registro(v, new BigDecimal("80"), "juan", Instant.parse("2026-01-01T00:00:00Z"))
         ));
-        when(resultadoRepo.findByProyectoIdAndMetrica_IdAndSprintIdAndParametrizacionVersionAndVigenteTrue(
-                proyectoId, metricaId, sprintId, 1)).thenReturn(Optional.empty());
+        when(resultadoRepo.findByProyectoIdAndMetrica_IdAndSprintIdAndVigenteTrue(
+                proyectoId, metricaId, sprintId)).thenReturn(List.of());
         when(resultadoRepo.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         var dto = service.calcularMetrica(metricaId, new CalcularMetricaRequest(proyectoId, sprintId), "juan");
@@ -274,8 +303,8 @@ class CalculoMetricaServiceTest {
                 registro(v, new BigDecimal("3"), "maria", Instant.parse("2026-01-02T00:00:00Z")),
                 registro(v, new BigDecimal("2"), "juan", Instant.parse("2026-01-01T00:00:00Z"))
         ));
-        when(resultadoRepo.findByProyectoIdAndMetrica_IdAndSprintIdAndParametrizacionVersionAndVigenteTrue(
-                proyectoId, metricaId, sprintId, 1)).thenReturn(Optional.empty());
+        when(resultadoRepo.findByProyectoIdAndMetrica_IdAndSprintIdAndVigenteTrue(
+                proyectoId, metricaId, sprintId)).thenReturn(List.of());
         when(resultadoRepo.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         var dto = service.calcularMetrica(metricaId, new CalcularMetricaRequest(proyectoId, sprintId), "juan");
@@ -297,8 +326,8 @@ class CalculoMetricaServiceTest {
                 registro(v, new BigDecimal("5"), "pedro", Instant.parse("2026-01-02T00:00:00Z")),
                 registro(v, new BigDecimal("3"), "juan", Instant.parse("2026-01-01T00:00:00Z"))
         ));
-        when(resultadoRepo.findByProyectoIdAndMetrica_IdAndSprintIdAndParametrizacionVersionAndVigenteTrue(
-                proyectoId, metricaId, sprintId, 1)).thenReturn(Optional.empty());
+        when(resultadoRepo.findByProyectoIdAndMetrica_IdAndSprintIdAndVigenteTrue(
+                proyectoId, metricaId, sprintId)).thenReturn(List.of());
         when(resultadoRepo.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         var dto = service.calcularMetrica(metricaId, new CalcularMetricaRequest(proyectoId, sprintId), "juan");
@@ -319,8 +348,8 @@ class CalculoMetricaServiceTest {
         when(registroRepo.findBySprintIdAndVariable_IdOrderByRegistradoAtDesc(sprintId, varId)).thenReturn(List.of(
                 registro(v, new BigDecimal("7"), "juan", Instant.parse("2026-01-01T00:00:00Z"))
         ));
-        when(resultadoRepo.findByProyectoIdAndMetrica_IdAndSprintIdAndParametrizacionVersionAndVigenteTrue(
-                proyectoId, metricaId, sprintId, 1)).thenReturn(Optional.empty());
+        when(resultadoRepo.findByProyectoIdAndMetrica_IdAndSprintIdAndVigenteTrue(
+                proyectoId, metricaId, sprintId)).thenReturn(List.of());
         when(resultadoRepo.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         var dto = service.calcularMetrica(metricaId, new CalcularMetricaRequest(proyectoId, sprintId), "juan");
@@ -349,7 +378,9 @@ class CalculoMetricaServiceTest {
                 .isInstanceOf(AgregacionMiembrosNoConfiguradaException.class)
                 .hasMessageContaining("no tiene configurada Variable.agregacionMiembros");
 
-        org.mockito.Mockito.verify(resultadoRepo, org.mockito.Mockito.never()).save(any());
+        // Corrección de auditoría (parte C): el fallo ya no queda sin rastro —
+        // ver assertResultadoErrorPersistido().
+        assertResultadoErrorPersistido();
     }
 
     @Test
@@ -382,8 +413,8 @@ class CalculoMetricaServiceTest {
         when(registroRepo.findBySprintIdAndVariable_IdOrderByRegistradoAtDesc(sprintId, varC)).thenReturn(List.of(
                 registro(c, new BigDecimal("4"), "juan", Instant.parse("2026-01-01T00:00:00Z"))
         )); // grupal, valor directo = 4
-        when(resultadoRepo.findByProyectoIdAndMetrica_IdAndSprintIdAndParametrizacionVersionAndVigenteTrue(
-                proyectoId, metricaId, sprintId, 1)).thenReturn(Optional.empty());
+        when(resultadoRepo.findByProyectoIdAndMetrica_IdAndSprintIdAndVigenteTrue(
+                proyectoId, metricaId, sprintId)).thenReturn(List.of());
         when(resultadoRepo.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         var dto = service.calcularMetrica(metricaId, new CalcularMetricaRequest(proyectoId, sprintId), "juan");
@@ -406,8 +437,8 @@ class CalculoMetricaServiceTest {
                 registro(v, new BigDecimal("1"), "maria", Instant.parse("2026-01-02T00:00:00Z")),
                 registro(v, new BigDecimal("1"), "pedro", Instant.parse("2026-01-01T00:00:00Z"))
         ));
-        when(resultadoRepo.findByProyectoIdAndMetrica_IdAndSprintIdAndParametrizacionVersionAndVigenteTrue(
-                proyectoId, metricaId, sprintId, 1)).thenReturn(Optional.empty());
+        when(resultadoRepo.findByProyectoIdAndMetrica_IdAndSprintIdAndVigenteTrue(
+                proyectoId, metricaId, sprintId)).thenReturn(List.of());
         when(resultadoRepo.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         var dto = service.calcularMetrica(metricaId, new CalcularMetricaRequest(proyectoId, sprintId), "juan");
@@ -430,8 +461,8 @@ class CalculoMetricaServiceTest {
                 registro(v, new BigDecimal("2"), "maria", Instant.parse("2026-01-02T00:00:00Z")),
                 registro(v, new BigDecimal("5"), "pedro", Instant.parse("2026-01-01T00:00:00Z"))
         ));
-        when(resultadoRepo.findByProyectoIdAndMetrica_IdAndSprintIdAndParametrizacionVersionAndVigenteTrue(
-                proyectoId, metricaId, sprintId, 1)).thenReturn(Optional.empty());
+        when(resultadoRepo.findByProyectoIdAndMetrica_IdAndSprintIdAndVigenteTrue(
+                proyectoId, metricaId, sprintId)).thenReturn(List.of());
         when(resultadoRepo.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         var dto = service.calcularMetrica(metricaId, new CalcularMetricaRequest(proyectoId, sprintId), "juan");
@@ -454,8 +485,8 @@ class CalculoMetricaServiceTest {
                 registro(v, new BigDecimal("2"), "maria", Instant.parse("2026-01-02T00:00:00Z")),
                 registro(v, new BigDecimal("5"), "pedro", Instant.parse("2026-01-01T00:00:00Z"))
         ));
-        when(resultadoRepo.findByProyectoIdAndMetrica_IdAndSprintIdAndParametrizacionVersionAndVigenteTrue(
-                proyectoId, metricaId, sprintId, 1)).thenReturn(Optional.empty());
+        when(resultadoRepo.findByProyectoIdAndMetrica_IdAndSprintIdAndVigenteTrue(
+                proyectoId, metricaId, sprintId)).thenReturn(List.of());
         when(resultadoRepo.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         var dto = service.calcularMetrica(metricaId, new CalcularMetricaRequest(proyectoId, sprintId), "juan");
@@ -476,8 +507,8 @@ class CalculoMetricaServiceTest {
         when(registroRepo.findBySprintIdAndVariable_IdOrderByRegistradoAtDesc(sprintId, varId)).thenReturn(List.of(
                 registro(v, new BigDecimal("11"), "sm", Instant.parse("2026-01-01T00:00:00Z"))
         ));
-        when(resultadoRepo.findByProyectoIdAndMetrica_IdAndSprintIdAndParametrizacionVersionAndVigenteTrue(
-                proyectoId, metricaId, sprintId, 1)).thenReturn(Optional.empty());
+        when(resultadoRepo.findByProyectoIdAndMetrica_IdAndSprintIdAndVigenteTrue(
+                proyectoId, metricaId, sprintId)).thenReturn(List.of());
         when(resultadoRepo.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         var dto = service.calcularMetrica(metricaId, new CalcularMetricaRequest(proyectoId, sprintId), "sm");
@@ -513,7 +544,9 @@ class CalculoMetricaServiceTest {
                 .isInstanceOf(AgregacionMiembrosNoConfiguradaException.class)
                 .hasMessageContaining("no tiene configurada Variable.agregacionMiembros");
 
-        org.mockito.Mockito.verify(resultadoRepo, org.mockito.Mockito.never()).save(any());
+        // Corrección de auditoría (parte C): el fallo ya no queda sin rastro —
+        // ver assertResultadoErrorPersistido().
+        assertResultadoErrorPersistido();
     }
 
     @Test
@@ -530,8 +563,8 @@ class CalculoMetricaServiceTest {
                 registro(v, new BigDecimal("11"), "sm", Instant.parse("2026-01-02T00:00:00Z")),
                 registro(v, new BigDecimal("7"), "juan", Instant.parse("2026-01-01T00:00:00Z"))
         ));
-        when(resultadoRepo.findByProyectoIdAndMetrica_IdAndSprintIdAndParametrizacionVersionAndVigenteTrue(
-                proyectoId, metricaId, sprintId, 1)).thenReturn(Optional.empty());
+        when(resultadoRepo.findByProyectoIdAndMetrica_IdAndSprintIdAndVigenteTrue(
+                proyectoId, metricaId, sprintId)).thenReturn(List.of());
         when(resultadoRepo.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         var dto = service.calcularMetrica(metricaId, new CalcularMetricaRequest(proyectoId, sprintId), "sm");
@@ -561,8 +594,8 @@ class CalculoMetricaServiceTest {
         when(registroRepo.findBySprintIdAndVariable_IdOrderByRegistradoAtDesc(sprintId, varId)).thenReturn(List.of(
                 registro(v, new BigDecimal("5"), "sm", Instant.parse("2026-01-01T00:00:00Z"))
         ));
-        when(resultadoRepo.findByProyectoIdAndMetrica_IdAndSprintIdAndParametrizacionVersionAndVigenteTrue(
-                proyectoId, metricaId, sprintId, 1)).thenReturn(Optional.empty());
+        when(resultadoRepo.findByProyectoIdAndMetrica_IdAndSprintIdAndVigenteTrue(
+                proyectoId, metricaId, sprintId)).thenReturn(List.of());
         when(resultadoRepo.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         var dto = service.calcularMetrica(metricaId, new CalcularMetricaRequest(proyectoId, sprintId), "sm");
@@ -595,8 +628,8 @@ class CalculoMetricaServiceTest {
         when(registroRepo.findBySprintIdAndVariable_IdOrderByRegistradoAtDesc(sprintId, varId)).thenReturn(List.of(
                 registro(v, new BigDecimal("5"), "sm", Instant.parse("2026-01-01T00:00:00Z"))
         ));
-        when(resultadoRepo.findByProyectoIdAndMetrica_IdAndSprintIdAndParametrizacionVersionAndVigenteTrue(
-                proyectoId, metricaId, sprintId, 1)).thenReturn(Optional.of(anterior));
+        when(resultadoRepo.findByProyectoIdAndMetrica_IdAndSprintIdAndVigenteTrue(
+                proyectoId, metricaId, sprintId)).thenReturn(List.of(anterior));
         when(resultadoRepo.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
         when(resultadoRepo.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
@@ -609,6 +642,130 @@ class CalculoMetricaServiceTest {
         // instante el índice único parcial idx_resultado_vigente_unico (V37).
         org.mockito.Mockito.verify(resultadoRepo, org.mockito.Mockito.times(1)).saveAndFlush(anterior);
         org.mockito.Mockito.verify(resultadoRepo, org.mockito.Mockito.times(1)).save(any());
+    }
+
+    // Corrección de auditoría (parte B): antes, invalidar el vigente anterior
+    // filtraba también por parametrizacion_version — un resultado vigente de
+    // una versión ANTERIOR quedaba intacto (ambos vigente=true a la vez) si la
+    // métrica se reparametrizó. invalidarResultadosVigentes() ya no filtra por
+    // versión, así que debe encontrar y desactivar el vigente aunque pertenezca
+    // a otra versión distinta de la que se está calculando ahora.
+    @Test
+    @DisplayName("Corrección de auditoría (parte B): recalcular con una NUEVA versión de parametrización invalida el vigente de la versión ANTERIOR")
+    void calcularMetrica_recalcularConNuevaVersion_invalidaVigenteDeVersionAnterior() {
+        UUID varId = UUID.randomUUID();
+        Variable v = variable(varId, "grupal", null);
+        // La parametrización VIGENTE ahora es la versión 2 (simula el escenario
+        // real: la v1 fue reemplazada por una nueva versión aprobada).
+        MetricParametrizacion paramV2 = parametrizacionConTipoOperacion("DIRECTO");
+        paramV2.setVersion(2);
+
+        ResultadoMetrica vigenteDeV1 = new ResultadoMetrica();
+        vigenteDeV1.setId(UUID.randomUUID());
+        vigenteDeV1.setParametrizacionVersion(1);
+        vigenteDeV1.setVigente(true);
+
+        stubMiembroDelProyecto("sm");
+        when(parametrizacionRepo.findUltimaVersionAprobada(metricaId, proyectoId)).thenReturn(Optional.of(paramV2));
+        when(variableRepo.findByParametrizacionIdAndParametrizacionVersion(paramV2.getId(), 2)).thenReturn(List.of(v));
+        when(registroRepo.findBySprintIdAndVariable_IdOrderByRegistradoAtDesc(sprintId, varId)).thenReturn(List.of(
+                registro(v, new BigDecimal("5"), "sm", Instant.parse("2026-01-01T00:00:00Z"))
+        ));
+        // El vigente encontrado pertenece a la VERSIÓN ANTERIOR (1), no a la que
+        // se está calculando (2) — el método version-agnostic debe encontrarlo igual.
+        when(resultadoRepo.findByProyectoIdAndMetrica_IdAndSprintIdAndVigenteTrue(proyectoId, metricaId, sprintId))
+                .thenReturn(List.of(vigenteDeV1));
+        when(resultadoRepo.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(resultadoRepo.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        var dto = service.calcularMetrica(metricaId, new CalcularMetricaRequest(proyectoId, sprintId), "sm");
+
+        assertThat(vigenteDeV1.getVigente()).isFalse();
+        assertThat(dto.parametrizacionVersion()).isEqualTo(2);
+        assertThat(dto.estado()).isEqualTo("calculado");
+        org.mockito.Mockito.verify(resultadoRepo, org.mockito.Mockito.times(1)).saveAndFlush(vigenteDeV1);
+        org.mockito.Mockito.verify(resultadoRepo, org.mockito.Mockito.times(1)).save(any());
+    }
+
+    @Test
+    @DisplayName("Cálculo exitoso: el resultado persistido tiene estado=\"calculado\", nunca \"error\", y mensajeError queda null")
+    void calcularMetrica_exitoso_persisteEstadoCalculadoSinMensajeError() {
+        UUID varId = UUID.randomUUID();
+        Variable v = variable(varId, "grupal", null);
+        MetricParametrizacion param = parametrizacionConTipoOperacion("SUMA");
+
+        stubMiembroDelProyecto("sm");
+        when(parametrizacionRepo.findUltimaVersionAprobada(metricaId, proyectoId)).thenReturn(Optional.of(param));
+        when(variableRepo.findByParametrizacionIdAndParametrizacionVersion(param.getId(), 1)).thenReturn(List.of(v));
+        when(registroRepo.findBySprintIdAndVariable_IdOrderByRegistradoAtDesc(sprintId, varId)).thenReturn(List.of(
+                registro(v, new BigDecimal("8"), "sm", Instant.parse("2026-01-01T00:00:00Z"))
+        ));
+        when(resultadoRepo.findByProyectoIdAndMetrica_IdAndSprintIdAndVigenteTrue(proyectoId, metricaId, sprintId))
+                .thenReturn(List.of());
+        var captor = org.mockito.ArgumentCaptor.forClass(ResultadoMetrica.class);
+        when(resultadoRepo.save(captor.capture())).thenAnswer(inv -> inv.getArgument(0));
+
+        var dto = service.calcularMetrica(metricaId, new CalcularMetricaRequest(proyectoId, sprintId), "sm");
+
+        assertThat(dto.estado()).isEqualTo("calculado");
+        assertThat(captor.getValue().getEstado()).isEqualTo("calculado");
+        assertThat(captor.getValue().getMensajeError()).isNull();
+        assertThat(captor.getValue().getResultado()).isEqualByComparingTo("8.0000");
+    }
+
+    // ════════════════════════════════════════════════════════════════════
+    // CASO REAL ("Creación de un avatar Xabi"): dos parametrizaciones casi
+    // idénticas de la misma métrica, creadas con segundos de diferencia (ver
+    // Corrección de auditoría, parte A). Los registros de captura quedaron
+    // asociados a las variables de la parametrización ANTERIOR; luego quedó
+    // vigente OTRA parametrización (nueva versión aprobada) cuyas variables
+    // (mismos nombres, UUIDs distintos) nunca recibieron esos registros. Al
+    // calcular con la parametrización vigente, FormulaEvaluator no encuentra
+    // valores para resolver las variables.
+    // ════════════════════════════════════════════════════════════════════
+    @Test
+    @DisplayName("CASO REAL (\"Creación de un avatar Xabi\"): variables de la parametrización vigente sin registro_valores -> estado=\"error\", nunca un resultado numérico falso")
+    void calcularMetrica_formulaSinRegistrosParaSusVariables_persisteEstadoError() {
+        UUID varA = UUID.randomUUID();
+        UUID varB = UUID.randomUUID();
+        Variable a = variable(varA, "grupal", null, "valor_negocio_done");
+        Variable b = variable(varB, "grupal", null, "valor_negocio_planificado");
+        // Fórmula real de "Satisfacción del Cliente" (auditoría), con nombres de
+        // variable cortos pero misma estructura: (Done / Planificado) * 100.
+        MetricParametrizacion param = parametrizacionFormula(
+                "(valor_negocio_done / valor_negocio_planificado) * 100");
+        param.setVersion(2); // la VIGENTE es una versión nueva — ver duplicación (parte A)
+
+        stubMiembroDelProyecto("sm");
+        when(parametrizacionRepo.findUltimaVersionAprobada(metricaId, proyectoId)).thenReturn(Optional.of(param));
+        when(variableRepo.findByParametrizacionIdAndParametrizacionVersion(param.getId(), 2))
+                .thenReturn(List.of(a, b));
+        // Las variables de ESTA versión no tienen ningún registro_valores — los
+        // registros reales quedaron asociados a las variables de la
+        // parametrización ANTERIOR (duplicada), exactamente el escenario real.
+        when(registroRepo.findBySprintIdAndVariable_IdOrderByRegistradoAtDesc(sprintId, varA)).thenReturn(List.of());
+        when(registroRepo.findBySprintIdAndVariable_IdOrderByRegistradoAtDesc(sprintId, varB)).thenReturn(List.of());
+        when(resultadoRepo.findByProyectoIdAndMetrica_IdAndSprintIdAndVigenteTrue(proyectoId, metricaId, sprintId))
+                .thenReturn(List.of());
+
+        CalcularMetricaRequest req = new CalcularMetricaRequest(proyectoId, sprintId);
+
+        // La ruta manual (vía CalculoMetricaController) sigue recibiendo el
+        // error de siempre — este cambio no lo oculta ni lo reemplaza por un
+        // resultado inventado.
+        assertThatThrownBy(() -> service.calcularMetrica(metricaId, req, "sm"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("No hay valores para resolver variables");
+
+        // La ruta automática (recalcularSilenciosamente) ya NO deja este fallo
+        // únicamente en log.debug(): queda un rastro consultable.
+        ResultadoMetrica guardado = assertResultadoErrorPersistido();
+        assertThat(guardado.getMensajeError()).contains("No hay valores para resolver variables");
+        assertThat(guardado.getParametrizacionId()).isEqualTo(param.getId());
+        assertThat(guardado.getParametrizacionVersion()).isEqualTo(2);
+        assertThat(guardado.getSprintId()).isEqualTo(sprintId);
+        assertThat(guardado.getProyectoId()).isEqualTo(proyectoId);
+        assertThat(guardado.getMetrica()).isNotNull();
     }
 
     // ════════════════════════════════════════════════════════════════════
@@ -661,8 +818,8 @@ class CalculoMetricaServiceTest {
                 registro(vErrores, new BigDecimal("3"), "pedro", Instant.parse("2026-01-03T00:00:00Z"))
         ));
 
-        when(resultadoRepo.findByProyectoIdAndMetrica_IdAndSprintIdAndParametrizacionVersionAndVigenteTrue(
-                any(), any(), any(), anyInt())).thenReturn(Optional.empty());
+        when(resultadoRepo.findByProyectoIdAndMetrica_IdAndSprintIdAndVigenteTrue(
+                any(), any(), any())).thenReturn(List.of());
         when(resultadoRepo.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         var dtoAnimo = service.calcularMetrica(
@@ -698,7 +855,9 @@ class CalculoMetricaServiceTest {
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("no tiene una operación de cálculo válida");
 
-        org.mockito.Mockito.verify(resultadoRepo, org.mockito.Mockito.never()).save(any());
+        // Corrección de auditoría (parte C): el fallo ya no queda sin rastro —
+        // ver assertResultadoErrorPersistido().
+        assertResultadoErrorPersistido();
     }
 
     // Complementa el caso anterior: tipoOperacion informado pero con un valor que
@@ -724,6 +883,8 @@ class CalculoMetricaServiceTest {
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("no soportado");
 
-        org.mockito.Mockito.verify(resultadoRepo, org.mockito.Mockito.never()).save(any());
+        // Corrección de auditoría (parte C): el fallo ya no queda sin rastro —
+        // ver assertResultadoErrorPersistido().
+        assertResultadoErrorPersistido();
     }
 }

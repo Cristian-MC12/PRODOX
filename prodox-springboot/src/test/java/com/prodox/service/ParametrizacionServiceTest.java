@@ -15,6 +15,7 @@ import com.prodox.repository.ProjectMemberRepository;
 import com.prodox.repository.VariableRepository;
 import com.prodox.service.TipoOperacionInvalidoException;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -25,6 +26,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -251,7 +253,117 @@ class ParametrizacionServiceTest {
         assertThat(result.getObjetivo()).isEqualTo("Objetivo test");
         assertThat(result.getPropuestaIAJson()).isEqualTo("{\"titulo\": \"Test\"}");
     }
-    
+
+    // ========================================
+    // TESTS Corrección de auditoría (parte A): protección backend contra
+    // doble clic/petición repetida en guardarPropuesta(). Caso real detectado
+    // (proyecto "Creación de un avatar Xabi"): dos parametrizaciones casi
+    // idénticas de la misma métrica, creadas con segundos de diferencia.
+    // ========================================
+
+    @Test
+    @DisplayName("Corrección de auditoría (parte A): dos llamadas consecutivas idénticas a guardarPropuesta() -> una sola parametrización persistida")
+    void guardarPropuesta_dosLlamadasConsecutivasIdenticas_creaUnaSolaParametrizacion() {
+        mockAuthentication();
+        UUID metricaId = UUID.randomUUID();
+        UUID proyectoId = UUID.randomUUID();
+
+        GuardarPropuestaRequest req = new GuardarPropuestaRequest(
+            metricaId, proyectoId, "Objetivo", "Procedimiento", "Indicador", "Escala",
+            "por_sprint", "Fuente", "Σ x", "SUMA", "unidad",
+            "{\"titulo\":\"Test\"}", "var_x",
+            "NUMERICA_ENTERA", java.math.BigDecimal.ZERO, java.math.BigDecimal.TEN,
+            java.math.BigDecimal.ONE, false, "descripcion"
+        );
+
+        when(projectMemberRepository.existsByProyectoIdAndUserId(eq(proyectoId), anyString())).thenReturn(true);
+        when(parametrizacionRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        when(parametrizacionRepository.findHistorialVersiones(metricaId, proyectoId)).thenReturn(List.of());
+
+        MetricParametrizacion primera = parametrizacionService.guardarPropuesta(req);
+        assertThat(primera.getVersion()).isEqualTo(1);
+
+        // La segunda petición (doble clic o reintento de red) llega cuando el
+        // historial YA tiene la propuesta recién creada por la primera.
+        when(parametrizacionRepository.findHistorialVersiones(metricaId, proyectoId))
+            .thenReturn(List.of(primera));
+
+        MetricParametrizacion segunda = parametrizacionService.guardarPropuesta(req);
+
+        assertThat(segunda).isSameAs(primera);
+        assertThat(segunda.getVersion()).isEqualTo(1);
+        // Solo UNA fila insertada en total — la protección no crea versión 2.
+        verify(parametrizacionRepository, times(1)).save(any());
+    }
+
+    @Test
+    @DisplayName("Corrección de auditoría (parte A): dos parametrizaciones con configuración realmente diferente -> ambas se permiten")
+    void guardarPropuesta_configuracionesRealmenteDiferentes_ambasSePermiten() {
+        mockAuthentication();
+        UUID metricaId = UUID.randomUUID();
+        UUID proyectoId = UUID.randomUUID();
+
+        GuardarPropuestaRequest req1 = new GuardarPropuestaRequest(
+            metricaId, proyectoId, "Objetivo A", "Procedimiento", "Indicador", "Escala",
+            "por_sprint", "Fuente", "Σ x", "SUMA", "unidad", null, null
+        , null, null, null, null, null, null);
+
+        // Difiere en el campo sustantivo objetivo (no es un doble clic: es una
+        // propuesta realmente distinta) — debe crear una versión nueva.
+        GuardarPropuestaRequest req2 = new GuardarPropuestaRequest(
+            metricaId, proyectoId, "Objetivo B, completamente distinto", "Procedimiento", "Indicador", "Escala",
+            "por_sprint", "Fuente", "Σ x", "SUMA", "unidad", null, null
+        , null, null, null, null, null, null);
+
+        when(projectMemberRepository.existsByProyectoIdAndUserId(eq(proyectoId), anyString())).thenReturn(true);
+        when(parametrizacionRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        when(parametrizacionRepository.findHistorialVersiones(metricaId, proyectoId)).thenReturn(List.of());
+
+        MetricParametrizacion primera = parametrizacionService.guardarPropuesta(req1);
+
+        when(parametrizacionRepository.findHistorialVersiones(metricaId, proyectoId))
+            .thenReturn(List.of(primera));
+
+        MetricParametrizacion segunda = parametrizacionService.guardarPropuesta(req2);
+
+        assertThat(segunda).isNotSameAs(primera);
+        assertThat(segunda.getVersion()).isEqualTo(2);
+        assertThat(segunda.getObjetivo()).isEqualTo("Objetivo B, completamente distinto");
+        verify(parametrizacionRepository, times(2)).save(any());
+    }
+
+    @Test
+    @DisplayName("Corrección de auditoría (parte A): misma configuración pero fuera de la ventana anti-duplicado -> se permite como parametrización nueva y legítima")
+    void guardarPropuesta_mismaConfiguracionFueraDeLaVentana_sePermiteComoNuevaVersion() {
+        mockAuthentication();
+        UUID metricaId = UUID.randomUUID();
+        UUID proyectoId = UUID.randomUUID();
+
+        GuardarPropuestaRequest req = new GuardarPropuestaRequest(
+            metricaId, proyectoId, "Objetivo", "Procedimiento", "Indicador", "Escala",
+            "por_sprint", "Fuente", "Σ x", "SUMA", "unidad", null, null
+        , null, null, null, null, null, null);
+
+        when(projectMemberRepository.existsByProyectoIdAndUserId(eq(proyectoId), anyString())).thenReturn(true);
+        when(parametrizacionRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        when(parametrizacionRepository.findHistorialVersiones(metricaId, proyectoId)).thenReturn(List.of());
+
+        MetricParametrizacion primera = parametrizacionService.guardarPropuesta(req);
+        // Simula que la primera quedó creada hace mucho más que la ventana
+        // anti-duplicado (ej. el usuario la recrea intencionalmente meses
+        // después de un rechazo) — no debe tratarse como duplicado.
+        primera.setCreatedAt(Instant.now().minusSeconds(3600));
+
+        when(parametrizacionRepository.findHistorialVersiones(metricaId, proyectoId))
+            .thenReturn(List.of(primera));
+
+        MetricParametrizacion segunda = parametrizacionService.guardarPropuesta(req);
+
+        assertThat(segunda).isNotSameAs(primera);
+        assertThat(segunda.getVersion()).isEqualTo(2);
+        verify(parametrizacionRepository, times(2)).save(any());
+    }
+
     // ========================================
     // TESTS FASE 16.10-D: CATÁLOGO OFICIAL DE tipoOperacion
     // (SUMA | PROMEDIO | DIRECTO | FORMULA — comentario V24 / FASE16_8_7)

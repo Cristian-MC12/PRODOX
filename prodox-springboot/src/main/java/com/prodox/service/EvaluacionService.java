@@ -165,6 +165,17 @@ public class EvaluacionService {
      * Vacía si la frecuencia es otra, o si todavía no se calculó nada para esta
      * métrica en este proyecto (ej. parametrización recién aprobada, sin sprints
      * cerrados aún) — en ambos casos el frontend cae de vuelta a 'registros'.
+     *
+     * Corrección de auditoría (parte C): excluye explícitamente cualquier
+     * resultado cuyo estado no sea "calculado". Desde que CalculoMetricaService.
+     * persistirResultadoError() puede dejar vigente=true un resultado con
+     * estado="error" (representando que el ÚLTIMO intento de cálculo falló, ver
+     * esa clase), este método NO debe devolverlo como si fuera un punto numérico
+     * válido — su campo `resultado` es BigDecimal.ZERO, un valor técnico
+     * placeholder, nunca un resultado real. Un sprint cuyo único resultado
+     * vigente está en estado="error" cae de vuelta a 'registros' (mismo
+     * fallback ya documentado arriba para "no se calculó nada todavía"), en vez
+     * de mostrar un cero falso.
      */
     private List<ResultadoCalculadoPuntoDto> resultadosCalculadosDeLaMetrica(
             Variable variable, UUID proyectoId, Map<UUID, Sprint> sprintsPorId) {
@@ -175,6 +186,7 @@ public class EvaluacionService {
                 .findByProyectoIdAndMetrica_IdAndVigenteTrue(proyectoId, variable.getMetrica().getId());
 
         return resultados.stream()
+                .filter(r -> "calculado".equals(r.getEstado()))
                 .filter(r -> sprintsPorId.containsKey(r.getSprintId()))
                 .sorted(Comparator.comparing(ResultadoMetrica::getCalculadoAt))
                 .map(r -> new ResultadoCalculadoPuntoDto(

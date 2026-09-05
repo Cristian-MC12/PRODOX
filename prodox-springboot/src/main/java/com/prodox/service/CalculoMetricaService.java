@@ -10,8 +10,11 @@ import com.prodox.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -40,7 +43,16 @@ public class CalculoMetricaService {
     private final ProjectMemberRepository projectMemberRepo;
     private final FormulaEvaluator evaluator;
     private final ObjectMapper objectMapper;
-    
+    private final PlatformTransactionManager transactionManager;
+
+    /** Mensaje de error usado cuando la excepción original no trae uno propio. */
+    private static final String MENSAJE_ERROR_DESCONOCIDO =
+        "Error desconocido durante el cálculo de la métrica";
+
+    /** Límite de longitud para mensaje_error (columna TEXT, pero se acota igual
+     *  por prudencia — nunca debe crecer sin límite con una traza completa). */
+    private static final int MENSAJE_ERROR_MAX_LENGTH = 2000;
+
     @Transactional
     public ResultadoMetricaDto calcularMetrica(
             UUID metricaId, 
@@ -160,31 +172,26 @@ public class CalculoMetricaService {
                 };
             }
 
-            // 5.b Distinguir vigente de histórico (V37): antes de insertar el
-            // nuevo resultado, el anterior para esta misma combinación exacta
-            // (proyecto+métrica+sprint+versión) pasa a vigente=false. Nunca se
-            // borra ni se modifica su contenido, solo el flag.
+            // 5.b Un solo resultado vigente por proyecto+métrica+sprint (Corrección
+            // de auditoría, parte B), sin importar la versión de parametrización:
+            // antes de insertar el nuevo resultado, CUALQUIER resultado vigente
+            // anterior para esta combinación pasa a vigente=false. Nunca se borra
+            // ni se modifica su contenido, solo el flag.
             //
-            // Corrección: saveAndFlush (no save) es obligatorio aquí. Hibernate
-            // ordena su flush por tipo de operación (INSERTs antes que UPDATEs),
-            // no por orden de código — así que un save() normal podía enviar el
-            // INSERT del resultado nuevo (vigente=true) ANTES que el UPDATE que
-            // marca el anterior como vigente=false, violando por un instante el
-            // índice único parcial idx_resultado_vigente_unico (V37) con un
-            // DataIntegrityViolationException. Este bug era preexistente y
-            // ajeno al bug de tipoOperacion, pero estaba oculto: calcularMetrica()
-            // nunca llegaba hasta aquí porque siempre fallaba antes con el
-            // NullPointerException. Al corregir la lectura de tipoOperacion, el
-            // cálculo ahora sí llega a este punto para métricas EQUIPO con 2+
-            // registros (el caso real y frecuente), exponiendo la condición de
-            // carrera. saveAndFlush fuerza el UPDATE a la base de datos antes de
-            // continuar, garantizando que nunca coexistan dos filas vigente=true.
-            resultadoRepo.findByProyectoIdAndMetrica_IdAndSprintIdAndParametrizacionVersionAndVigenteTrue(
-                    request.proyectoId(), metricaId, request.sprintId(), parametrizacion.getVersion())
-                .ifPresent(anterior -> {
-                    anterior.setVigente(false);
-                    resultadoRepo.saveAndFlush(anterior);
-                });
+            // Antes esta invalidación solo buscaba el vigente de la MISMA
+            // parametrizacion_version (findBy...AndParametrizacionVersionAndVigenteTrue),
+            // dejando intacto el vigente de una versión ANTERIOR si la métrica se
+            // reparametrizó — el índice único parcial de V37 (idx_resultado_vigente_
+            // unico) incluye parametrizacion_version en su definición, así que dos
+            // versiones distintas SÍ pueden tener cada una su propio vigente=true
+            // simultáneo a nivel de esquema. invalidarResultadosVigentes() ya no
+            // filtra por versión, así que cierra ese hueco a nivel de aplicación.
+            //
+            // Limitación conocida, documentada explícitamente: el índice de V37
+            // sigue existiendo tal cual — endurecer la garantía a nivel de base de
+            // datos (un índice único sin parametrizacion_version) requeriría una
+            // migración nueva (V42), fuera de esta fase.
+            invalidarResultadosVigentes(request.proyectoId(), metricaId, request.sprintId());
 
             // 6. Persistir resultado
             ResultadoMetrica resultadoEntity = new ResultadoMetrica();
@@ -225,14 +232,145 @@ public class CalculoMetricaService {
             );
             
         } catch (IllegalArgumentException e) {
+            persistirResultadoError(metricaId, metrica, request, parametrizacion, valoresPorVariable, userId, e.getMessage());
             throw e;
         } catch (ArithmeticException e) {
+            persistirResultadoError(metricaId, metrica, request, parametrizacion, valoresPorVariable, userId, e.getMessage());
             throw new ArithmeticException("Error de cálculo: " + e.getMessage());
         } catch (Exception e) {
+            persistirResultadoError(metricaId, metrica, request, parametrizacion, valoresPorVariable, userId, e.getMessage());
             throw new RuntimeException("Error calculando métrica: " + e.getMessage(), e);
         }
     }
-    
+
+    /**
+     * Un solo resultado vigente por proyecto+métrica+sprint (Corrección de
+     * auditoría, parte B), sin importar la versión de parametrización que lo
+     * produjo. Se usa tanto en el camino exitoso (antes de insertar el resultado
+     * calculado) como en el camino de error (antes de insertar el resultado con
+     * estado="error", ver persistirResultadoError()) — en ambos casos el nuevo
+     * resultado refleja el estado del ÚLTIMO intento de cálculo, y cualquier
+     * resultado vigente previo (de cualquier versión) pasa a histórico. Nunca se
+     * borra ni se modifica el contenido de una fila anterior, solo su flag
+     * vigente.
+     *
+     * saveAndFlush (no save) por cada fila, igual que el código que reemplaza:
+     * Hibernate ordena su flush por tipo de operación (INSERTs antes que
+     * UPDATEs), no por orden de código, así que un save() normal podría enviar
+     * el INSERT del resultado nuevo (vigente=true) antes que el UPDATE que
+     * marca el/los anterior(es) como vigente=false.
+     */
+    private void invalidarResultadosVigentes(UUID proyectoId, UUID metricaId, UUID sprintId) {
+        List<ResultadoMetrica> vigentes = resultadoRepo
+            .findByProyectoIdAndMetrica_IdAndSprintIdAndVigenteTrue(proyectoId, metricaId, sprintId);
+
+        for (ResultadoMetrica anterior : vigentes) {
+            anterior.setVigente(false);
+            resultadoRepo.saveAndFlush(anterior);
+        }
+    }
+
+    /**
+     * Corrección de auditoría (parte C): persiste de forma segura un cálculo
+     * fallido, en vez de dejar la excepción como único rastro. Antes, el camino
+     * automático (EjecucionService.recalcularMetricaAsociada() ->
+     * recalcularSilenciosamente()) atrapaba cualquier excepción de calcularMetrica()
+     * y solo hacía log.debug() — sin dejar ningún dato consultable, así que un
+     * fallo de cálculo (ej. una parametrización re-versionada cuyas variables
+     * nuevas no tienen registro_valores todavía — caso real "Creación de un
+     * avatar Xabi") era completamente invisible para el usuario.
+     *
+     * Invalida primero cualquier resultado vigente anterior (misma regla que
+     * invalidarResultadosVigentes()) para que ESTE resultado con estado="error"
+     * pase a ser el vigente: representa fielmente que el ÚLTIMO intento de
+     * cálculo para esta combinación falló — nunca se deja un resultado
+     * "calculado" antiguo como si siguiera siendo válido cuando el intento más
+     * reciente en realidad falló.
+     *
+     * resultado=BigDecimal.ZERO es un valor técnico obligatorio por la columna
+     * NOT NULL de resultados_metricas — JAMÁS debe interpretarse como un
+     * resultado real. Todo consumidor de resultados_metricas debe filtrar
+     * estado="calculado" antes de leer el campo resultado (ver
+     * EvaluacionService.resultadosCalculadosDeLaMetrica()).
+     *
+     * Se ejecuta en una transacción NUEVA e independiente (REQUIRES_NEW, vía
+     * TransactionTemplate — no @Transactional: este método se invoca por
+     * auto-invocación desde el propio catch de calcularMetrica(), y el proxy de
+     * Spring no intercepta llamadas self-invocadas, así que una anotación aquí
+     * no tendría efecto). Es imprescindible que sea independiente: cuando
+     * calcularMetrica() se invoca desde CalculoMetricaController (camino manual),
+     * la excepción que se relanza después de este método hace que Spring revierta
+     * la transacción de calcularMetrica() — sin una transacción propia, el
+     * registro de error se revertiría junto con ella, perdiéndose igual que
+     * antes de esta corrección.
+     *
+     * Nunca lanza: si el propio guardado de este registro de error fallara (caso
+     * extremo, ej. problema de conexión a BD), se registra en log.error() y se
+     * deja que la excepción original siga su curso sin un segundo fallo
+     * enmascarándola.
+     */
+    private void persistirResultadoError(
+            UUID metricaId,
+            Metrica metrica,
+            CalcularMetricaRequest request,
+            MetricParametrizacion parametrizacion,
+            Map<UUID, List<BigDecimal>> valoresPorVariable,
+            String userId,
+            String mensajeError) {
+
+        TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
+        transactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+
+        try {
+            transactionTemplate.executeWithoutResult(status -> {
+                // metricaId (el parámetro validado al inicio de calcularMetrica()),
+                // no metrica.getId(): mismo identificador que usa el camino exitoso
+                // (ver invalidarResultadosVigentes() más abajo en el 5.b), para que
+                // ambos caminos localicen exactamente los mismos resultados vigentes.
+                invalidarResultadosVigentes(request.proyectoId(), metricaId, request.sprintId());
+
+                ResultadoMetrica resultadoEntity = new ResultadoMetrica();
+                resultadoEntity.setProyectoId(request.proyectoId());
+                resultadoEntity.setMetrica(metrica);
+                resultadoEntity.setSprintId(request.sprintId());
+                resultadoEntity.setParametrizacionId(parametrizacion.getId());
+                resultadoEntity.setParametrizacionVersion(parametrizacion.getVersion());
+                resultadoEntity.setTipoCalculo("error");
+                resultadoEntity.setExpresionUtilizada(null);
+                resultadoEntity.setValoresUtilizados(serializarValoresParaError(valoresPorVariable));
+                resultadoEntity.setResultado(BigDecimal.ZERO); // placeholder técnico, JAMÁS un resultado real
+                resultadoEntity.setEstado("error");
+                resultadoEntity.setMensajeError(truncarMensajeError(mensajeError));
+                resultadoEntity.setCalculadoPor(userId);
+                resultadoEntity.setCalculadoAt(Instant.now());
+                resultadoEntity.setVigente(true);
+
+                resultadoRepo.save(resultadoEntity);
+            });
+        } catch (Exception persistError) {
+            log.error("No se pudo persistir el resultado de error para métrica {} / sprint {}: {}",
+                metrica.getId(), request.sprintId(), persistError.getMessage());
+        }
+    }
+
+    private String serializarValoresParaError(Map<UUID, List<BigDecimal>> valoresPorVariable) {
+        try {
+            return objectMapper.writeValueAsString(
+                valoresPorVariable != null ? valoresPorVariable : Map.of());
+        } catch (Exception e) {
+            return "{}";
+        }
+    }
+
+    private String truncarMensajeError(String mensaje) {
+        if (mensaje == null || mensaje.isBlank()) {
+            return MENSAJE_ERROR_DESCONOCIDO;
+        }
+        return mensaje.length() > MENSAJE_ERROR_MAX_LENGTH
+            ? mensaje.substring(0, MENSAJE_ERROR_MAX_LENGTH)
+            : mensaje;
+    }
+
     /**
      * DIRECTO/SUMA/PROMEDIO/FORMULA resuelven su(s) variable(s) directamente desde
      * `variables` (ya scopeada a la parametrización aprobada por

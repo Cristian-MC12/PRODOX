@@ -20,8 +20,10 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.ArrayList;
@@ -65,6 +67,22 @@ public class ParametrizacionService {
     /** Valor por defecto cuando el llamador no elige explícitamente — conserva el
      *  comportamiento previo a esta revisión (todas las variables quedaban 'grupal'). */
     static final String RESPONSABLE_CAPTURA_DEFAULT = "SCRUM_MASTER";
+
+    /**
+     * Ventana anti-duplicado (Corrección de auditoría, parte A): si YA existe una
+     * parametrización para el mismo proyecto+métrica, creada por el MISMO usuario
+     * hace menos de este tiempo, con una configuración sustantiva equivalente,
+     * guardarPropuesta() devuelve esa fila existente en vez de insertar una nueva.
+     * Cubre doble clic sobre "Guardar propuesta" y reintentos de red — el caso real
+     * detectado (proyecto "Creación de un avatar Xabi") tenía parametrizaciones
+     * casi idénticas creadas con segundos de diferencia.
+     *
+     * Deliberadamente corta: no es una regla permanente de "nunca dos
+     * parametrizaciones iguales" — una propuesta idéntica creada mucho después
+     * (ej. el usuario la recrea intencionalmente tras un rechazo) sigue permitida,
+     * como una parametrización nueva y legítima.
+     */
+    static final Duration VENTANA_ANTI_DUPLICADO = Duration.ofSeconds(20);
 
     /**
      * Catálogo de tipos de escala estructurada soportados (corrección del manejo
@@ -455,7 +473,19 @@ public class ParametrizacionService {
         );
 
         if (!historial.isEmpty()) {
-            siguienteVersion = historial.get(0).getVersion() + 1;
+            MetricParametrizacion masReciente = historial.get(0);
+
+            // Corrección de auditoría (parte A): protección backend contra doble
+            // clic/petición repetida — ver esDuplicadoReciente(). Si la propuesta
+            // más reciente es del mismo usuario, muy reciente, y su configuración
+            // sustantiva es equivalente a la de este request, NO se inserta una
+            // fila nueva: se devuelve la ya existente, tal como quedó guardada.
+            if (esDuplicadoReciente(masReciente, request, userId)) {
+                masReciente.setNombreVariable(request.nombreVariable());
+                return masReciente;
+            }
+
+            siguienteVersion = masReciente.getVersion() + 1;
         }
 
         MetricParametrizacion parametrizacion = new MetricParametrizacion();
@@ -499,6 +529,96 @@ public class ParametrizacionService {
         // al aprobar. Queda documentado de forma durable dentro de propuestaIAJson.
         guardada.setNombreVariable(request.nombreVariable());
         return guardada;
+    }
+
+    /**
+     * Corrección de auditoría (parte A): true si `existente` (la parametrización
+     * más reciente para este proyecto+métrica) es, con altísima probabilidad, el
+     * resultado de un doble clic o una petición repetida de ESTE MISMO request —
+     * no una nueva propuesta legítima. Exige las tres condiciones a la vez:
+     * mismo usuario, creada dentro de VENTANA_ANTI_DUPLICADO, y configuración
+     * sustantiva equivalente (ver esConfiguracionEquivalente()). Cualquiera de
+     * las tres que falle significa que es una parametrización distinta y debe
+     * crearse una versión nueva, sin cambios de comportamiento.
+     */
+    private boolean esDuplicadoReciente(
+            MetricParametrizacion existente, GuardarPropuestaRequest request, String userId) {
+
+        if (!Objects.equals(existente.getUserId(), userId)) {
+            return false;
+        }
+        if (existente.getCreatedAt() == null) {
+            return false;
+        }
+
+        Duration transcurrido = Duration.between(existente.getCreatedAt(), Instant.now());
+        if (transcurrido.isNegative() || transcurrido.compareTo(VENTANA_ANTI_DUPLICADO) > 0) {
+            return false;
+        }
+
+        return esConfiguracionEquivalente(existente, request);
+    }
+
+    /**
+     * Compara la configuración sustantiva completa de una parametrización ya
+     * persistida contra un GuardarPropuestaRequest entrante, de forma null-safe:
+     * texto comparado con trim() (nunca equals() directo, que trataría "x" y "x "
+     * como distintos), y BigDecimal comparado con compareTo()==0 (nunca equals(),
+     * que distinguiría "5" de "5.0" como valores diferentes pese a ser el mismo
+     * número — un falso negativo que dejaría pasar duplicados reales). Los campos
+     * con valor por defecto al persistir (frecuenciaCaptura, responsableCaptura,
+     * escalaMax cuando escalaSinLimite=true) se comparan ya resueltos, igual que
+     * quedarían guardados, para no tratar como "diferente" un request que omite
+     * un campo cuyo default coincide con el valor ya persistido.
+     *
+     * No incluye nombreVariable: FASE 16.10-E lo documenta como campo transient
+     * que nunca se persiste como columna propia (ver MetricParametrizacion.
+     * nombreVariable) — no hay valor guardado con el que compararlo.
+     */
+    private boolean esConfiguracionEquivalente(
+            MetricParametrizacion existente, GuardarPropuestaRequest request) {
+
+        String frecuenciaCapturaRequest = request.frecuenciaCaptura() != null
+            ? request.frecuenciaCaptura()
+            : "por_sprint";
+        String responsableCapturaRequest = request.responsableCaptura() != null
+            ? request.responsableCaptura()
+            : RESPONSABLE_CAPTURA_DEFAULT;
+        java.math.BigDecimal escalaMaxRequest = Boolean.TRUE.equals(request.escalaSinLimite())
+            ? null
+            : request.escalaMax();
+
+        return textoEquivalente(existente.getObjetivo(), request.objetivo())
+            && textoEquivalente(existente.getProcedimiento(), request.procedimiento())
+            && textoEquivalente(existente.getIndicadorVariable(), request.indicadorVariable())
+            && textoEquivalente(existente.getEscala(), request.escala())
+            && textoEquivalente(existente.getEscalaTipo(), request.escalaTipo())
+            && numeroEquivalente(existente.getEscalaMin(), request.escalaMin())
+            && numeroEquivalente(existente.getEscalaMax(), escalaMaxRequest)
+            && numeroEquivalente(existente.getEscalaPaso(), request.escalaPaso())
+            && Objects.equals(existente.getEscalaSinLimite(), request.escalaSinLimite())
+            && textoEquivalente(existente.getEscalaDescripcion(), request.escalaDescripcion())
+            && textoEquivalente(existente.getFrecuenciaCaptura(), frecuenciaCapturaRequest)
+            && textoEquivalente(existente.getFuenteAcademica(), request.fuenteAcademica())
+            && textoEquivalente(existente.getFormulaAcademica(), request.formulaAcademica())
+            && textoEquivalente(existente.getTipoOperacion(), request.tipoOperacion())
+            && textoEquivalente(existente.getResponsableCaptura(), responsableCapturaRequest)
+            && textoEquivalente(existente.getUnidadResultado(), request.unidadResultado());
+    }
+
+    /** Null-safe y con trim() — nunca equals() directo (ver esConfiguracionEquivalente()). */
+    private boolean textoEquivalente(String a, String b) {
+        String normalizadaA = a == null ? null : a.trim();
+        String normalizadaB = b == null ? null : b.trim();
+        return Objects.equals(normalizadaA, normalizadaB);
+    }
+
+    /** Null-safe y con compareTo()==0 — nunca equals() directo (ver esConfiguracionEquivalente()). */
+    private boolean numeroEquivalente(java.math.BigDecimal a, java.math.BigDecimal b) {
+        if (a == null || b == null) {
+            return a == null && b == null;
+        }
+        return a.compareTo(b) == 0;
     }
     
     /**
