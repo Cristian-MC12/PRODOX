@@ -58,6 +58,8 @@ export interface MetricaEvaluacionDetalleDto {
    *  antiguos). El fallback a variableNombre cuando no hay descripción amigable se resuelve
    *  en la presentación (componente), nunca mutando este dato. */
   variableDescripcion?: string | null;
+  /** Nombre de la métrica del catálogo (ej: "Velocidad del Equipo por Sprint") */
+  metricaNombre:     string;
   categoria:         string;
   tipoAlcance:       string;
   frecuenciaCaptura: string;

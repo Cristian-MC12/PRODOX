@@ -15,6 +15,8 @@ public record MetricaEvaluacionDetalleDto(
     /** Variable.descripcion tal cual está persistida (puede ser null); el fallback a
      *  variableNombre cuando no hay descripción amigable se resuelve en presentación. */
     String     variableDescripcion,
+    /** Nombre de la métrica del catálogo (ej: "Velocidad del Equipo por Sprint") */
+    String     metricaNombre,
     String     categoria,
     String     tipoAlcance,
     /** diaria | semanal | por_sprint | ilimitada (valor real de Variable.frecuenciaCaptura) */

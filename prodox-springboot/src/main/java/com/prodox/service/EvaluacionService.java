@@ -141,6 +141,7 @@ public class EvaluacionService {
 
             resultado.add(new MetricaEvaluacionDetalleDto(
                     variable.getId(), variable.getNombre(), variable.getDescripcion(),
+                    variable.getMetrica().getNombre(),
                     variable.getMetrica().getCategoria().getNombre(),
                     variable.getTipoAlcance(),
                     variable.getFrecuenciaCaptura(),

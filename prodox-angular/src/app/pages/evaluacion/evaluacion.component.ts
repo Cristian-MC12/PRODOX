@@ -108,24 +108,29 @@ const FRECUENCIA_LABEL: Record<string, string> = {
         } @else {
 
           <!-- Filtros -->
-          <div class="d-flex flex-wrap gap-2 mb-3 align-items-center">
-            <span class="small fw-semibold text-muted">Filtrar por:</span>
-            <select class="form-select form-select-sm" style="max-width:150px" [(ngModel)]="categoriaFiltro">
-              <option value="">Todas las categorías</option>
-              @for (c of categoriasDisponibles; track c) { <option [value]="c">{{ c }}</option> }
-            </select>
-            <select class="form-select form-select-sm" style="max-width:150px" [(ngModel)]="frecuenciaFiltro">
-              <option value="">Todas las frecuencias</option>
-              @for (f of frecuenciasDisponibles; track f) {
-                <option [value]="f">{{ frecuenciaLabel(f) }}</option>
-              }
-            </select>
-            @if (tab === 'tendencias') {
-              <select class="form-select form-select-sm" style="max-width:150px" [(ngModel)]="sprintFiltro">
-                <option [ngValue]="null">Todos los sprints</option>
-                @for (s of sprintsDisponibles; track s) { <option [ngValue]="s">Sprint {{ s }}</option> }
+          <div class="filters-container mb-3">
+            <div class="filters-label">
+              <i class="bi bi-funnel me-1"></i>
+              <span>Filtrar por:</span>
+            </div>
+            <div class="filters-controls">
+              <select class="form-select form-select-sm filter-select" [(ngModel)]="categoriaFiltro">
+                <option value="">Todas las categorías</option>
+                @for (c of categoriasDisponibles; track c) { <option [value]="c">{{ c }}</option> }
               </select>
-            }
+              <select class="form-select form-select-sm filter-select" [(ngModel)]="frecuenciaFiltro">
+                <option value="">Todas las frecuencias</option>
+                @for (f of frecuenciasDisponibles; track f) {
+                  <option [value]="f">{{ frecuenciaLabel(f) }}</option>
+                }
+              </select>
+              @if (tab === 'tendencias') {
+                <select class="form-select form-select-sm filter-select" [(ngModel)]="sprintFiltro">
+                  <option [ngValue]="null">Todos los sprints</option>
+                  @for (s of sprintsDisponibles; track s) { <option [ngValue]="s">Sprint {{ s }}</option> }
+                </select>
+              }
+            </div>
           </div>
 
           @if (metricasFiltradas.length === 0) {
@@ -139,13 +144,15 @@ const FRECUENCIA_LABEL: Record<string, string> = {
                 <div class="col-lg-6">
                   <div class="card h-100 metrica-card" (click)="abrirDetalle(m)" role="button">
                     <div class="card-header py-2 d-flex justify-content-between align-items-start">
-                      <div>
-                        <div class="fw-semibold small">{{ m.variableNombre }}</div>
+                      <div class="flex-grow-1 me-2" style="min-width: 0;">
+                        <div class="fw-semibold small metrica-nombre-truncado" [title]="getNombreMetrica(m)">
+                          {{ getNombreMetrica(m) }}
+                        </div>
                         <div class="text-muted" style="font-size:0.68rem">
                           Frecuencia: {{ frecuenciaLabel(m.frecuenciaCaptura) }}
                         </div>
                       </div>
-                      <span class="badge prox-badge-sm" [class]="badgeCat(m.categoria)">
+                      <span class="badge prox-badge-sm flex-shrink-0" [class]="badgeCat(m.categoria)">
                         {{ m.categoria }}
                       </span>
                     </div>
@@ -211,7 +218,7 @@ const FRECUENCIA_LABEL: Record<string, string> = {
                   <tbody>
                     @for (m of metricasFiltradas; track m.variableId) {
                       <tr>
-                        <td class="ps-3 small fw-semibold align-middle">{{ m.variableNombre }}</td>
+                        <td class="ps-3 small fw-semibold align-middle">{{ getNombreMetrica(m) }}</td>
                         <td class="align-middle">
                           <span class="badge prox-badge-sm" [class]="badgeCat(m.categoria)">
                             {{ m.categoria }}
@@ -334,7 +341,7 @@ const FRECUENCIA_LABEL: Record<string, string> = {
                       <div class="card-body py-2">
                         @for (m of filasPorCategoria(cat); track m.variableId) {
                           <div class="d-flex justify-content-between align-items-center mb-2">
-                            <span class="small">{{ m.variableNombre }}</span>
+                            <span class="small">{{ getNombreMetrica(m) }}</span>
                             <div class="d-flex align-items-center gap-2">
                               <span class="small fw-semibold">{{ m.estadisticas.ultimoValor }}</span>
                               <span [class]="colorTendenciaTexto(m.estadisticas.tendencia)">
@@ -360,9 +367,9 @@ const FRECUENCIA_LABEL: Record<string, string> = {
           <div class="modal-dialog modal-lg" (click)="$event.stopPropagation()">
             <div class="modal-content">
               <div class="modal-header">
-                <h5 class="modal-title">
-                  {{ detalleAbierto.variableNombre }}
-                  <span class="badge ms-2 prox-badge-sm" [class]="badgeCat(detalleAbierto.categoria)">
+                <h5 class="modal-title d-flex align-items-center gap-2 flex-wrap" style="max-width: 90%;">
+                  <span class="text-truncate">{{ getNombreMetrica(detalleAbierto) }}</span>
+                  <span class="badge prox-badge-sm flex-shrink-0" [class]="badgeCat(detalleAbierto.categoria)">
                     {{ detalleAbierto.categoria }}
                   </span>
                 </h5>
@@ -371,7 +378,7 @@ const FRECUENCIA_LABEL: Record<string, string> = {
               <div class="modal-body">
                 <!-- Descripción completa -->
                 <div class="alert alert-light border-0 bg-light mb-3 small">
-                  <i class="bi bi-info-circle me-2"></i>{{ detalleAbierto.variableDescripcion }}
+                  <i class="bi bi-info-circle me-2"></i>{{ getDescripcionMetrica(detalleAbierto) }}
                 </div>
                 
                 <div class="small text-muted mb-2 d-flex align-items-center gap-2 flex-wrap">
@@ -605,8 +612,89 @@ const FRECUENCIA_LABEL: Record<string, string> = {
     </app-shell>
   `,
   styles: [`
-    .metrica-card { cursor: pointer; transition: box-shadow .15s; }
+    .metrica-card { 
+      cursor: pointer; 
+      transition: box-shadow .15s;
+      overflow: hidden;
+    }
     .metrica-card:hover { box-shadow: 0 0 0 2px var(--bs-primary); }
+    .metrica-card .card-header,
+    .metrica-card .card-body,
+    .metrica-card .card-footer {
+      overflow: hidden;
+    }
+    .metrica-nombre-truncado {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      max-width: 100%;
+      display: block;
+    }
+    .modal-title .text-truncate {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    
+    /* Filtros mejorados */
+    .filters-container {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      padding: 0.75rem 1rem;
+      background: #f8f9fa;
+      border-radius: 0.5rem;
+      border: 1px solid #dee2e6;
+    }
+    
+    .filters-label {
+      display: flex;
+      align-items: center;
+      font-size: 0.875rem;
+      font-weight: 600;
+      color: #6c757d;
+      white-space: nowrap;
+      margin-right: 0.5rem;
+    }
+    
+    .filters-controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      flex: 1;
+    }
+    
+    .filter-select {
+      min-width: 180px;
+      max-width: 220px;
+      background-color: white;
+      border: 1px solid #ced4da;
+    }
+    
+    .filter-select:focus {
+      border-color: #0d6efd;
+      box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+    }
+    
+    @media (max-width: 768px) {
+      .filters-container {
+        flex-direction: column;
+        align-items: stretch;
+      }
+      
+      .filters-label {
+        margin-right: 0;
+        margin-bottom: 0.5rem;
+      }
+      
+      .filters-controls {
+        flex-direction: column;
+      }
+      
+      .filter-select {
+        max-width: 100%;
+      }
+    }
   `]
 })
 export class EvaluacionComponent implements OnInit {
@@ -1267,6 +1355,23 @@ export class EvaluacionComponent implements OnInit {
   }
 
   // ── helpers visuales ─────────────────────────────────────────────────
+
+  /**
+   * Obtiene el nombre de visualización de la métrica.
+   * Usa metricaNombre (el nombre legible de la métrica del catálogo,
+   * ej: "Velocidad del Equipo por Sprint", "Defectos", etc.)
+   */
+  getNombreMetrica(m: MetricaEvaluacionDetalleDto): string {
+    return m.metricaNombre || 'Sin nombre';
+  }
+
+  /**
+   * Obtiene la descripción completa de la métrica.
+   * Si no existe variableDescripcion, usa metricaNombre como fallback.
+   */
+  getDescripcionMetrica(m: MetricaEvaluacionDetalleDto): string {
+    return m.variableDescripcion || m.metricaNombre || 'Sin descripción';
+  }
 
   frecuenciaLabel(f: string): string {
     return FRECUENCIA_LABEL[f] ?? f;

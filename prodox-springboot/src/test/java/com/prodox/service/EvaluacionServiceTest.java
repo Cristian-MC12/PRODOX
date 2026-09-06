@@ -127,6 +127,7 @@ class EvaluacionServiceTest {
         MetricaEvaluacionDetalleDto dto = resultado.get(0);
         assertThat(dto.variableNombre()).isEqualTo("tareas_retrabajadas");
         assertThat(dto.variableDescripcion()).isEqualTo("Tareas retrabajadas por sprint");
+        assertThat(dto.metricaNombre()).isEqualTo("Métrica de prueba");
     }
 
     @Test
@@ -146,6 +147,7 @@ class EvaluacionServiceTest {
         MetricaEvaluacionDetalleDto dto = resultado.get(0);
         assertThat(dto.variableNombre()).isEqualTo("tareas_retrabajadas"); // se conserva intacto
         assertThat(dto.variableDescripcion()).isNull(); // no se inventa ni se genera uno artificial
+        assertThat(dto.metricaNombre()).isEqualTo("Métrica de prueba");
     }
 
     @Test
