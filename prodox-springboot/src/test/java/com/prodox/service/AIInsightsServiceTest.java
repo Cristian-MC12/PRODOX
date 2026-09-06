@@ -112,27 +112,34 @@ class AIInsightsServiceTest {
         verifyNoInteractions(geminiService);
     }
 
-    // ── Datos insuficientes ───────────────────────────────────────────────
+    // ── Datos insuficientes / regla de mínimo 2 sprints finalizados ────────
+    // Corrección de auditoría (AI Insights): generar insights requiere como
+    // mínimo 2 sprints finalizados (ver AIInsightsService.generateInsights).
+    // Con 0 o 1 sprint finalizado, la generación se rechaza ANTES de llamar
+    // a Gemini o a cualquier analítica, con IllegalStateException — el mismo
+    // mecanismo de error de negocio ya usado en el resto del backend
+    // (-> 409 CONFLICT, ver GlobalExceptionHandler). Tener 1 solo sprint NO
+    // es un error del proyecto, solo insuficiente historial todavía.
 
     @Test
-    @DisplayName("generateInsights: proyecto sin sprints finalizados retorna lista vacía")
-    void generateInsights_sinSprintsFinalizados_retornaVacio() {
+    @DisplayName("generateInsights: proyecto sin sprints finalizados (0) rechaza la generación con IllegalStateException")
+    void generateInsights_sinSprintsFinalizados_lanzaIllegalStateException() {
         when(projectMemberRepo.findByProyectoIdAndUserId(proyectoId, userId)).thenReturn(Optional.of(scrumMaster()));
         when(proyectoRepo.findById(proyectoId)).thenReturn(Optional.of(proyecto));
         when(sprintRepo.findByProyectoIdOrderByNumeroDesc(proyectoId)).thenReturn(List.of());
 
-        GenerateInsightsResultDto resultado = service.generateInsights(proyectoId, userId);
+        assertThatThrownBy(() -> service.generateInsights(proyectoId, userId))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("al menos 2 sprints finalizados");
 
-        assertThat(resultado.insights()).isEmpty();
-        assertThat(resultado.status()).isEqualTo("SIN_DATOS");
         verify(analyticsService, never()).getSprintTrends(any(), any(), any());
         verify(geminiService, never()).generate(anyString());
         verify(insightRepo, never()).save(any());
     }
 
     @Test
-    @DisplayName("generateInsights: proyecto con 1 sprint retorna lista vacía")
-    void generateInsights_unSprint_retornaVacio() {
+    @DisplayName("generateInsights: proyecto con exactamente 1 sprint finalizado rechaza la generación con IllegalStateException")
+    void generateInsights_unSprintFinalizado_lanzaIllegalStateException() {
         when(projectMemberRepo.findByProyectoIdAndUserId(proyectoId, userId)).thenReturn(Optional.of(scrumMaster()));
         when(proyectoRepo.findById(proyectoId)).thenReturn(Optional.of(proyecto));
 
@@ -141,16 +148,37 @@ class AIInsightsServiceTest {
         sprint1.setProyectoId(proyectoId);
         sprint1.setNumero(1);
         sprint1.setEstado("finalizado");
-        
+
         when(sprintRepo.findByProyectoIdOrderByNumeroDesc(proyectoId)).thenReturn(List.of(sprint1));
-        when(analyticsService.getSprintTrends(any(), any(), any())).thenReturn(List.of());
 
-        GenerateInsightsResultDto resultado = service.generateInsights(proyectoId, userId);
+        assertThatThrownBy(() -> service.generateInsights(proyectoId, userId))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("al menos 2 sprints finalizados");
 
-        assertThat(resultado.insights()).isEmpty();
-        assertThat(resultado.status()).isEqualTo("SIN_SENALES");
-        verify(analyticsService, times(1)).getSprintTrends(eq(proyectoId), isNull(), eq(3));
+        verify(analyticsService, never()).getSprintTrends(any(), any(), any());
         verify(geminiService, never()).generate(anyString());
+        verify(insightRepo, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("generateInsights: sprints en_ejecucion o pendientes NO cuentan para el mínimo de 2 finalizados")
+    void generateInsights_sprintsNoFinalizados_noCuentanParaElMinimo() {
+        when(projectMemberRepo.findByProyectoIdAndUserId(proyectoId, userId)).thenReturn(Optional.of(scrumMaster()));
+        when(proyectoRepo.findById(proyectoId)).thenReturn(Optional.of(proyecto));
+
+        Sprint finalizado = crearSprint(1, "finalizado");
+        Sprint enEjecucion = crearSprint(2, "en_ejecucion");
+        Sprint pendiente = crearSprint(3, "pendiente");
+
+        when(sprintRepo.findByProyectoIdOrderByNumeroDesc(proyectoId))
+                .thenReturn(List.of(pendiente, enEjecucion, finalizado));
+
+        // Solo 1 de los 3 sprints está realmente finalizado -> igual se rechaza.
+        assertThatThrownBy(() -> service.generateInsights(proyectoId, userId))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("al menos 2 sprints finalizados");
+
+        verify(analyticsService, never()).getSprintTrends(any(), any(), any());
     }
 
     // ── Consultas ──────────────────────────────────────────────────────────
@@ -574,13 +602,18 @@ class AIInsightsServiceTest {
     }
 
     // ── FASE 23: robustez del parser TÍTULO/DESCRIPCIÓN/RECOMENDACIÓN (sección 4) ──
-    // Usa el generador de TREND como vehículo (solo requiere 1 sprint finalizado
-    // y una tendencia no-STABLE mockeada directamente desde AgileAnalyticsService).
+    // Usa el generador de TREND como vehículo, con una tendencia no-STABLE
+    // mockeada directamente desde AgileAnalyticsService. Corrección de
+    // auditoría (AI Insights, regla de mínimo 2 sprints finalizados):
+    // configura 2 sprints finalizados (antes usaba 1 solo) — con 1 la
+    // corrida completa ahora se rechaza antes de llegar al generador de TREND
+    // que estos tests ejercitan (ver generateInsights_unSprintFinalizado_lanzaIllegalStateException).
 
     private void mockUnSprintConTendencia(TrendAnalysisDto trend) {
+        Sprint sprintAnterior = crearSprint(sprint.getNumero() - 1, "finalizado");
         when(projectMemberRepo.findByProyectoIdAndUserId(proyectoId, userId)).thenReturn(Optional.of(scrumMaster()));
         when(proyectoRepo.findById(proyectoId)).thenReturn(Optional.of(proyecto));
-        when(sprintRepo.findByProyectoIdOrderByNumeroDesc(proyectoId)).thenReturn(List.of(sprint));
+        when(sprintRepo.findByProyectoIdOrderByNumeroDesc(proyectoId)).thenReturn(List.of(sprint, sprintAnterior));
         when(analyticsService.getSprintTrends(eq(proyectoId), isNull(), eq(3))).thenReturn(List.of(trend));
         when(insightRepo.findByProyectoIdAndTipoAndCategoriaAfectadaAndDismissedFalse(any(), any(), any()))
                 .thenReturn(List.of());

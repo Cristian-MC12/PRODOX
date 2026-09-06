@@ -20,6 +20,7 @@ function metricaDetalle(overrides: Partial<MetricaEvaluacionDetalleDto> = {}): M
   return {
     variableId: 'v1',
     variableNombre: 'Estado de ánimo del equipo',
+    metricaNombre: 'Métrica de prueba',
     categoria: 'Significado',
     tipoAlcance: 'grupal',
     frecuenciaCaptura: 'por_sprint',

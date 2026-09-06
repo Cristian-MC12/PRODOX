@@ -236,7 +236,7 @@ describe('EjecucionComponent (FASE 16 — métricas dinámicas)', () => {
     const v = m.variables[0];
 
     evaluacionService.detalle.and.returnValue(of([{
-      variableId: v.variableId, variableNombre: v.nombre, categoria: 'Significado', tipoAlcance: 'grupal',
+      variableId: v.variableId, variableNombre: v.nombre, metricaNombre: 'Métrica de prueba', categoria: 'Significado', tipoAlcance: 'grupal',
       frecuenciaCaptura: 'por_sprint', formulaTexto: null,
       registros: [
         { id: 'r1', valor: 7, registradoAt: '2026-08-21T00:00:00Z', sprintId: 'sprint-1', sprintNumero: 1, userId: 'sm@test.com' },
@@ -498,7 +498,7 @@ describe('EjecucionComponent (FASE 16 — métricas dinámicas)', () => {
     planeacionService.listarMetricas.and.returnValue(of([metrica(METRICA_DEFECTOS, 'Defectos', true)]));
     const variableId = 'v-' + METRICA_DEFECTOS + '-0';
     evaluacionService.detalle.and.returnValue(of([{
-      variableId, variableNombre: 'defectos_totales', categoria: 'Significado', tipoAlcance: 'grupal',
+      variableId, variableNombre: 'defectos_totales', metricaNombre: 'Métrica de prueba', categoria: 'Significado', tipoAlcance: 'grupal',
       frecuenciaCaptura: 'por_sprint', formulaTexto: null,
       registros: [
         { id: 'r1', valor: 6, registradoAt: '2026-08-22T00:00:00Z', sprintId: 'sprint-1', sprintNumero: 1, userId: 'sm@test.com' }
@@ -560,7 +560,7 @@ describe('EjecucionComponent (FASE 16 — métricas dinámicas)', () => {
     const v = m.variables[0];
 
     evaluacionService.detalle.and.returnValue(of([{
-      variableId: v.variableId, variableNombre: v.nombre, categoria: 'Significado', tipoAlcance: 'grupal',
+      variableId: v.variableId, variableNombre: v.nombre, metricaNombre: 'Métrica de prueba', categoria: 'Significado', tipoAlcance: 'grupal',
       frecuenciaCaptura: 'por_sprint', formulaTexto: null,
       registros: [
         { id: 'r-sprint1', valor: 8, registradoAt: '2026-08-22T00:00:00Z', sprintId: 'sprint-1', sprintNumero: 1, userId: 'sm@test.com' },
@@ -737,7 +737,7 @@ describe('EjecucionComponent (FASE 16 — métricas dinámicas)', () => {
 
       // Captura en Sprint 1.
       evaluacionService.detalle.and.returnValue(of([{
-        variableId: 'v-' + METRICA_DEFECTOS + '-0', variableNombre: 'defectos_totales', categoria: 'Significado',
+        variableId: 'v-' + METRICA_DEFECTOS + '-0', variableNombre: 'defectos_totales', metricaNombre: 'Métrica de prueba', categoria: 'Significado',
         tipoAlcance: 'grupal', frecuenciaCaptura: 'por_sprint', formulaTexto: null,
         registros: [
           { id: 'r-sprint1', valor: 4, registradoAt: '2026-08-22T00:00:00Z', sprintId: 'sprint-1', sprintNumero: 1, userId: 'sm@test.com' },
@@ -815,7 +815,7 @@ describe('EjecucionComponent (FASE 16 — métricas dinámicas)', () => {
 
     it('D. irASprintSiguiente() cambia el sprint seleccionado, recarga sus variables y no arrastra capturas del sprint anterior', () => {
       evaluacionService.detalle.and.returnValue(of([{
-        variableId: 'v-' + METRICA_DEFECTOS + '-0', variableNombre: 'defectos_totales', categoria: 'Significado',
+        variableId: 'v-' + METRICA_DEFECTOS + '-0', variableNombre: 'defectos_totales', metricaNombre: 'Métrica de prueba', categoria: 'Significado',
         tipoAlcance: 'grupal', frecuenciaCaptura: 'por_sprint', formulaTexto: null,
         registros: [
           { id: 'r-sprint1', valor: 4, registradoAt: '2026-08-22T00:00:00Z', sprintId: 'sprint-1', sprintNumero: 1, userId: 'sm@test.com' },
@@ -837,7 +837,7 @@ describe('EjecucionComponent (FASE 16 — métricas dinámicas)', () => {
 
     it('E. irASprintAnterior() cambia el sprint seleccionado en sentido contrario y no arrastra capturas del sprint siguiente', () => {
       evaluacionService.detalle.and.returnValue(of([{
-        variableId: 'v-' + METRICA_DEFECTOS + '-0', variableNombre: 'defectos_totales', categoria: 'Significado',
+        variableId: 'v-' + METRICA_DEFECTOS + '-0', variableNombre: 'defectos_totales', metricaNombre: 'Métrica de prueba', categoria: 'Significado',
         tipoAlcance: 'grupal', frecuenciaCaptura: 'por_sprint', formulaTexto: null,
         registros: [
           { id: 'r-sprint1', valor: 4, registradoAt: '2026-08-22T00:00:00Z', sprintId: 'sprint-1', sprintNumero: 1, userId: 'sm@test.com' },
@@ -1022,7 +1022,7 @@ describe('EjecucionComponent (FASE 16 — métricas dinámicas)', () => {
       variableService.obtenerVariables.and.returnValue(of(variablesConAlcance(METRICA_DEFECTOS, 'defectos_totales', 'individual')));
       const variableId = 'v-' + METRICA_DEFECTOS + '-0';
       evaluacionService.detalle.and.returnValue(of([{
-        variableId, variableNombre: 'defectos_totales', categoria: 'Significado', tipoAlcance: 'individual',
+        variableId, variableNombre: 'defectos_totales', metricaNombre: 'Métrica de prueba', categoria: 'Significado', tipoAlcance: 'individual',
         frecuenciaCaptura: 'por_sprint', formulaTexto: null,
         registros: [
           { id: 'r-otro', valor: 4, registradoAt: '2026-08-22T00:00:00Z', sprintId: 'sprint-1', sprintNumero: 1, userId: 'otro-user' }
@@ -1045,7 +1045,7 @@ describe('EjecucionComponent (FASE 16 — métricas dinámicas)', () => {
       variableService.obtenerVariables.and.returnValue(of(variablesConAlcance(METRICA_DEFECTOS, 'defectos_totales', 'individual')));
       const variableId = 'v-' + METRICA_DEFECTOS + '-0';
       evaluacionService.detalle.and.returnValue(of([{
-        variableId, variableNombre: 'defectos_totales', categoria: 'Significado', tipoAlcance: 'individual',
+        variableId, variableNombre: 'defectos_totales', metricaNombre: 'Métrica de prueba', categoria: 'Significado', tipoAlcance: 'individual',
         frecuenciaCaptura: 'por_sprint', formulaTexto: null,
         registros: [
           { id: 'r-a', valor: 4, registradoAt: '2026-08-22T00:00:00Z', sprintId: 'sprint-1', sprintNumero: 1, userId: 'user-a' },
@@ -1090,7 +1090,7 @@ describe('EjecucionComponent (FASE 16 — métricas dinámicas)', () => {
       }]
     }));
     evaluacionService.detalle.and.returnValue(of([{
-      variableId, variableNombre: 'defectos_totales', categoria: 'Significado', tipoAlcance: 'individual',
+      variableId, variableNombre: 'defectos_totales', metricaNombre: 'Métrica de prueba', categoria: 'Significado', tipoAlcance: 'individual',
       frecuenciaCaptura: 'por_sprint', formulaTexto: null,
       registros: [
         { id: 'r-otro', valor: 22, registradoAt: '2026-08-22T00:00:00Z', sprintId: 'sprint-1', sprintNumero: 1, userId: 'otro-user' }

@@ -10,6 +10,8 @@ import { SprintService } from '../../services/sprint.service';
 import { ProyectoDto } from '../../models/proyecto.model';
 import { SprintDto } from '../../models/sprint.model';
 import { AIRetrospective } from '../../models/ai-reports.model';
+import { construirSeccionesRetrospectiva } from '../../core/retrospectiva-reporte.builder';
+import { generarYDescargarDocumento } from '../../core/word-report.util';
 
 @Component({
   selector: 'app-ai-retrospective',
@@ -139,5 +141,33 @@ export class AIRetrospectiveComponent implements OnInit {
     this.alertMsg.set(message);
     this.alertClass.set(cssClass);
     setTimeout(() => this.alertMsg.set(''), 5000);
+  }
+
+  // ============ EXPORTACIÓN A WORD ============
+
+  /**
+   * Exporta la retrospectiva ya generada a un documento Word (.docx),
+   * 100% en el navegador — mismo patrón ya usado por AI Insights
+   * (ai-insights.component.ts:exportarAWord). Solo incluye los datos que
+   * AIRetrospectiveDto realmente trae (ver construirSeccionesRetrospectiva);
+   * PRODOX no persiste retrospectivas, así que este documento es la única
+   * forma de conservar una retrospectiva puntual fuera de la sesión.
+   */
+  async exportarAWord(): Promise<void> {
+    if (!this.retrospective) {
+      this.showAlert('No hay retrospectiva generada para exportar', 'alert-warning');
+      return;
+    }
+
+    const secciones = construirSeccionesRetrospectiva(this.retrospective, this.proyecto?.nombre || 'Sin nombre');
+    const fileName = `Retrospectiva_Sprint${this.retrospective.sprintNumero}_${this.proyecto?.nombre || 'Proyecto'}_${new Date().toISOString().split('T')[0]}.docx`;
+
+    const exportado = await generarYDescargarDocumento('Retrospectiva de Sprint', secciones, fileName);
+
+    if (exportado) {
+      this.showAlert('Retrospectiva exportada correctamente', 'alert-success');
+    } else {
+      this.showAlert('La exportación a Word no está disponible en este momento.', 'alert-warning');
+    }
   }
 }

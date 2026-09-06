@@ -20,6 +20,7 @@ import { MiniChartComponent, PuntoMiniChart } from '../../shared/mini-chart/mini
 import { ProyectoDto } from '../../models/proyecto.model';
 import { SprintDto } from '../../models/sprint.model';
 import { MetricaEvaluacionDetalleDto, RegistroPuntoDto } from '../../models/evaluacion-detalle.model';
+import { ToastService } from '../../shared/toast/toast.service';
 
 /** Una variable de una métrica aprobada, con su bloque de captura + gráfica. */
 interface BloqueVariable {
@@ -109,7 +110,8 @@ export class EjecucionComponent implements OnInit {
     private planeacionService: PlaneacionService,
     private metricaAcademicaService: MetricaAcademicaService,
     private variableService: VariableDinamicaService,
-    private evaluacionService: EvaluacionService
+    private evaluacionService: EvaluacionService,
+    private toast: ToastService
   ) {}
 
   /**
@@ -464,6 +466,9 @@ export class EjecucionComponent implements OnInit {
         v.error = err?.status === 403
           ? 'No tienes permiso para registrar valores.'
           : (err?.error?.error || 'No se pudo registrar el valor.');
+        // Corrección de auditoría (toasts): v.error ya se muestra inline
+        // (ver template, @if (v.error)) — no duplicar el mismo mensaje
+        // como toast.
         v.registrando = false;
         return of(null);
       })
@@ -471,6 +476,11 @@ export class EjecucionComponent implements OnInit {
       if (resultado === null && v.error) return;
       v.registrando = false;
       v.ultimoMensaje = 'Valor registrado.';
+      // Corrección de UX (toasts): el único feedback existente era este
+      // texto inline junto al campo, fácil de perder en un sprint con
+      // varias variables — se agrega un toast breve además, sin quitar el
+      // mensaje inline existente.
+      this.toast.success('Valores de métrica guardados correctamente.');
       // La edición terminó: el próximo "Registrar valor" es una captura
       // nueva otra vez, salvo que se abra explícitamente otra edición.
       v.registroEditandoId = null;

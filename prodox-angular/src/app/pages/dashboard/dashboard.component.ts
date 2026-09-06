@@ -17,11 +17,15 @@ import { SprintService } from '../../services/sprint.service';
 import { ProjectMemberService } from '../../services/project-member.service';
 import { PlaneacionService } from '../../services/planeacion.service';
 import { AuthService } from '../../services/auth.service';
+import { EvaluacionService } from '../../services/evaluacion.service';
+import { AIInsightsService } from '../../services/ai-insights.service';
 
 import { ProyectoDto } from '../../models/proyecto.model';
 import { ProjectOverview, Risk, TrendAnalysis } from '../../models/analytics.model';
 import { SprintDto, EstadoSprint } from '../../models/sprint.model';
 import { ProyectoMetricaDto } from '../../models/planeacion.model';
+import { construirSeccionesReporteGeneral } from '../../core/reporte-general.builder';
+import { generarYDescargarDocumento } from '../../core/word-report.util';
 
 Chart.register(...registerables);
 
@@ -104,13 +108,18 @@ export class DashboardComponent implements OnInit, AfterViewChecked, OnDestroy {
     reabierto: '#D99A2B'
   };
 
+  // Estado del botón "Reporte General" (evita doble clic y muestra progreso).
+  generandoReporteGeneral = signal(false);
+
   constructor(
     private router: Router,
     private analyticsService: AnalyticsService,
     private sprintService: SprintService,
     private memberService: ProjectMemberService,
     private planeacionService: PlaneacionService,
-    private authService: AuthService
+    private authService: AuthService,
+    private evaluacionService: EvaluacionService,
+    private aiInsightsService: AIInsightsService
   ) {}
 
   /**
@@ -654,5 +663,59 @@ export class DashboardComponent implements OnInit, AfterViewChecked, OnDestroy {
 
   navigateToReport(): void {
     this.router.navigate(['/ai-report']);
+  }
+
+  // ============ REPORTE GENERAL DEL PROYECTO (EXPORTACIÓN A WORD) ============
+
+  /**
+   * Exporta el reporte histórico general del proyecto a Word (.docx), 100%
+   * en el navegador — reutiliza el mismo patrón de exportación ya usado por
+   * AI Insights (word-report.util.ts). Combina projectOverview (ya cargado
+   * en este componente), la evaluación detallada por variable
+   * (EvaluacionService.detalle) y los AI Insights activos
+   * (AIInsightsService.getProjectInsights) — las mismas fuentes que ya
+   * consumen, respectivamente, Dashboard, la página Evaluación y AI
+   * Insights, todas ya autorizadas por proyecto en el backend (el usuario
+   * solo puede consultar el proyecto del que es miembro). No se agrega
+   * ningún endpoint ni parámetro de proyecto nuevo: proyectoId siempre sale
+   * de this.proyecto (el proyecto activo ya cargado), nunca de un valor
+   * editable por el usuario.
+   *
+   * Construcción del contenido delegada a construirSeccionesReporteGeneral
+   * (reporte-general.builder.ts), que NUNCA combina métricas de distinta
+   * categoría/escala en un único promedio o score.
+   */
+  exportarReporteGeneral(): void {
+    if (!this.proyecto || this.generandoReporteGeneral()) return;
+
+    this.generandoReporteGeneral.set(true);
+    const proyectoId = this.proyecto.id;
+
+    forkJoin({
+      metricas: this.evaluacionService.detalle(proyectoId).pipe(catchError(() => of([]))),
+      insights: this.aiInsightsService.getProjectInsights(proyectoId).pipe(catchError(() => of([])))
+    }).subscribe(async ({ metricas, insights }) => {
+      if (!this.proyecto || this.proyecto.id !== proyectoId || !this.projectOverview) {
+        this.generandoReporteGeneral.set(false);
+        return;
+      }
+
+      const secciones = construirSeccionesReporteGeneral({
+        proyecto: this.proyecto,
+        overview: this.projectOverview,
+        metricas,
+        insights
+      });
+
+      const fileName = `Reporte_General_${this.proyecto.nombre}_${new Date().toISOString().split('T')[0]}.docx`;
+      const exportado = await generarYDescargarDocumento('Reporte General del Proyecto', secciones, fileName);
+
+      this.generandoReporteGeneral.set(false);
+      if (exportado) {
+        this.showAlert('Reporte general exportado correctamente', 'alert-success');
+      } else {
+        this.showAlert('La exportación a Word no está disponible en este momento.', 'alert-warning');
+      }
+    });
   }
 }

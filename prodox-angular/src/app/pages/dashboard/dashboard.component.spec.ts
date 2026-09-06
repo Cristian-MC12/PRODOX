@@ -9,10 +9,14 @@ import { SprintService } from '../../services/sprint.service';
 import { ProjectMemberService } from '../../services/project-member.service';
 import { PlaneacionService } from '../../services/planeacion.service';
 import { AuthService } from '../../services/auth.service';
+import { EvaluacionService } from '../../services/evaluacion.service';
+import { AIInsightsService } from '../../services/ai-insights.service';
 import { ProjectOverview, Risk, TrendAnalysis } from '../../models/analytics.model';
 import { SprintDto } from '../../models/sprint.model';
 import { ProjectMemberDto } from '../../models/project-member.model';
 import { ProyectoMetricaDto } from '../../models/planeacion.model';
+import { MetricaEvaluacionDetalleDto } from '../../models/evaluacion-detalle.model';
+import { AIInsight } from '../../models/ai-insights.model';
 
 describe('DashboardComponent', () => {
   let component: DashboardComponent;
@@ -22,6 +26,8 @@ describe('DashboardComponent', () => {
   let mockMemberService: jasmine.SpyObj<ProjectMemberService>;
   let mockPlaneacionService: jasmine.SpyObj<PlaneacionService>;
   let mockAuthService: { currentUser: jasmine.Spy };
+  let mockEvaluacionService: jasmine.SpyObj<EvaluacionService>;
+  let mockAiInsightsService: jasmine.SpyObj<AIInsightsService>;
 
   const mockProyecto: any = {
     id: 'proyecto-123',
@@ -146,6 +152,8 @@ describe('DashboardComponent', () => {
     mockSprintService = jasmine.createSpyObj('SprintService', ['getActivo', 'listar']);
     mockMemberService = jasmine.createSpyObj('ProjectMemberService', ['listar']);
     mockPlaneacionService = jasmine.createSpyObj('PlaneacionService', ['listarMetricas']);
+    mockEvaluacionService = jasmine.createSpyObj('EvaluacionService', ['detalle']);
+    mockAiInsightsService = jasmine.createSpyObj('AIInsightsService', ['getProjectInsights']);
     mockAuthService = { currentUser: jasmine.createSpy('currentUser') };
     // Por defecto, el usuario autenticado ES el Scrum Master del proyecto activo
     // (su email coincide con mockProyecto.scrumMasterEmail) — mantiene el
@@ -156,6 +164,14 @@ describe('DashboardComponent', () => {
     // Configurar defaultReturnValue para evitar errores
     mockSprintService.listar.and.returnValue(of([]));
     mockPlaneacionService.listarMetricas.and.returnValue(of(mockMetricas));
+    // EvaluacionService/AIInsightsService también los usa ActivityFeedService
+    // (componente hijo real, renderizado por fixture.detectChanges()) — sin
+    // un valor por defecto, el spy sin configurar devuelve undefined y
+    // ActivityFeedService.getProjectActivities() revienta en '.pipe()' antes
+    // de llegar a los tests específicos de exportarReporteGeneral, que sí
+    // configuran su propio retorno.
+    mockEvaluacionService.detalle.and.returnValue(of([]));
+    mockAiInsightsService.getProjectInsights.and.returnValue(of([]));
 
     await TestBed.configureTestingModule({
       imports: [
@@ -168,7 +184,9 @@ describe('DashboardComponent', () => {
         { provide: SprintService, useValue: mockSprintService },
         { provide: ProjectMemberService, useValue: mockMemberService },
         { provide: PlaneacionService, useValue: mockPlaneacionService },
-        { provide: AuthService, useValue: mockAuthService }
+        { provide: AuthService, useValue: mockAuthService },
+        { provide: EvaluacionService, useValue: mockEvaluacionService },
+        { provide: AIInsightsService, useValue: mockAiInsightsService }
       ]
     }).compileComponents();
 
@@ -407,7 +425,7 @@ describe('DashboardComponent', () => {
     expect(porEstado.find(s => s.label === 'Reabierto')?.value).toBe(0);
   });
 
-  it('Scrum Master del proyecto: ve y puede usar las acciones Insights/Retrospectiva/Reporte', () => {
+  it('Scrum Master del proyecto: ve y puede usar las acciones Insights/Retrospectiva/Reporte/Reporte General', () => {
     mockAnalyticsService.getProjectOverview.and.returnValue(of(mockOverview));
     mockAnalyticsService.identifyRisks.and.returnValue(of(mockRisks));
     mockSprintService.getActivo.and.returnValue(of(mockSprint));
@@ -418,8 +436,11 @@ describe('DashboardComponent', () => {
 
     expect(component.esScrumMasterDelProyecto).toBeTrue();
 
+    // 4 acciones: Insights, Retrospectiva, Reporte (navegación) y Reporte
+    // General (descarga directa de un .docx, ver exportarReporteGeneral()).
     const botones = fixture.nativeElement.querySelectorAll('.exec-actions button');
-    expect(botones.length).toBe(3);
+    expect(botones.length).toBe(4);
+    expect(fixture.nativeElement.textContent).toContain('Reporte General');
   });
 
   it('Miembro normal: puede consultar todo el Dashboard pero NO ve las acciones de generación IA', () => {
@@ -450,5 +471,83 @@ describe('DashboardComponent', () => {
 
     expect(component2.state()).toBe('error');
     expect(component2.alertMsg()).toContain('No hay proyecto activo');
+  });
+
+  // Auditoría de reportes (Fase 4): Reporte General del proyecto — combina
+  // projectOverview (ya cargado), EvaluacionService.detalle() y
+  // AIInsightsService.getProjectInsights(), todos ya autorizados por
+  // proyecto en el backend. proyectoId siempre sale de this.proyecto (el
+  // proyecto activo cargado desde localStorage), nunca de un valor
+  // editable por el usuario — no hay superficie IDOR nueva.
+  describe('exportarReporteGeneral (Fase reportes)', () => {
+    const mockMetricasDetalle: MetricaEvaluacionDetalleDto[] = [{
+      variableId: 'v1', variableNombre: 'defectos', metricaNombre: 'Defectos por sprint',
+      categoria: 'Calidad', tipoAlcance: 'grupal', frecuenciaCaptura: 'por_sprint',
+      formulaTexto: null, registros: [], porSprint: [],
+      estadisticas: {
+        totalRegistros: 3, promedio: 5, minimo: 3, maximo: 7, primerValor: 7, ultimoValor: 3,
+        cambio: -4, cambioPct: -57.1, tendencia: 'descendente', pendiente: -2,
+        desviacionEstandar: 1.6, coeficienteVariacion: 32, variabilidad: 'media'
+      }
+    }];
+
+    const mockInsightsDashboard: AIInsight[] = [{
+      id: 'i1', proyectoId: 'proyecto-123', sprintId: null, type: 'TREND', severity: 'MEDIUM',
+      title: 'Calidad en mejora', description: 'Los defectos bajaron', evidence: [],
+      recommendation: null, confidence: 'HIGH', dismissed: false,
+      createdAt: '2026-08-01T00:00:00Z', dismissedAt: null
+    }];
+
+    beforeEach(() => {
+      mockAnalyticsService.getProjectOverview.and.returnValue(of(mockOverview));
+      mockAnalyticsService.identifyRisks.and.returnValue(of(mockRisks));
+      mockSprintService.getActivo.and.returnValue(of(mockSprint));
+      mockMemberService.listar.and.returnValue(of(mockMembers));
+      mockAnalyticsService.getSprintTrends.and.returnValue(of(mockTrends));
+    });
+
+    it('sin proyecto activo: no hace nada (no llama a los servicios)', () => {
+      component.proyecto = null;
+      component.exportarReporteGeneral();
+
+      expect(mockEvaluacionService.detalle).not.toHaveBeenCalled();
+      expect(mockAiInsightsService.getProjectInsights).not.toHaveBeenCalled();
+    });
+
+    it('con datos disponibles: genera el reporte sin lanzar excepción y muestra éxito', (done) => {
+      mockEvaluacionService.detalle.and.returnValue(of(mockMetricasDetalle));
+      mockAiInsightsService.getProjectInsights.and.returnValue(of(mockInsightsDashboard));
+
+      fixture.detectChanges();
+
+      setTimeout(() => {
+        expect(component.projectOverview).toBeTruthy();
+        expect(() => component.exportarReporteGeneral()).not.toThrow();
+
+        // La descarga real involucra import() dinámico de 'docx'/'file-saver'
+        // y Packer.toBlob() (serialización real del documento) — se le da
+        // margen generoso para resolver antes de comprobar el resultado.
+        setTimeout(() => {
+          expect(component.alertClass()).toBe('alert-success');
+          expect(component.alertMsg()).toContain('exportado correctamente');
+          done();
+        }, 1000);
+      }, 100);
+    }, 10000);
+
+    it('si falla la carga de métricas o insights: degrada a listas vacías en vez de romper la exportación', (done) => {
+      mockEvaluacionService.detalle.and.returnValue(throwError(() => new Error('falló')));
+      mockAiInsightsService.getProjectInsights.and.returnValue(throwError(() => new Error('falló')));
+
+      fixture.detectChanges();
+
+      setTimeout(() => {
+        expect(() => component.exportarReporteGeneral()).not.toThrow();
+        setTimeout(() => {
+          expect(component.alertClass()).toBe('alert-success');
+          done();
+        }, 1000);
+      }, 100);
+    }, 10000);
   });
 });

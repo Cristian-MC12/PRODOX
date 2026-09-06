@@ -11,8 +11,8 @@ import { ProyectoDto } from '../../models/proyecto.model';
 import { SprintDto } from '../../models/sprint.model';
 import { AISprintReport } from '../../models/ai-reports.model';
 import { LimpiarMarkdownIAPipe } from '../../core/limpiar-markdown-ia.pipe';
-import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType, Table, TableRow, TableCell, WidthType } from 'docx';
-import { saveAs } from 'file-saver';
+import { construirSeccionesReporteEjecutivo } from '../../core/reporte-ejecutivo.builder';
+import { generarYDescargarDocumento } from '../../core/word-report.util';
 
 @Component({
   selector: 'app-ai-report',
@@ -163,5 +163,34 @@ export class AIReportComponent implements OnInit {
     this.generationStep.set(step);
     this.alertMsg.set(step);
     this.alertClass.set('alert-info');
+  }
+
+  // ============ EXPORTACIÓN A WORD ============
+
+  /**
+   * Exporta el Reporte Ejecutivo ya generado a un documento Word (.docx),
+   * 100% en el navegador — mismo patrón e infraestructura ya usados por AI
+   * Insights, Retrospectiva y el Reporte General (ver word-report.util.ts).
+   * Solo serializa this.report, ya generado y autorizado por
+   * generateReport() (backend: validateScrumMasterAccess sobre el
+   * proyecto del sprint) — no hace ninguna llamada nueva a IA ni a ningún
+   * endpoint, no crea ni modifica ningún dato.
+   */
+  async exportarAWord(): Promise<void> {
+    if (!this.report) {
+      this.showAlert('No hay reporte generado para exportar', 'alert-warning');
+      return;
+    }
+
+    const secciones = construirSeccionesReporteEjecutivo(this.report, this.proyecto?.nombre || 'Sin nombre');
+    const fileName = `Reporte_Ejecutivo_Sprint${this.report.sprintNumero}_${this.proyecto?.nombre || 'Proyecto'}_${new Date().toISOString().split('T')[0]}.docx`;
+
+    const exportado = await generarYDescargarDocumento('Reporte Ejecutivo de Sprint', secciones, fileName);
+
+    if (exportado) {
+      this.showAlert('Reporte exportado correctamente', 'alert-success');
+    } else {
+      this.showAlert('La exportación a Word no está disponible en este momento.', 'alert-warning');
+    }
   }
 }

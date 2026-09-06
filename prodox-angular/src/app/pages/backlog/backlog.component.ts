@@ -10,6 +10,7 @@ import { ProyectoDto } from '../../models/proyecto.model';
 import { SprintDto } from '../../models/sprint.model';
 import { EstadoHistoria, HistoriaUsuarioDto, PrioridadHistoria } from '../../models/historia-usuario.model';
 import { ROL_PRODUCT_OWNER } from '../../models/project-role.model';
+import { ToastService } from '../../shared/toast/toast.service';
 
 type FiltroEstado = 'todas' | EstadoHistoria;
 
@@ -280,7 +281,8 @@ export class BacklogComponent implements OnInit {
 
   constructor(
     private historiaService: HistoriaUsuarioService,
-    private sprintService: SprintService
+    private sprintService: SprintService,
+    private toast: ToastService
   ) {}
 
   /** V39: el backlog se administra si el rol POR PROYECTO es product_owner
@@ -401,6 +403,11 @@ export class BacklogComponent implements OnInit {
     });
   }
 
+  // Corrección de UX (toasts): estas 3 acciones (prioridad/estado/sprint,
+  // ediciones rápidas desde el tablero) solo actualizaban this.historias en
+  // silencio al tener éxito — el único feedback existente era el banner de
+  // error. Se agrega un toast breve de éxito, sin tocar la lógica ni el
+  // manejo de errores existente.
   cambiarPrioridad(h: HistoriaUsuarioDto, prioridad: PrioridadHistoria): void {
     if (prioridad === h.prioridad) return;
     this.historiaService.cambiarPrioridad(h.id, prioridad).pipe(
@@ -409,7 +416,10 @@ export class BacklogComponent implements OnInit {
         return of(null);
       })
     ).subscribe(actualizada => {
-      if (actualizada) this.historias = this.historias.map(x => x.id === h.id ? actualizada : x);
+      if (actualizada) {
+        this.historias = this.historias.map(x => x.id === h.id ? actualizada : x);
+        this.toast.success('Prioridad actualizada correctamente.');
+      }
     });
   }
 
@@ -421,7 +431,10 @@ export class BacklogComponent implements OnInit {
         return of(null);
       })
     ).subscribe(actualizada => {
-      if (actualizada) this.historias = this.historias.map(x => x.id === h.id ? actualizada : x);
+      if (actualizada) {
+        this.historias = this.historias.map(x => x.id === h.id ? actualizada : x);
+        this.toast.success('Estado actualizado correctamente.');
+      }
     });
   }
 
@@ -434,7 +447,10 @@ export class BacklogComponent implements OnInit {
         return of(null);
       })
     ).subscribe(actualizada => {
-      if (actualizada) this.historias = this.historias.map(x => x.id === h.id ? actualizada : x);
+      if (actualizada) {
+        this.historias = this.historias.map(x => x.id === h.id ? actualizada : x);
+        this.toast.success('Sprint asignado correctamente.');
+      }
     });
   }
 

@@ -45,6 +45,15 @@
             <button class="btn btn-sm btn-primary" (click)="navigateToReport()">
               <i class="bi bi-file-earmark-bar-graph me-1"></i>Reporte
             </button>
+            <button class="btn btn-sm btn-outline-success" (click)="exportarReporteGeneral()"
+                    [disabled]="generandoReporteGeneral() || state() !== 'success'"
+                    title="Descargar reporte histórico completo del proyecto en Word">
+              @if (generandoReporteGeneral()) {
+                <span class="spinner-border spinner-border-sm me-1"></span>Generando...
+              } @else {
+                <i class="bi bi-file-earmark-word me-1"></i>Reporte General
+              }
+            </button>
           </div>
         }
       </div>

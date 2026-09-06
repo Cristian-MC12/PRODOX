@@ -42,7 +42,7 @@ describe('SprintsComponent', () => {
 
   async function crearComponente(): Promise<void> {
     const sprintServiceSpy = jasmine.createSpyObj('SprintService', [
-      'listar', 'cerrarEIniciarSiguiente', 'reabrir', 'finalizarReabierto'
+      'listar', 'cerrarEIniciarSiguiente', 'cerrarSprintActual', 'reabrir', 'finalizarReabierto'
     ]);
     const routerSpy = jasmine.createSpyObj('Router', ['navigate']);
     authServiceSpy = jasmine.createSpyObj('AuthService', ['logout']);
@@ -171,6 +171,70 @@ describe('SprintsComponent', () => {
       component.confirmarAccion();
 
       expect(sprintService.reabrir).not.toHaveBeenCalled();
+    });
+  });
+
+  // Corrección de auditoría (cierre de último sprint): antes el panel
+  // "Finalizar Sprint N e iniciar Sprint N+1" se mostraba siempre que había
+  // un sprint en ejecución, sin importar si en verdad existía un sprint
+  // pendiente al que avanzar — sobre el ÚLTIMO sprint del proyecto (ningún
+  // pendiente) ese flujo llama a cerrarEIniciarSiguiente(), que el backend
+  // rechaza con "No hay sprints pendientes." (ver SprintServiceTest), sin
+  // cerrar nada. Ahora, sin sprint pendiente, se muestra en su lugar un
+  // panel que cierra el sprint actual con cerrarSprintActual() (mismo
+  // método ya usado por el botón de la fila de la tabla, que sí maneja
+  // correctamente la ausencia de sprint siguiente).
+  describe('Scrum Master - último sprint del proyecto (sin sprint pendiente)', () => {
+    beforeEach(async () => {
+      await crearComponente();
+      sprintService.listar.and.returnValue(of([
+        sprint(1, 'finalizado'), sprint(2, 'en_ejecucion')
+      ]));
+      fixture.detectChanges();
+    });
+
+    it('haySprintPendiente es false cuando ningún sprint está pendiente', () => {
+      expect(component.haySprintPendiente).toBeFalse();
+    });
+
+    it('NO muestra el panel "Finalizar Sprint N e iniciar Sprint N+1" (no hay sprint pendiente al que avanzar)', () => {
+      const compiled = fixture.nativeElement;
+      expect(compiled.textContent).not.toContain('Finalizar Sprint 2 e iniciar Sprint 3');
+    });
+
+    it('muestra en su lugar el panel para cerrar el último sprint sin iniciar uno nuevo', () => {
+      const compiled = fixture.nativeElement;
+      expect(compiled.textContent).toContain('Cerrar Sprint 2 (último sprint del proyecto)');
+    });
+
+    it('el botón de ese panel cierra correctamente el último sprint usando cerrarSprintActual', () => {
+      const cerrado = sprint(2, 'finalizado');
+      sprintService.cerrarSprintActual.and.returnValue(of(cerrado));
+      sprintService.listar.and.returnValue(of([sprint(1, 'finalizado'), cerrado]));
+
+      component.pedirCerrarActual(sprint(2, 'en_ejecucion'));
+      component.confirmarAccion();
+
+      expect(sprintService.cerrarSprintActual).toHaveBeenCalledWith('sprint-2');
+      expect(sprintService.cerrarEIniciarSiguiente).not.toHaveBeenCalled();
+      expect(component.accionPendiente).toBeNull();
+    });
+  });
+
+  // Regresión: con un sprint pendiente disponible, el flujo "finalizar e
+  // iniciar siguiente" existente se mantiene sin cambios (ya cubierto arriba
+  // por 've la acción "Finalizar Sprint N e iniciar Sprint N+1"...' y
+  // 'confirmarAccion (cerrar): llama a cerrarEIniciarSiguiente...' — este
+  // test añade la verificación explícita de haySprintPendiente=true).
+  describe('Scrum Master - sprint con siguiente pendiente disponible', () => {
+    it('haySprintPendiente es true cuando hay un sprint pendiente', async () => {
+      await crearComponente();
+      sprintService.listar.and.returnValue(of([
+        sprint(1, 'finalizado'), sprint(2, 'en_ejecucion'), sprint(3, 'pendiente')
+      ]));
+      fixture.detectChanges();
+
+      expect(component.haySprintPendiente).toBeTrue();
     });
   });
 

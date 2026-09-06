@@ -274,4 +274,30 @@ describe('AIRetrospectiveComponent', () => {
 
     expect(reportService.generateRetrospective).not.toHaveBeenCalled();
   });
+
+  // Auditoría de reportes (Fase 3): Retrospectiva no tenía ninguna forma de
+  // exportación — PRODOX tampoco la persiste (se genera bajo demanda, ver
+  // AIRetrospectiveService), así que el .docx es la única forma de
+  // conservarla. No aplica un caso "proyecto no autorizado": exportarAWord()
+  // no hace ninguna llamada HTTP nueva, solo serializa this.retrospective,
+  // ya autorizado por generateRetrospective() (backend: validateScrumMasterAccess).
+  describe('exportarAWord (FASE reportes)', () => {
+    it('sin retrospectiva generada: muestra advertencia y no intenta generar el documento', async () => {
+      component.retrospective = null;
+
+      await component.exportarAWord();
+
+      expect(component.alertMsg()).toContain('No hay retrospectiva generada');
+      expect(component.alertClass()).toBe('alert-warning');
+    });
+
+    it('con retrospectiva generada: genera y descarga el documento Word sin lanzar excepción', async () => {
+      component.retrospective = mockRetro;
+
+      await expectAsync(component.exportarAWord()).toBeResolved();
+
+      expect(component.alertClass()).toBe('alert-success');
+      expect(component.alertMsg()).toContain('exportada correctamente');
+    });
+  });
 });

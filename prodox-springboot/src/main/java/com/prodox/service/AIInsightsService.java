@@ -99,14 +99,24 @@ public class AIInsightsService {
                 .filter(s -> "finalizado".equals(s.getEstado()))
                 .toList();
 
-        if (sprintsFinalizados.isEmpty()) {
-            log.info("Proyecto {} no tiene sprints finalizados, no se pueden generar insights", proyectoId);
-            return new GenerateInsightsResultDto(List.of(), "SIN_DATOS", 0, 0, 0, List.of());
-        }
-
+        // Corrección de auditoría (AI Insights): generar insights requiere como
+        // mínimo 2 sprints finalizados — con 0 o 1 sprint finalizado no hay
+        // suficiente historial para ninguna de las señales que este servicio
+        // detecta (tendencias/anomalías/comparaciones necesitan al menos 2
+        // puntos, ver AgileAnalyticsService). Antes esto no se rechazaba: con 0
+        // se devolvía 200 "SIN_DATOS" y con 1 se llamaba a Gemini igual sin
+        // ninguna señal real que interpretar. Ahora se rechaza ANTES de llamar
+        // a Gemini, con el mismo mecanismo de error de negocio ya usado en el
+        // resto del backend (IllegalStateException -> 409 CONFLICT, ver
+        // GlobalExceptionHandler), sin inventar una excepción nueva. Tener 1
+        // solo sprint no es un error del proyecto — solo significa que todavía
+        // no existe suficiente historial.
         if (sprintsFinalizados.size() < 2) {
-            log.info("Proyecto {} tiene menos de 2 sprints finalizados, insights limitados", proyectoId);
-            // Aún podemos generar insights básicos del sprint actual
+            log.info("Proyecto {} tiene {} sprint(s) finalizado(s), insuficiente para generar insights (mínimo 2)",
+                    proyectoId, sprintsFinalizados.size());
+            throw new IllegalStateException(
+                    "Se requieren al menos 2 sprints finalizados para generar Insights. Actualmente hay "
+                            + sprintsFinalizados.size() + ".");
         }
 
         List<AIInsight> todosNuevos = new ArrayList<>();

@@ -62,30 +62,61 @@ type AccionSprint = 'cerrar' | 'cerrar_actual' | 'reabrir' | 'finalizar';
         </div>
 
         <!-- Finalizar sprint en ejecución e iniciar el siguiente (solo SM) -->
+        <!-- Corrección de auditoría (cierre de último sprint): este panel usa
+             cerrarEIniciarSiguiente(), que EXIGE un sprint pendiente para
+             iniciar — sobre el último sprint del proyecto (sin ningún
+             pendiente) esa llamada falla con "No hay sprints pendientes." y
+             no cierra nada (comportamiento intencional y probado en
+             SprintServiceTest). Antes este panel se mostraba igual en ese
+             caso, invitando a una acción que iba a fallar. Ahora se muestra
+             SOLO si hay(Sprint) pendiente(s); si no, se ofrece en su lugar
+             cerrar el sprint actual sin iniciar uno nuevo (mismo botón/acción
+             ya usado en la fila de la tabla, cerrarSprintActual(), que sí
+             maneja correctamente la ausencia de un sprint siguiente). -->
         @if (esScrumMaster && sprintActivo) {
-          <div class="card mb-4">
-            <div class="card-header fw-semibold small">
-              <i class="bi bi-arrow-right-circle me-1 text-warning"></i>
-              Finalizar Sprint {{ sprintActivo.numero }} e iniciar Sprint {{ sprintActivo.numero + 1 }}
-            </div>
-            <div class="card-body">
-              <div class="mb-3">
-                <label class="form-label small fw-semibold">
-                  Sprint Goal del Sprint {{ sprintActivo.numero + 1 }}
-                  <span class="text-danger">*</span>
-                </label>
-                <textarea class="form-control form-control-sm" rows="2"
-                          placeholder="¿Qué se quiere lograr en el siguiente sprint?"
-                          [(ngModel)]="nuevoSprintGoal"></textarea>
-              </div>
-              <button class="btn btn-warning btn-sm"
-                      [disabled]="!nuevoSprintGoal.trim() || procesando"
-                      (click)="pedirCerrarSiguiente()">
-                <i class="bi bi-arrow-clockwise me-1"></i>
+          @if (haySprintPendiente) {
+            <div class="card mb-4">
+              <div class="card-header fw-semibold small">
+                <i class="bi bi-arrow-right-circle me-1 text-warning"></i>
                 Finalizar Sprint {{ sprintActivo.numero }} e iniciar Sprint {{ sprintActivo.numero + 1 }}
-              </button>
+              </div>
+              <div class="card-body">
+                <div class="mb-3">
+                  <label class="form-label small fw-semibold">
+                    Sprint Goal del Sprint {{ sprintActivo.numero + 1 }}
+                    <span class="text-danger">*</span>
+                  </label>
+                  <textarea class="form-control form-control-sm" rows="2"
+                            placeholder="¿Qué se quiere lograr en el siguiente sprint?"
+                            [(ngModel)]="nuevoSprintGoal"></textarea>
+                </div>
+                <button class="btn btn-warning btn-sm"
+                        [disabled]="!nuevoSprintGoal.trim() || procesando"
+                        (click)="pedirCerrarSiguiente()">
+                  <i class="bi bi-arrow-clockwise me-1"></i>
+                  Finalizar Sprint {{ sprintActivo.numero }} e iniciar Sprint {{ sprintActivo.numero + 1 }}
+                </button>
+              </div>
             </div>
-          </div>
+          } @else {
+            <div class="card mb-4">
+              <div class="card-header fw-semibold small">
+                <i class="bi bi-flag-fill me-1 text-warning"></i>
+                Cerrar Sprint {{ sprintActivo.numero }} (último sprint del proyecto)
+              </div>
+              <div class="card-body">
+                <p class="small text-muted mb-3">
+                  No hay más sprints pendientes por iniciar. Podés cerrar este sprint sin crear uno nuevo.
+                </p>
+                <button class="btn btn-warning btn-sm"
+                        [disabled]="procesando"
+                        (click)="pedirCerrarActual(sprintActivo)">
+                  <i class="bi bi-check2-circle me-1"></i>
+                  Cerrar Sprint {{ sprintActivo.numero }}
+                </button>
+              </div>
+            </div>
+          }
         }
 
         <!-- Historial de sprints -->
@@ -233,6 +264,20 @@ export class SprintsComponent implements OnInit {
    */
   get esScrumMaster(): boolean {
     return this.proyecto?.scrumMasterEmail === this.auth.currentUser()?.email;
+  }
+
+  /**
+   * Corrección de auditoría (cierre de último sprint): refleja el mismo
+   * criterio que el backend usa para decidir si "Finalizar e iniciar
+   * siguiente" (cerrarEIniciarSiguiente) puede completarse — ese endpoint
+   * busca el sprint pendiente de menor número
+   * (findFirstByProyectoIdAndEstadoOrderByNumeroAsc) y falla si no hay
+   * ninguno. Con esta misma condición en el frontend, el panel de "iniciar
+   * siguiente" solo se ofrece cuando en verdad hay un sprint pendiente al
+   * que avanzar.
+   */
+  get haySprintPendiente(): boolean {
+    return this.sprints.some(s => s.estado === 'pendiente');
   }
 
   ngOnInit(): void {

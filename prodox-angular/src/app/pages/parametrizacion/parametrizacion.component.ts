@@ -12,6 +12,7 @@ import { MetricRankingService } from '../../services/metric-ranking.service';
 import { MetricaSeleccionada, Parametrizacion, PropuestaGenAI } from '../../models/seleccion.model';
 import { MetricParametrizacionBase, TopParametrizacion } from '../../models/metric-ranking.model';
 import { environment } from '../../../environments/environment';
+import { ToastService } from '../../shared/toast/toast.service';
 
 @Component({
   selector: 'app-parametrizacion',
@@ -653,7 +654,8 @@ export class ParametrizacionComponent implements OnInit {
     private auth: AuthService,
     private seleccionService: SeleccionService,
     private rankingService: MetricRankingService,
-    private http: HttpClient
+    private http: HttpClient,
+    private toast: ToastService
   ) {}
 
   /**
@@ -1144,9 +1146,12 @@ export class ParametrizacionComponent implements OnInit {
     
     this.http.post<any>(`${this.apiBase}/parametrizacion/guardar-propuesta`, request)
       .pipe(catchError((err) => {
-        this.errorGuardar = err.status === 403 
+        this.errorGuardar = err.status === 403
           ? 'No tienes permiso para parametrizar en este proyecto'
           : 'Error al guardar la propuesta';
+        // Corrección de auditoría (toasts): errorGuardar ya se muestra inline
+        // (ver template, @if (errorGuardar)) — no duplicar el mismo mensaje
+        // como toast.
         this.guardando = false;
         return of(null);
       }))
@@ -1160,6 +1165,9 @@ export class ParametrizacionComponent implements OnInit {
           // fuente de verdad para el momento de aprobar.
           this.propuestaPendiente = parametrizacion;
           this.guardando = false;
+          // Corrección de UX (toasts): guardar la propuesta antes no daba
+          // ningún feedback de éxito, solo actualizaba el estado en silencio.
+          this.toast.success('Propuesta guardada correctamente.');
 
           // Scroll al área de aprobación
           setTimeout(() => {
@@ -1216,11 +1224,14 @@ export class ParametrizacionComponent implements OnInit {
     
     this.http.post<any>(`${this.apiBase}/parametrizacion/${this.parametrizacionId}/aprobar`, request)
       .pipe(catchError((err) => {
-        this.errorAprobar = err.status === 403 
+        this.errorAprobar = err.status === 403
           ? 'No tienes permiso para aprobar parametrizaciones en este proyecto'
           : err.status === 404
           ? 'parametrización no encontrada'
           : 'Error al aprobar la parametrización';
+        // Corrección de auditoría (toasts): errorAprobar ya se muestra inline
+        // (ver template, @if (errorAprobar)) — no duplicar el mismo mensaje
+        // como toast.
         this.aprobando = false;
         return of(null);
       }))
@@ -1229,7 +1240,10 @@ export class ParametrizacionComponent implements OnInit {
           this.estadoActual = parametrizacion.status;
           this.versionActual = parametrizacion.version;
           this.aprobando = false;
-          
+          // Corrección de UX (toasts): aprobar antes no daba ningún feedback
+          // de éxito, solo actualizaba el estado en silencio.
+          this.toast.success('Parametrización aprobada correctamente.');
+
           // Guardar también en localStorage para compatibilidad con Fase 16.5
           if (this.metrica) {
             this.seleccionService.parametrizar(this.metrica.id, {

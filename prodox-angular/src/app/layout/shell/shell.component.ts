@@ -3,6 +3,7 @@ import { Component, Input, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { SidebarComponent } from '../sidebar/sidebar.component';
 import { NotificacionesBellComponent } from '../notificaciones/notificaciones-bell.component';
+import { ToastContainerComponent } from '../../shared/toast/toast-container.component';
 import { SprintService } from '../../services/sprint.service';
 import { ProyectoDto } from '../../models/proyecto.model';
 import { SprintDto } from '../../models/sprint.model';
@@ -12,7 +13,7 @@ import { catchError, of } from 'rxjs';
 @Component({
   selector: 'app-shell',
   standalone: true,
-  imports: [CommonModule, SidebarComponent, NotificacionesBellComponent],
+  imports: [CommonModule, SidebarComponent, NotificacionesBellComponent, ToastContainerComponent],
   template: `
     <div class="d-flex" [class.sidebar-collapsed]="sidebar.collapsed()">
       <!-- Overlay oscuro para móvil -->
@@ -75,6 +76,8 @@ import { catchError, of } from 'rxjs';
         </main>
       </div>
     </div>
+
+    <app-toast-container></app-toast-container>
 
     <!-- AI Copilot deshabilitado (reorganización de navegación): el Copiloto
          no se usa en esta versión y sus preguntas abiertas podían generar

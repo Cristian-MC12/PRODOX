@@ -7,14 +7,28 @@ import { NO_ERRORS_SCHEMA } from '@angular/core';
 import { of, throwError } from 'rxjs';
 import { AIInsightsComponent } from './ai-insights.component';
 import { AIInsightsService } from '../../services/ai-insights.service';
+import { SprintService } from '../../services/sprint.service';
 import { AIInsight, GenerateInsightsResult } from '../../models/ai-insights.model';
 import { ProyectoDto } from '../../models/proyecto.model';
+import { SprintDto } from '../../models/sprint.model';
+import { ToastService } from '../../shared/toast/toast.service';
 
 describe('AIInsightsComponent', () => {
   let component: AIInsightsComponent;
   let fixture: ComponentFixture<AIInsightsComponent>;
   let insightsService: jasmine.SpyObj<AIInsightsService>;
+  let sprintService: jasmine.SpyObj<SprintService>;
+  let toastService: jasmine.SpyObj<ToastService>;
   let router: Router;
+
+  function sprint(numero: number, estado: SprintDto['estado']): SprintDto {
+    return {
+      id: `sprint-${numero}`, proyectoId: 'proyecto-123', proyectoNombre: 'Test Project', metodo: 'scrum',
+      timeBoxSemanas: 2, numero, sprintGoal: `Sprint ${numero}`, estado,
+      fechaInicio: '2026-07-01', fechaFin: '2026-07-14', cerradoPor: null, cerradoAt: null,
+      createdAt: '2026-07-01T00:00:00Z'
+    };
+  }
 
   const mockProyecto: ProyectoDto = {
     id: 'proyecto-123',
@@ -61,22 +75,43 @@ describe('AIInsightsComponent', () => {
   ];
 
   beforeEach(async () => {
-    const insightsServiceSpy = jasmine.createSpyObj('AIInsightsService', 
+    const insightsServiceSpy = jasmine.createSpyObj('AIInsightsService',
       ['getProjectInsights', 'generateInsights', 'dismissInsight']);
+    // getActivo también lo usa ShellComponent (renderizado de verdad en este
+    // spec, que usa NO_ERRORS_SCHEMA en vez de mockear <app-shell>) — sin
+    // configurarlo, el spy sin ese método definido rompe ShellComponent.ngOnInit
+    // con "getActivo is not a function" (misma clase de problema que
+    // ActivityFeedService con EvaluacionService/AIInsightsService).
+    const sprintServiceSpy = jasmine.createSpyObj('SprintService', ['listar', 'getActivo']);
+    // ToastContainerComponent (renderizado de verdad dentro del ShellComponent
+    // real que este spec monta) lee toastService.toasts() como una signal —
+    // sin un valor, "toasts is not a function" rompe cualquier detectChanges().
+    const toastServiceSpy = jasmine.createSpyObj('ToastService', ['success', 'error', 'warning', 'info']);
+    toastServiceSpy.toasts = jasmine.createSpy('toasts').and.returnValue([]);
+
+    // Por defecto, 2 sprints finalizados (mínimo exacto que permite generar)
+    // — así las pruebas existentes, que no ejercitan la regla de mínimo de
+    // sprints, siguen viendo el botón habilitado sin cambios.
+    sprintServiceSpy.listar.and.returnValue(of([sprint(1, 'finalizado'), sprint(2, 'finalizado')]));
+    sprintServiceSpy.getActivo.and.returnValue(of(null));
 
     await TestBed.configureTestingModule({
       imports: [
-        AIInsightsComponent, 
+        AIInsightsComponent,
         HttpClientTestingModule,
         RouterTestingModule
       ],
       providers: [
-        { provide: AIInsightsService, useValue: insightsServiceSpy }
+        { provide: AIInsightsService, useValue: insightsServiceSpy },
+        { provide: SprintService, useValue: sprintServiceSpy },
+        { provide: ToastService, useValue: toastServiceSpy }
       ],
       schemas: [NO_ERRORS_SCHEMA] // Ignora componentes hijos como app-shell
     }).compileComponents();
 
     insightsService = TestBed.inject(AIInsightsService) as jasmine.SpyObj<AIInsightsService>;
+    sprintService = TestBed.inject(SprintService) as jasmine.SpyObj<SprintService>;
+    toastService = TestBed.inject(ToastService) as jasmine.SpyObj<ToastService>;
     router = TestBed.inject(Router);
 
     fixture = TestBed.createComponent(AIInsightsComponent);
@@ -175,6 +210,10 @@ describe('AIInsightsComponent', () => {
   describe('generateInsights', () => {
     beforeEach(() => {
       component.proyecto = mockProyecto;
+      // Regla de mínimo 2 sprints finalizados: estos tests ejercitan el flujo
+      // de generación en sí (no la regla, cubierta aparte más abajo), así que
+      // se seedea directamente con 2 finalizados (el mínimo que la permite).
+      component.sprints = [sprint(1, 'finalizado'), sprint(2, 'finalizado')];
       // FASE 23: tras generar, el componente recarga la lista completa
       // (loadInsights()) en vez de reemplazarla solo con la tanda nueva.
       insightsService.getProjectInsights.and.returnValue(of(mockInsights));
@@ -286,6 +325,34 @@ describe('AIInsightsComponent', () => {
       expect(component.alertMsg()).toContain('Error al generar insights');
     });
 
+    // Corrección de auditoría (regla de mínimo 2 sprints finalizados): el
+    // backend rechaza con 409 CONFLICT cuando hay menos de 2 sprints
+    // finalizados (ver AIInsightsService.generateInsights). El frontend
+    // debería impedir llegar a este caso (botón deshabilitado), pero se
+    // maneja igual por si los datos de sprints quedaron desactualizados.
+    it('should handle 409 error (backend rejects: not enough finished sprints) with the exact backend message', () => {
+      insightsService.generateInsights.and.returnValue(
+        throwError(() => ({ status: 409, error: { error: 'Se requieren al menos 2 sprints finalizados para generar Insights. Actualmente hay 1.' } }))
+      );
+
+      component.generateInsights();
+
+      expect(component.generating()).toBe(false);
+      expect(component.alertClass()).toBe('alert-warning');
+      expect(component.alertMsg()).toContain('al menos 2 sprints finalizados');
+      expect(toastService.error).toHaveBeenCalledWith('No se pudieron generar los Insights.');
+    });
+
+    it('should show a success toast in addition to the inline banner on COMPLETE', fakeAsync(() => {
+      insightsService.generateInsights.and.returnValue(of(resultado({ insights: mockInsights, senalesNuevas: 1 })));
+
+      component.generateInsights();
+      tick(500);
+
+      expect(toastService.success).toHaveBeenCalledWith('Insights generados correctamente.');
+      flush();
+    }));
+
     it('should prevent double generation', () => {
       insightsService.generateInsights.and.returnValue(of(resultado({ insights: mockInsights })));
       component.generating.set(true);
@@ -293,6 +360,98 @@ describe('AIInsightsComponent', () => {
       component.generateInsights();
 
       expect(insightsService.generateInsights).not.toHaveBeenCalled();
+    });
+  });
+
+  // Corrección de auditoría: regla de negocio "AI Insights requiere como
+  // mínimo 2 sprints finalizados" — replicada en el frontend (ver
+  // AIInsightsComponent.puedeGenerarInsights) con el MISMO criterio que
+  // valida el backend (AIInsightsService.generateInsights: estado="finalizado",
+  // nunca en_ejecucion/pendiente/reabierto).
+  describe('regla de mínimo 2 sprints finalizados', () => {
+    beforeEach(() => {
+      component.proyecto = mockProyecto;
+    });
+
+    it('0 sprints finalizados: puedeGenerarInsights es false y el mensaje no menciona un conteo parcial', () => {
+      component.sprints = [];
+      expect(component.sprintsFinalizadosCount).toBe(0);
+      expect(component.puedeGenerarInsights).toBeFalse();
+      expect(component.getMensajeRequisitoInsights()).toBe(
+        'No puedes generar Insights todavía. Se requieren al menos 2 sprints finalizados.'
+      );
+    });
+
+    it('1 sprint finalizado: puedeGenerarInsights es false y el mensaje indica el conteo actual', () => {
+      component.sprints = [sprint(1, 'finalizado')];
+      expect(component.sprintsFinalizadosCount).toBe(1);
+      expect(component.puedeGenerarInsights).toBeFalse();
+      expect(component.getMensajeRequisitoInsights()).toBe(
+        'No puedes generar Insights todavía. Se requieren al menos 2 sprints finalizados. Actualmente tienes 1 sprint finalizado.'
+      );
+    });
+
+    it('2 sprints finalizados: puedeGenerarInsights es true y no hay mensaje de bloqueo', () => {
+      component.sprints = [sprint(1, 'finalizado'), sprint(2, 'finalizado')];
+      expect(component.sprintsFinalizadosCount).toBe(2);
+      expect(component.puedeGenerarInsights).toBeTrue();
+      expect(component.getMensajeRequisitoInsights()).toBe('');
+    });
+
+    it('3 o más sprints finalizados: puedeGenerarInsights sigue siendo true', () => {
+      component.sprints = [sprint(1, 'finalizado'), sprint(2, 'finalizado'), sprint(3, 'finalizado')];
+      expect(component.sprintsFinalizadosCount).toBe(3);
+      expect(component.puedeGenerarInsights).toBeTrue();
+    });
+
+    it('sprint en_ejecucion NO cuenta para el mínimo', () => {
+      component.sprints = [sprint(1, 'finalizado'), sprint(2, 'en_ejecucion')];
+      expect(component.sprintsFinalizadosCount).toBe(1);
+      expect(component.puedeGenerarInsights).toBeFalse();
+    });
+
+    it('sprint pendiente NO cuenta para el mínimo', () => {
+      component.sprints = [sprint(1, 'finalizado'), sprint(2, 'pendiente')];
+      expect(component.sprintsFinalizadosCount).toBe(1);
+      expect(component.puedeGenerarInsights).toBeFalse();
+    });
+
+    it('getProgresoSprintsLabel refleja el conteo real sobre el mínimo requerido', () => {
+      component.sprints = [sprint(1, 'finalizado')];
+      expect(component.getProgresoSprintsLabel()).toBe('Progreso: 1 / 2 sprints finalizados');
+    });
+
+    it('generateInsights(): con menos de 2 sprints finalizados, NO llama al servicio de IA y muestra el motivo', () => {
+      component.sprints = [sprint(1, 'finalizado')];
+
+      component.generateInsights();
+
+      expect(insightsService.generateInsights).not.toHaveBeenCalled();
+      expect(component.alertClass()).toBe('alert-warning');
+      expect(component.alertMsg()).toContain('al menos 2 sprints finalizados');
+    });
+
+    it('generateInsights(): con 2 sprints finalizados, sí llama al servicio de IA normalmente', () => {
+      component.sprints = [sprint(1, 'finalizado'), sprint(2, 'finalizado')];
+      insightsService.generateInsights.and.returnValue(of({
+        insights: [], status: 'SIN_SENALES', senalesDetectadas: 0, senalesNuevas: 0,
+        senalesOmitidasPorDuplicado: 0, errores: []
+      }));
+
+      component.generateInsights();
+
+      expect(insightsService.generateInsights).toHaveBeenCalledWith('proyecto-123');
+    });
+
+    it('ngOnInit carga los sprints del proyecto activo (loadSprints)', () => {
+      spyOn(localStorage, 'getItem').and.returnValue(JSON.stringify(mockProyecto));
+      insightsService.getProjectInsights.and.returnValue(of([]));
+      sprintService.listar.and.returnValue(of([sprint(1, 'finalizado'), sprint(2, 'finalizado')]));
+
+      component.ngOnInit();
+
+      expect(sprintService.listar).toHaveBeenCalledWith('proyecto-123');
+      expect(component.sprintsFinalizadosCount).toBe(2);
     });
   });
 
@@ -413,6 +572,37 @@ describe('AIInsightsComponent', () => {
 
       const sorted = component.filteredInsights;
       expect(sorted[0].severity).toBe('CRITICAL');
+    });
+  });
+
+  // Auditoría de reportes: exportarAWord() no tenía cobertura de tests —
+  // "no asumas que funciona porque el botón existe". Estos tests ejecutan
+  // el código real (import dinámico de 'docx'/'file-saver', ambos
+  // dependencias reales del proyecto, ver package.json) para confirmar que
+  // la exportación efectivamente genera un documento y dispara la descarga,
+  // sin mockear la librería. No aplica un caso "proyecto no autorizado": a
+  // diferencia de generateInsights()/dismissInsight(), exportarAWord() no
+  // hace ninguna llamada HTTP nueva — solo serializa this.insights, que ya
+  // llegó autorizado por proyecto vía getProjectInsights() (AIInsightsService,
+  // ver validateProjectAccess en el backend).
+  describe('exportarAWord (FASE reportes)', () => {
+    it('sin insights: muestra advertencia y no intenta generar el documento', async () => {
+      component.insights = [];
+
+      await component.exportarAWord();
+
+      expect(component.alertMsg()).toContain('No hay insights para exportar');
+      expect(component.alertClass()).toBe('alert-warning');
+    });
+
+    it('con insights: genera y descarga el documento Word sin lanzar excepción', async () => {
+      component.proyecto = mockProyecto;
+      component.insights = [...mockInsights];
+
+      await expectAsync(component.exportarAWord()).toBeResolved();
+
+      expect(component.alertClass()).toBe('alert-success');
+      expect(component.alertMsg()).toContain('exportado correctamente');
     });
   });
 });

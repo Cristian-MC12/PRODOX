@@ -291,8 +291,7 @@ public class EvaluacionService {
         if (n >= 3 && promedio.compareTo(BigDecimal.ZERO) != 0) {
             coefVariacion = desviacion.divide(promedio.abs(), MathContext.DECIMAL64)
                     .multiply(BigDecimal.valueOf(100)).setScale(1, RoundingMode.HALF_UP);
-            double cv = coefVariacion.doubleValue();
-            variabilidad = cv < 15 ? "baja" : (cv <= 35 ? "media" : "alta");
+            variabilidad = clasificarVariabilidadPorCV(coefVariacion.doubleValue());
         }
 
         return new VariableEstadisticasDto(
@@ -301,6 +300,20 @@ public class EvaluacionService {
                 tendencia, pendiente != null ? pendiente.setScale(4, RoundingMode.HALF_UP) : null,
                 desviacion, coefVariacion, variabilidad
         );
+    }
+
+    /**
+     * Corrección de auditoría (variabilidad): clasifica un coeficiente de
+     * variación (CV%) ya calculado en "baja" (&lt;15%), "media" (15-35%) o
+     * "alta" (&gt;35%) — es el MISMO criterio que este método ya usaba
+     * inline para variables individuales, extraído aquí (sin cambiar los
+     * umbrales ni el comportamiento existente) para que otros consumidores
+     * del dominio (AgileAnalyticsService.identifyRisks(), HIGH_VARIABILITY)
+     * apliquen el mismo criterio relativo a la escala de la métrica, en vez
+     * de un umbral absoluto de desviación estándar sin relativizar.
+     */
+    static String clasificarVariabilidadPorCV(double coefVariacionPorcentaje) {
+        return coefVariacionPorcentaje < 15 ? "baja" : (coefVariacionPorcentaje <= 35 ? "media" : "alta");
     }
 
     /** Pendiente de la recta de regresión lineal (mínimos cuadrados) con X = índice 0..n-1. */

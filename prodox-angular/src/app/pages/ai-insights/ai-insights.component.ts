@@ -6,9 +6,16 @@ import { Router } from '@angular/router';
 import { catchError, of } from 'rxjs';
 import { ShellComponent } from '../../layout/shell/shell.component';
 import { AIInsightsService } from '../../services/ai-insights.service';
+import { SprintService } from '../../services/sprint.service';
 import { ProyectoDto } from '../../models/proyecto.model';
 import { AIInsight, InsightEvidence } from '../../models/ai-insights.model';
+import { SprintDto } from '../../models/sprint.model';
 import { LimpiarMarkdownIAPipe } from '../../core/limpiar-markdown-ia.pipe';
+import { ToastService } from '../../shared/toast/toast.service';
+
+/** Regla de negocio: AI Insights requiere como mínimo 2 sprints finalizados
+ *  (ver AIInsightsService.generateInsights en el backend — misma constante). */
+const MINIMO_SPRINTS_FINALIZADOS_PARA_INSIGHTS = 2;
 
 @Component({
   selector: 'app-ai-insights',
@@ -21,7 +28,8 @@ export class AIInsightsComponent implements OnInit {
 
   proyecto: ProyectoDto | null = null;
   insights: AIInsight[] = [];
-  
+  sprints: SprintDto[] = [];
+
   loading = signal(false);
   generating = signal(false);
   alertMsg = signal('');
@@ -42,16 +50,60 @@ export class AIInsightsComponent implements OnInit {
 
   constructor(
     public router: Router,
-    private insightsService: AIInsightsService
+    private insightsService: AIInsightsService,
+    private sprintService: SprintService,
+    private toast: ToastService
   ) {}
 
   ngOnInit(): void {
     const raw = localStorage.getItem('mpdia_proyecto_activo');
     this.proyecto = raw ? JSON.parse(raw) : null;
-    
+
     if (this.proyecto) {
       this.loadInsights();
+      this.loadSprints();
     }
+  }
+
+  // ============ REGLA: MÍNIMO 2 SPRINTS FINALIZADOS ============
+
+  /**
+   * Corrección de auditoría (AI Insights): antes el botón "Generar Insights"
+   * siempre estaba habilitado, sin importar cuántos sprints finalizados
+   * tuviera el proyecto — con 0 o 1 sprint, la llamada igual disparaba
+   * Gemini (o, con 0, ni eso) para terminar devolviendo "sin datos"/"sin
+   * señales", una experiencia confusa. Ahora se calcula localmente la misma
+   * condición que el backend valida (AIInsightsService.generateInsights:
+   * mínimo 2 sprints con estado="finalizado", nunca en_ejecucion/pendiente),
+   * y el botón se deshabilita ANTES de intentar la llamada, mostrando el
+   * motivo exacto en vez de ocultar la función.
+   */
+  private loadSprints(): void {
+    if (!this.proyecto) return;
+    this.sprintService.listar(this.proyecto.id)
+      .pipe(catchError(() => of([])))
+      .subscribe(data => this.sprints = data);
+  }
+
+  get sprintsFinalizadosCount(): number {
+    return this.sprints.filter(s => s.estado === 'finalizado').length;
+  }
+
+  get puedeGenerarInsights(): boolean {
+    return this.sprintsFinalizadosCount >= MINIMO_SPRINTS_FINALIZADOS_PARA_INSIGHTS;
+  }
+
+  /** Mensaje claro del motivo por el que la generación está bloqueada, o '' si ya se puede generar. */
+  getMensajeRequisitoInsights(): string {
+    if (this.puedeGenerarInsights) return '';
+    const count = this.sprintsFinalizadosCount;
+    const base = `No puedes generar Insights todavía. Se requieren al menos ${MINIMO_SPRINTS_FINALIZADOS_PARA_INSIGHTS} sprints finalizados.`;
+    if (count === 0) return base;
+    return `${base} Actualmente tienes ${count} sprint finalizado.`;
+  }
+
+  getProgresoSprintsLabel(): string {
+    return `Progreso: ${this.sprintsFinalizadosCount} / ${MINIMO_SPRINTS_FINALIZADOS_PARA_INSIGHTS} sprints finalizados`;
   }
 
   loadInsights(): void {
@@ -76,6 +128,10 @@ export class AIInsightsComponent implements OnInit {
 
   generateInsights(): void {
     if (!this.proyecto || this.generating()) return;
+    if (!this.puedeGenerarInsights) {
+      this.showAlert(this.getMensajeRequisitoInsights(), 'alert-warning');
+      return;
+    }
 
     this.generating.set(true);
     this.updateGenerationProgress('Preparando análisis...');
@@ -95,9 +151,18 @@ export class AIInsightsComponent implements OnInit {
 
           if (err.status === 403) {
             this.showAlert('No tienes permisos para generar insights en este proyecto', 'alert-danger');
+          } else if (err.status === 409) {
+            // Corrección de auditoría: el backend rechaza con 409 CONFLICT
+            // cuando hay menos de 2 sprints finalizados (ver
+            // AIInsightsService.generateInsights). El botón ya debería estar
+            // deshabilitado en ese caso (ver puedeGenerarInsights), pero se
+            // maneja igual por si los datos de sprints quedaron desactualizados.
+            const mensaje = err?.error?.error || this.getMensajeRequisitoInsights() || 'No hay suficientes sprints finalizados para generar Insights.';
+            this.showAlert(mensaje, 'alert-warning');
           } else {
             this.showAlert('Error al generar insights. Intentá nuevamente.', 'alert-danger');
           }
+          this.toast.error('No se pudieron generar los Insights.');
 
           return of(null);
         })
@@ -142,6 +207,7 @@ export class AIInsightsComponent implements OnInit {
                   ? ` (${resultado.senalesOmitidasPorDuplicado} señal(es) ya estaban cubiertas, no se duplicaron)`
                   : '';
                 this.showAlert(`${nuevosTexto}${omitidosTexto}`, 'alert-success');
+                this.toast.success('Insights generados correctamente.');
               }
             }
           }, 500);
@@ -393,7 +459,13 @@ export class AIInsightsComponent implements OnInit {
   private async generarDocumentoWord(docx: any, fileSaver: any): Promise<void> {
     try {
       const { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } = docx;
-      const { saveAs } = fileSaver;
+      // Corrección de auditoría (reportes): 'file-saver' es un módulo UMD/CJS
+      // — según el bundler, el interop de import() dinámico puede exponer la
+      // función de guardado como .saveAs, como .default o como el propio
+      // objeto del módulo. Tomar solo fileSaver.saveAs podía resolver a
+      // undefined y romper la exportación con "saveAs is not a function"
+      // sin ningún aviso (confirmado con un test real que antes no existía).
+      const saveAs = fileSaver.saveAs ?? fileSaver.default ?? fileSaver;
 
       const doc = new Document({
         sections: [{

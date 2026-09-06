@@ -493,18 +493,36 @@ public class AgileAnalyticsService {
                 ));
             }
 
-            // Riesgo: Alta variabilidad
-            if (trend.desviacionEstandar().compareTo(new BigDecimal("3.0")) > 0) {
-                risks.add(new RiskDto(
-                        proyectoId,
-                        "HIGH_VARIABILITY",
-                        "MEDIUM",
-                        "Alta variabilidad en " + trend.categoria(),
-                        String.format("Desviación estándar de %.2f indica resultados inconsistentes",
-                                trend.desviacionEstandar()),
-                        trend.categoria(),
-                        java.time.Instant.now()
-                ));
+            // Riesgo: Alta variabilidad — Corrección de auditoría: antes se comparaba
+            // la desviación estándar ABSOLUTA (en la escala cruda de la categoría)
+            // contra un umbral fijo de 3.0, sin relativizar al promedio ni a la
+            // escala de la métrica — un caso real (sprints 80/90/95, sd≈6.24,
+            // promedio≈88.33) se clasificaba como "alta" cuando su coeficiente de
+            // variación real es ≈7%, "baja" según el criterio que el propio
+            // proyecto YA usa para variables individuales (ver
+            // EvaluacionService.clasificarVariabilidadPorCV(), CV<15%→baja,
+            // 15-35%→media, >35%→alta). Se reutiliza ESE mismo criterio aquí en
+            // vez de un umbral nuevo, para que "alta variabilidad" signifique lo
+            // mismo en todo el proyecto. Sin promedio (0 o ausente) no hay CV
+            // matemáticamente válido — se omite el riesgo en vez de dividir por
+            // cero o inventar una clasificación.
+            if (trend.promedioGeneral() != null && trend.promedioGeneral().compareTo(BigDecimal.ZERO) != 0) {
+                BigDecimal coefVariacion = trend.desviacionEstandar()
+                        .divide(trend.promedioGeneral().abs(), java.math.MathContext.DECIMAL64)
+                        .multiply(new BigDecimal("100"));
+
+                if ("alta".equals(EvaluacionService.clasificarVariabilidadPorCV(coefVariacion.doubleValue()))) {
+                    risks.add(new RiskDto(
+                            proyectoId,
+                            "HIGH_VARIABILITY",
+                            "MEDIUM",
+                            "Alta variabilidad en " + trend.categoria(),
+                            String.format("Coeficiente de variación de %.1f%% indica resultados inconsistentes",
+                                    coefVariacion.doubleValue()),
+                            trend.categoria(),
+                            java.time.Instant.now()
+                    ));
+                }
             }
         }
 

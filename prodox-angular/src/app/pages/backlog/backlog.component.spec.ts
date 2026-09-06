@@ -11,6 +11,7 @@ import { HistoriaUsuarioService } from '../../services/historia-usuario.service'
 import { SprintService } from '../../services/sprint.service';
 import { HistoriaUsuarioDto } from '../../models/historia-usuario.model';
 import { SprintDto } from '../../models/sprint.model';
+import { ToastService } from '../../shared/toast/toast.service';
 
 @Component({ selector: 'app-shell', standalone: true, template: '<ng-content></ng-content>' })
 class MockShellComponent {
@@ -40,6 +41,7 @@ describe('BacklogComponent', () => {
   let fixture: ComponentFixture<BacklogComponent>;
   let historiaService: jasmine.SpyObj<HistoriaUsuarioService>;
   let sprintService: jasmine.SpyObj<SprintService>;
+  let toastService: jasmine.SpyObj<ToastService>;
 
   async function crearComponente(rol: string): Promise<void> {
     const historiaServiceSpy = jasmine.createSpyObj('HistoriaUsuarioService', [
@@ -47,12 +49,14 @@ describe('BacklogComponent', () => {
     ]);
     const sprintServiceSpy = jasmine.createSpyObj('SprintService', ['listar']);
     sprintServiceSpy.listar.and.returnValue(of([] as SprintDto[]));
+    const toastServiceSpy = jasmine.createSpyObj('ToastService', ['success', 'error', 'warning', 'info']);
 
     await TestBed.configureTestingModule({
       imports: [HttpClientTestingModule, FormsModule, CommonModule],
       providers: [
         { provide: HistoriaUsuarioService, useValue: historiaServiceSpy },
         { provide: SprintService, useValue: sprintServiceSpy },
+        { provide: ToastService, useValue: toastServiceSpy },
       ]
     })
       .overrideComponent(BacklogComponent, {
@@ -63,6 +67,7 @@ describe('BacklogComponent', () => {
 
     historiaService = TestBed.inject(HistoriaUsuarioService) as jasmine.SpyObj<HistoriaUsuarioService>;
     sprintService = TestBed.inject(SprintService) as jasmine.SpyObj<SprintService>;
+    toastService = TestBed.inject(ToastService) as jasmine.SpyObj<ToastService>;
 
     localStorage.setItem('mpdia_proyecto_activo', JSON.stringify(mockProyecto(rol)));
 
@@ -124,7 +129,7 @@ describe('BacklogComponent', () => {
       expect(component.historias.find(h => h.id === 'h1')?.titulo).toBe('Editado');
     });
 
-    it('cambiarPrioridad: llama al servicio y refleja el cambio en el listado', () => {
+    it('cambiarPrioridad: llama al servicio, refleja el cambio en el listado y muestra un toast de éxito', () => {
       const actualizada = historia('h1', 'baja', 'pendiente');
       historiaService.cambiarPrioridad.and.returnValue(of(actualizada));
 
@@ -132,9 +137,23 @@ describe('BacklogComponent', () => {
 
       expect(historiaService.cambiarPrioridad).toHaveBeenCalledWith('h1', 'baja');
       expect(component.historias.find(h => h.id === 'h1')?.prioridad).toBe('baja');
+      // Corrección de UX (toasts): antes esta acción cambiaba el estado en
+      // silencio, sin ningún feedback de éxito.
+      expect(toastService.success).toHaveBeenCalledWith('Prioridad actualizada correctamente.');
     });
 
-    it('asignarSprint: llama al servicio con el sprintId elegido', () => {
+    it('cambiarEstado: llama al servicio, refleja el cambio en el listado y muestra un toast de éxito', () => {
+      const actualizada = historia('h1', 'alta', 'en_progreso');
+      historiaService.cambiarEstado.and.returnValue(of(actualizada));
+
+      component.cambiarEstado(component.historias[0], 'en_progreso');
+
+      expect(historiaService.cambiarEstado).toHaveBeenCalledWith('h1', 'en_progreso');
+      expect(component.historias.find(h => h.id === 'h1')?.estado).toBe('en_progreso');
+      expect(toastService.success).toHaveBeenCalledWith('Estado actualizado correctamente.');
+    });
+
+    it('asignarSprint: llama al servicio con el sprintId elegido y muestra un toast de éxito', () => {
       const actualizada = { ...historia('h1', 'alta', 'pendiente'), sprintId: 'sprint-1' };
       historiaService.asignarSprint.and.returnValue(of(actualizada));
 
@@ -142,6 +161,7 @@ describe('BacklogComponent', () => {
 
       expect(historiaService.asignarSprint).toHaveBeenCalledWith('h1', 'sprint-1');
       expect(component.historias.find(h => h.id === 'h1')?.sprintId).toBe('sprint-1');
+      expect(toastService.success).toHaveBeenCalledWith('Sprint asignado correctamente.');
     });
 
     it('asignarSprint: con valor vacío desasigna (sprintId null)', () => {
@@ -154,13 +174,14 @@ describe('BacklogComponent', () => {
       expect(historiaService.asignarSprint).toHaveBeenCalledWith('h1', null);
     });
 
-    it('cambiarPrioridad: si el backend rechaza el cambio, muestra alerta y no rompe el listado', () => {
+    it('cambiarPrioridad: si el backend rechaza el cambio, muestra alerta, no rompe el listado y NO muestra un toast de éxito', () => {
       historiaService.cambiarPrioridad.and.returnValue(throwError(() => ({ error: { error: 'No autorizado' } })));
 
       component.cambiarPrioridad(component.historias[0], 'baja');
 
       expect(component.alertMsg).toContain('No autorizado');
       expect(component.historias.find(h => h.id === 'h1')?.prioridad).toBe('alta');
+      expect(toastService.success).not.toHaveBeenCalled();
     });
 
     it('eliminar: pide confirmación y luego llama al servicio', () => {

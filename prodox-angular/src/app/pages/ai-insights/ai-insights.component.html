@@ -20,12 +20,24 @@
       <div class="alert py-2 small mb-3" [class]="alertClass()">{{ alertMsg() }}</div>
     }
 
+    <!-- Corrección de auditoría (regla de mínimo 2 sprints finalizados): se
+         muestra bloqueada con el motivo en vez de ocultar la función
+         (mejor UX que desaparecer el botón sin explicación). -->
+    @if (!loading() && !puedeGenerarInsights) {
+      <div class="alert alert-warning py-2 small mb-3">
+        <i class="bi bi-info-circle me-1"></i>
+        {{ getMensajeRequisitoInsights() }}
+        <div class="mt-1 fw-semibold">{{ getProgresoSprintsLabel() }}</div>
+      </div>
+    }
+
     <!-- Acciones -->
     <div class="d-flex flex-wrap gap-2 mb-4">
-      <button 
+      <button
         class="btn btn-primary btn-sm"
         (click)="generateInsights()"
-        [disabled]="generating() || loading()">
+        [disabled]="generating() || loading() || !puedeGenerarInsights"
+        [title]="!puedeGenerarInsights ? getMensajeRequisitoInsights() : ''">
         @if (generating()) {
           <span class="spinner-border spinner-border-sm me-1"></span>
           Generando...
@@ -34,7 +46,7 @@
           Generar Insights
         }
       </button>
-      
+
       <button 
         class="btn btn-outline-secondary btn-sm"
         (click)="loadInsights()"
