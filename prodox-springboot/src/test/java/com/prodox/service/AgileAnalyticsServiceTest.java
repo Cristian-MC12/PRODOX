@@ -88,6 +88,14 @@ class AgileAnalyticsServiceTest {
                 null, "por_sprint");
     }
 
+    /** Variante con variableId explícito, para probar el filtro por métrica individual. */
+    private EvaluacionSprintDto evalDto(UUID sprintId, int sprintNumero, UUID variableId, String categoria, BigDecimal promedio) {
+        return new EvaluacionSprintDto(
+                sprintId, sprintNumero, variableId, "variable-" + categoria,
+                categoria, "grupal", promedio, promedio, promedio, 1,
+                null, "por_sprint");
+    }
+
     // ════════════════════════════════════════════════════════════════════
     // 1-2) No promediar directamente categorías con escalas/unidades
     // heterogéneas (caso real: "Creación de un avatar Xabi" — Velocidad en
@@ -364,5 +372,122 @@ class AgileAnalyticsServiceTest {
         assertThat(calidad.promedioGeneral()).isEqualByComparingTo("70.00");
         assertThat(calidad.tendenciaGeneral()).isEqualTo("UP");
         assertThat(calidad.datosDisponibles()).isTrue();
+    }
+
+    // ════════════════════════════════════════════════════════════════════
+    // Auditoría Dashboard (selector de métrica individual): getSprintTrends/
+    // identifyRisks con filtro opcional por variableId — analizar UNA sola
+    // métrica sin mezclarla con otras variables de su misma categoría.
+    // ════════════════════════════════════════════════════════════════════
+
+    @Test
+    @DisplayName("getSprintTrends con variableId: filtra a esa única variable, ignora otra variable de la MISMA categoría")
+    void getSprintTrends_conVariableId_filtraAUnaSolaVariableDeLaCategoria() {
+        Sprint s1 = sprint(1, "finalizado");
+        Sprint s2 = sprint(2, "finalizado");
+        Sprint s3 = sprint(3, "finalizado");
+        UUID velocidadId = UUID.randomUUID();
+        UUID satisfaccionId = UUID.randomUUID();
+
+        when(sprintRepo.findByProyectoIdOrderByNumeroDesc(proyectoId)).thenReturn(List.of(s3, s2, s1));
+        // Ambas variables comparten categoría "Impacto" — sin el filtro, se
+        // promediarían entre sí (exactamente la mezcla que reporta el usuario:
+        // Velocidad en Story Points junto con Satisfacción en %).
+        when(evaluacionService.evaluarSprint(s1.getId())).thenReturn(List.of(
+                evalDto(s1.getId(), 1, velocidadId, "Impacto", new BigDecimal("90")),
+                evalDto(s1.getId(), 1, satisfaccionId, "Impacto", new BigDecimal("70"))));
+        when(evaluacionService.evaluarSprint(s2.getId())).thenReturn(List.of(
+                evalDto(s2.getId(), 2, velocidadId, "Impacto", new BigDecimal("80")),
+                evalDto(s2.getId(), 2, satisfaccionId, "Impacto", new BigDecimal("90"))));
+        when(evaluacionService.evaluarSprint(s3.getId())).thenReturn(List.of(
+                evalDto(s3.getId(), 3, velocidadId, "Impacto", new BigDecimal("85")),
+                evalDto(s3.getId(), 3, satisfaccionId, "Impacto", new BigDecimal("80"))));
+
+        List<TrendAnalysisDto> resultado = service.getSprintTrends(proyectoId, null, 5, velocidadId);
+
+        assertThat(resultado).hasSize(1);
+        TrendAnalysisDto trend = resultado.get(0);
+        assertThat(trend.dataPoints()).extracting(TrendAnalysisDto.SprintDataPoint::valor)
+                .containsExactly(new BigDecimal("90.00"), new BigDecimal("80.00"), new BigDecimal("85.00"));
+        // Nunca el promedio combinado (90+70)/2=80, (80+90)/2=85, (85+80)/2=82.5.
+        assertThat(trend.dataPoints()).extracting(TrendAnalysisDto.SprintDataPoint::valor)
+                .doesNotContain(new BigDecimal("82.50"));
+    }
+
+    @Test
+    @DisplayName("getSprintTrends sin variableId (null): comportamiento IDÉNTICO al método de 3 argumentos, sin cambios")
+    void getSprintTrends_sinVariableId_comportamientoIdenticoAlDeTresArgumentos() {
+        Sprint s1 = sprint(1, "finalizado");
+        Sprint s2 = sprint(2, "finalizado");
+
+        when(sprintRepo.findByProyectoIdOrderByNumeroDesc(proyectoId)).thenReturn(List.of(s2, s1));
+        when(evaluacionService.evaluarSprint(s1.getId())).thenReturn(List.of(
+                evalDto(s1.getId(), 1, "Calidad", new BigDecimal("60"))));
+        when(evaluacionService.evaluarSprint(s2.getId())).thenReturn(List.of(
+                evalDto(s2.getId(), 2, "Calidad", new BigDecimal("70"))));
+
+        List<TrendAnalysisDto> conTresArgumentos = service.getSprintTrends(proyectoId, "Calidad", 5);
+        List<TrendAnalysisDto> conCuatroArgumentosNull = service.getSprintTrends(proyectoId, "Calidad", 5, null);
+
+        assertThat(conCuatroArgumentosNull).isEqualTo(conTresArgumentos);
+    }
+
+    @Test
+    @DisplayName("identifyRisks(proyectoId, variableId): HIGH_VARIABILITY se evalúa solo con el CV de esa variable, no el de otra variable de su misma categoría")
+    void identifyRisks_conVariableId_evaluaSoloEsaVariable() {
+        Sprint s1 = sprint(1, "finalizado");
+        Sprint s2 = sprint(2, "finalizado");
+        Sprint s3 = sprint(3, "finalizado");
+        UUID estableId = UUID.randomUUID();
+        UUID inestableId = UUID.randomUUID();
+
+        when(sprintRepo.findByProyectoIdOrderByNumeroDesc(proyectoId)).thenReturn(List.of(s3, s2, s1));
+        // "estableId" (80/90/95, CV bajo) e "inestableId" (20/50/80, CV alto)
+        // comparten categoría "Significado".
+        when(evaluacionService.evaluarSprint(s1.getId())).thenReturn(List.of(
+                evalDto(s1.getId(), 1, estableId, "Significado", new BigDecimal("80")),
+                evalDto(s1.getId(), 1, inestableId, "Significado", new BigDecimal("20"))));
+        when(evaluacionService.evaluarSprint(s2.getId())).thenReturn(List.of(
+                evalDto(s2.getId(), 2, estableId, "Significado", new BigDecimal("90")),
+                evalDto(s2.getId(), 2, inestableId, "Significado", new BigDecimal("50"))));
+        when(evaluacionService.evaluarSprint(s3.getId())).thenReturn(List.of(
+                evalDto(s3.getId(), 3, estableId, "Significado", new BigDecimal("95")),
+                evalDto(s3.getId(), 3, inestableId, "Significado", new BigDecimal("80"))));
+
+        List<RiskDto> risksEstable = service.identifyRisks(proyectoId, estableId);
+        List<RiskDto> risksInestable = service.identifyRisks(proyectoId, inestableId);
+
+        assertThat(risksEstable).noneMatch(r -> "HIGH_VARIABILITY".equals(r.tipo()));
+        assertThat(risksInestable).anyMatch(r -> "HIGH_VARIABILITY".equals(r.tipo()));
+    }
+
+    @Test
+    @DisplayName("identifyRisks(proyectoId, null): comportamiento IDÉNTICO al método de 1 argumento, sin cambios")
+    void identifyRisks_sinVariableId_comportamientoIdenticoAlDeUnArgumento() {
+        Sprint s1 = sprint(1, "finalizado");
+        Sprint s2 = sprint(2, "finalizado");
+        Sprint s3 = sprint(3, "finalizado");
+
+        when(sprintRepo.findByProyectoIdOrderByNumeroDesc(proyectoId)).thenReturn(List.of(s3, s2, s1));
+        when(evaluacionService.evaluarSprint(s1.getId())).thenReturn(List.of(
+                evalDto(s1.getId(), 1, "Significado", new BigDecimal("20"))));
+        when(evaluacionService.evaluarSprint(s2.getId())).thenReturn(List.of(
+                evalDto(s2.getId(), 2, "Significado", new BigDecimal("50"))));
+        when(evaluacionService.evaluarSprint(s3.getId())).thenReturn(List.of(
+                evalDto(s3.getId(), 3, "Significado", new BigDecimal("80"))));
+
+        // RiskDto.detectedAt es Instant.now() en cada llamada — se compara por
+        // tipo/severidad/categoría (la parte determinística), no por igualdad
+        // exacta del record completo.
+        List<RiskDto> conDosArgumentosNull = service.identifyRisks(proyectoId, null);
+        List<RiskDto> conUnArgumento = service.identifyRisks(proyectoId);
+
+        assertThat(conDosArgumentosNull)
+                .extracting(RiskDto::tipo, RiskDto::severidad, RiskDto::categoriaAfectada)
+                .containsExactlyInAnyOrderElementsOf(
+                        conUnArgumento.stream()
+                                .map(r -> org.assertj.core.groups.Tuple.tuple(r.tipo(), r.severidad(), r.categoriaAfectada()))
+                                .toList()
+                );
     }
 }

@@ -1,6 +1,7 @@
 // Autor: Cristian Santiago Martinez Cordoba — PRODOX
 package com.prodox.dto;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 
@@ -36,5 +37,18 @@ public record MetricaEvaluacionDetalleDto(
      * a 'registros' cuando esta lista está vacía — comportamiento preexistente
      * sin cambios.
      */
-    List<ResultadoCalculadoPuntoDto> resultadosCalculados
+    List<ResultadoCalculadoPuntoDto> resultadosCalculados,
+    /**
+     * Auditoría Dashboard (selector de métrica individual): campos de escala de
+     * Variable, tal cual, sin ninguna interpretación aquí. Permiten al frontend
+     * decidir honestamente si "Cumplimiento" tiene sentido matemático para esta
+     * métrica (escala acotada 0-100 o similar) o no (ej. Story Points sin techo)
+     * — nunca se normaliza aquí ni se inventa un porcentaje. escalaMin/escalaMax/
+     * escalaTipo pueden ser null (compatibilidad histórica, ver Variable). tipoDato
+     * nunca es null (default "numerico" en Variable).
+     */
+    BigDecimal escalaMin,
+    BigDecimal escalaMax,
+    String     escalaTipo,
+    String     tipoDato
 ) {}

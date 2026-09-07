@@ -149,7 +149,11 @@ public class EvaluacionService {
                     puntos,
                     calcularEstadisticas(agruparPorPeriodo(puntos, variable.getFrecuenciaCaptura())),
                     calcularPorSprint(puntos),
-                    resultadosCalculadosDeLaMetrica(variable, proyectoId, sprintsPorId)
+                    resultadosCalculadosDeLaMetrica(variable, proyectoId, sprintsPorId),
+                    variable.getEscalaMin(),
+                    variable.getEscalaMax(),
+                    variable.getEscalaTipo(),
+                    variable.getTipoDato()
             ));
         }
         return resultado;

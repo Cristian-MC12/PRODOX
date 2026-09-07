@@ -110,9 +110,9 @@ class AnalyticsControllerTest {
         when(projectMemberRepository.existsByProyectoIdAndUserId(proyectoId, userId)).thenReturn(true);
         RiskDto risk = new RiskDto(proyectoId, "DECLINING_METRIC", "CRITICAL",
                 "Impacto en descenso sostenido", "Impacto disminuyó 75,0%", "Impacto", Instant.now());
-        when(analyticsService.identifyRisks(proyectoId)).thenReturn(List.of(risk));
+        when(analyticsService.identifyRisks(proyectoId, null)).thenReturn(List.of(risk));
 
-        ResponseEntity<List<RiskDto>> respuesta = controller.risks(proyectoId, authMiembro);
+        ResponseEntity<List<RiskDto>> respuesta = controller.risks(proyectoId, null, authMiembro);
 
         assertThat(respuesta.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(respuesta.getBody()).containsExactly(risk);
@@ -122,10 +122,25 @@ class AnalyticsControllerTest {
     void risks_usuarioNoMiembroDelProyecto_lanzaSecurityException() {
         when(projectMemberRepository.existsByProyectoIdAndUserId(proyectoId, userId)).thenReturn(false);
 
-        assertThatThrownBy(() -> controller.risks(proyectoId, authMiembro))
+        assertThatThrownBy(() -> controller.risks(proyectoId, null, authMiembro))
                 .isInstanceOf(SecurityException.class);
 
         verifyNoInteractions(analyticsService);
+    }
+
+    @Test
+    void risks_conVariableId_delegaEnAgileAnalyticsServiceConEseFiltro() {
+        UUID variableId = UUID.randomUUID();
+        when(projectMemberRepository.existsByProyectoIdAndUserId(proyectoId, userId)).thenReturn(true);
+        RiskDto risk = new RiskDto(proyectoId, "HIGH_VARIABILITY", "MEDIUM",
+                "Alta variabilidad en Velocidad", "CV 40.0%", "Velocidad", Instant.now());
+        when(analyticsService.identifyRisks(proyectoId, variableId)).thenReturn(List.of(risk));
+
+        ResponseEntity<List<RiskDto>> respuesta = controller.risks(proyectoId, variableId, authMiembro);
+
+        assertThat(respuesta.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(respuesta.getBody()).containsExactly(risk);
+        verify(analyticsService).identifyRisks(proyectoId, variableId);
     }
 
     @Test

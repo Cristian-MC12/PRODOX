@@ -72,4 +72,17 @@ export interface MetricaEvaluacionDetalleDto {
    *  el backend siempre lo envía, pero se mantiene opcional en el modelo para no
    *  romper fixtures de tests existentes construidos antes de este campo. */
   resultadosCalculados?: ResultadoCalculadoPuntoDto[];
+  /**
+   * Auditoría Dashboard (selector de métrica individual): campos de escala de
+   * Variable, transportados tal cual (sin interpretación aquí) — permiten decidir
+   * si "Cumplimiento" tiene sentido matemático para esta métrica (ver
+   * dashboard.component.ts:tieneEscalaValida). escalaMin/escalaMax/escalaTipo
+   * pueden ser null (métrica sin escala acotada, ej. Story Points). Opcionales en
+   * el modelo por el mismo motivo que resultadosCalculados: no romper fixtures de
+   * tests existentes construidos antes de estos campos.
+   */
+  escalaMin?: number | null;
+  escalaMax?: number | null;
+  escalaTipo?: string | null;
+  tipoDato?: string;
 }

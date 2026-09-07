@@ -58,6 +58,26 @@
         }
       </div>
 
+      <!-- Selector de métrica individual (auditoría Dashboard: no mezclar
+           métricas de escalas/unidades distintas). Mismo patrón visual de
+           filtros que ya usa la página Evaluación (.filters-container). -->
+      <div class="filters-container mb-3">
+        <div class="filters-label">
+          <i class="bi bi-funnel me-1"></i>
+          <span>Métrica:</span>
+        </div>
+        <div class="filters-controls">
+          <select class="form-select form-select-sm filter-select"
+                  [ngModel]="metricaSeleccionada()"
+                  (ngModelChange)="onMetricaChange($event)">
+            <option value="">Todas las métricas</option>
+            @for (m of metricasDetalle; track m.variableId) {
+              <option [value]="m.variableId">{{ m.metricaNombre }} ({{ m.categoria }})</option>
+            }
+          </select>
+        </div>
+      </div>
+
       <!-- KPI Cards -->
       <div class="kpi-cards">
         <!-- Card 1: Métricas activas - Destacada con fondo azul -->
@@ -143,21 +163,35 @@
         <!-- Row 1 -->
         <div class="chart-row">
           
-          <!-- Cumplimiento del sprint -->
+          <!-- Cumplimiento -->
           <div class="chart-card chart-compact">
             <div class="chart-header">
               <h6 class="chart-title">Cumplimiento</h6>
             </div>
             <div class="chart-content chart-center">
-              @if (hasComplianceData()) {
-                <app-sprint-compliance-gauge
-                  [percentage]="getSprintCompliance()"
-                  [label]="''"
-                />
+              @if (metricaActual; as ma) {
+                @if (tieneEscalaValidaParaCumplimiento(ma)) {
+                  <app-sprint-compliance-gauge
+                    [percentage]="getCumplimientoMetrica(ma)"
+                    [label]="''"
+                    [subtitle]="ma.metricaNombre"
+                  />
+                } @else {
+                  <div class="empty-compact">
+                    <i class="bi bi-speedometer2"></i>
+                    <span>No aplica cumplimiento para esta métrica</span>
+                  </div>
+                }
               } @else {
+                <!-- "Todas las métricas": nunca se combina el cumplimiento de
+                     métricas con escalas/unidades distintas en un único %. Hoy
+                     ninguna métrica tiene una fórmula de cumplimiento válida
+                     (ver tieneEscalaValidaParaCumplimiento) — el único dato
+                     agregado matemáticamente honesto es un conteo de cuántas
+                     métricas se están analizando, nunca un porcentaje. -->
                 <div class="empty-compact">
-                  <i class="bi bi-speedometer2"></i>
-                  <span>No hay datos suficientes</span>
+                  <i class="bi bi-check2-square"></i>
+                  <span>{{ metricasDetalle.length }} métrica(s) analizada(s) — sin cumplimiento combinado</span>
                 </div>
               }
             </div>
@@ -166,26 +200,80 @@
           <!-- Evolución de métricas -->
           <div class="chart-card chart-wide">
             <div class="chart-header">
-              <h6 class="chart-title">Evolución de métricas</h6>
+              <h6 class="chart-title">
+                {{ metricaActual ? ('Evolución — ' + metricaActual!.metricaNombre) : 'Evolución de métricas' }}
+              </h6>
             </div>
             <div class="chart-content">
-              <app-metrics-evolution-chart
-                [dataPoints]="evolutionData"
-                [title]="''"
-              />
+              @if (metricaActual; as ma) {
+                <app-metrics-evolution-chart
+                  [dataPoints]="getEvolutionDataParaMetrica(ma)"
+                  [title]="''"
+                />
+              } @else if (metricasDetalle.length > 0) {
+                <!-- Cada métrica con su propia serie — nunca combinadas en un
+                     único promedio/línea (regla fundamental de esta corrección). -->
+                <div class="metricas-todas-grid">
+                  @for (m of metricasDetalle; track m.variableId) {
+                    <div class="metrica-mini-card">
+                      <div class="metrica-mini-header">
+                        <span class="metrica-mini-nombre" [title]="m.metricaNombre">{{ m.metricaNombre }}</span>
+                        <span class="badge prox-badge-sm">{{ m.categoria }}</span>
+                      </div>
+                      <div class="metrica-mini-chart">
+                        <app-metrics-evolution-chart
+                          [dataPoints]="getEvolutionDataParaMetrica(m)"
+                          [title]="''"
+                        />
+                      </div>
+                      <div class="metrica-mini-footer">
+                        <span [class]="iconoTendencia(m.estadisticas.tendencia)">
+                          <i class="bi" [class]="iconoTendencia(m.estadisticas.tendencia)"></i>
+                          {{ labelTendencia(m.estadisticas.tendencia) }}
+                        </span>
+                        @if (m.estadisticas.variabilidad) {
+                          <span class="badge prox-badge-sm">Variabilidad {{ m.estadisticas.variabilidad }}</span>
+                        }
+                      </div>
+                    </div>
+                  }
+                </div>
+              } @else {
+                <div class="empty-compact">
+                  <i class="bi bi-graph-up"></i>
+                  <span>No hay métricas con datos todavía</span>
+                </div>
+              }
             </div>
           </div>
 
-          <!-- Distribución de métricas -->
+          <!-- Distribución (modo "Todas") / Detalle de la métrica (métrica seleccionada) -->
           <div class="chart-card chart-compact">
             <div class="chart-header">
-              <h6 class="chart-title">Distribución</h6>
+              <h6 class="chart-title">{{ metricaActual ? 'Detalle de la métrica' : 'Distribución' }}</h6>
             </div>
             <div class="chart-content chart-center">
-              <app-metrics-distribution-chart
-                [segments]="distributionSegments"
-                [title]="''"
-              />
+              @if (metricaActual; as ma) {
+                <div class="metrica-detalle-panel small">
+                  <div class="d-flex justify-content-between"><span class="text-muted">Promedio</span><strong>{{ ma.estadisticas.promedio }}</strong></div>
+                  <div class="d-flex justify-content-between"><span class="text-muted">Tendencia</span><strong>{{ labelTendencia(ma.estadisticas.tendencia) }}</strong></div>
+                  <div class="d-flex justify-content-between">
+                    <span class="text-muted">Variabilidad</span>
+                    <strong>{{ ma.estadisticas.variabilidad ?? 'Insuficientes registros' }}</strong>
+                  </div>
+                  @if (getMejorSprintMetrica(ma); as mejor) {
+                    <div class="d-flex justify-content-between"><span class="text-muted">Mejor sprint</span><strong>Sprint {{ mejor.sprintNumero }} ({{ mejor.promedio }})</strong></div>
+                  }
+                  @if (getPeorSprintMetrica(ma); as peor) {
+                    <div class="d-flex justify-content-between"><span class="text-muted">Peor sprint</span><strong>Sprint {{ peor.sprintNumero }} ({{ peor.promedio }})</strong></div>
+                  }
+                </div>
+              } @else {
+                <app-metrics-distribution-chart
+                  [segments]="distributionSegments"
+                  [title]="''"
+                />
+              }
             </div>
           </div>
 
@@ -197,7 +285,12 @@
           <!-- Últimos riesgos -->
           <div class="chart-card">
             <div class="chart-header">
-              <h6 class="chart-title">Riesgos recientes</h6>
+              <h6 class="chart-title">
+                Riesgos recientes
+                @if (metricaActual; as ma) {
+                  <span class="text-muted fw-normal" style="font-size:0.7rem"> — {{ ma.metricaNombre }}</span>
+                }
+              </h6>
             </div>
             <div class="chart-content chart-compact-content">
               @if (risks.length > 0) {

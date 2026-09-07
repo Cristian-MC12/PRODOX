@@ -550,4 +550,271 @@ describe('DashboardComponent', () => {
       }, 100);
     }, 10000);
   });
+
+  // ════════════════════════════════════════════════════════════════════
+  // Auditoría Dashboard (selector de métrica individual): Satisfacción del
+  // Cliente (escala 0-100 válida) y Velocidad en Story Points (sin escala
+  // acotada) comparten a propósito la misma categoría "Impacto" — es
+  // exactamente el escenario real reportado (dos métricas heterogéneas que
+  // el Dashboard mezclaba antes de esta corrección).
+  // ════════════════════════════════════════════════════════════════════
+  describe('Selector de métrica individual (auditoría Dashboard)', () => {
+    const mockSatisfaccion: MetricaEvaluacionDetalleDto = {
+      variableId: 'v-satisfaccion',
+      variableNombre: 'satisfaccion_cliente',
+      variableDescripcion: 'Satisfacción del cliente',
+      metricaNombre: 'Satisfacción del Cliente',
+      categoria: 'Impacto',
+      tipoAlcance: 'grupal',
+      frecuenciaCaptura: 'por_sprint',
+      formulaTexto: null,
+      registros: [],
+      estadisticas: {
+        totalRegistros: 3, promedio: 80, minimo: 70, maximo: 90, primerValor: 70, ultimoValor: 80,
+        cambio: 10, cambioPct: 14.3, tendencia: 'estable', pendiente: 0,
+        desviacionEstandar: 10, coeficienteVariacion: 12.5, variabilidad: 'baja'
+      },
+      porSprint: [
+        { sprintId: 's1', sprintNumero: 1, totalRegistros: 1, promedio: 70, minimo: 70, maximo: 70 },
+        { sprintId: 's2', sprintNumero: 2, totalRegistros: 1, promedio: 90, minimo: 90, maximo: 90 },
+        { sprintId: 's3', sprintNumero: 3, totalRegistros: 1, promedio: 80, minimo: 80, maximo: 80 }
+      ],
+      resultadosCalculados: [],
+      escalaMin: 0, escalaMax: 100, escalaTipo: 'NUMERICA_ENTERA', tipoDato: 'numerico'
+    };
+
+    const mockVelocidad: MetricaEvaluacionDetalleDto = {
+      variableId: 'v-velocidad',
+      variableNombre: 'velocidad_story_points',
+      variableDescripcion: 'Story points completados por sprint',
+      metricaNombre: 'Velocidad (Story Points)',
+      categoria: 'Impacto', // misma categoría que Satisfacción, a propósito
+      tipoAlcance: 'grupal',
+      frecuenciaCaptura: 'por_sprint',
+      formulaTexto: null,
+      registros: [],
+      estadisticas: {
+        totalRegistros: 3, promedio: 85, minimo: 80, maximo: 90, primerValor: 90, ultimoValor: 85,
+        cambio: -5, cambioPct: -5.6, tendencia: 'estable', pendiente: -2.5,
+        desviacionEstandar: 5, coeficienteVariacion: 5.9, variabilidad: 'baja'
+      },
+      porSprint: [
+        { sprintId: 's1', sprintNumero: 1, totalRegistros: 1, promedio: 90, minimo: 90, maximo: 90 },
+        { sprintId: 's2', sprintNumero: 2, totalRegistros: 1, promedio: 80, minimo: 80, maximo: 80 },
+        { sprintId: 's3', sprintNumero: 3, totalRegistros: 1, promedio: 85, minimo: 85, maximo: 85 }
+      ],
+      resultadosCalculados: [],
+      escalaMin: null, escalaMax: null, escalaTipo: null, tipoDato: 'numerico' // sin techo natural
+    };
+
+    const risksGlobal: Risk[] = [{
+      proyectoId: 'proyecto-123', tipo: 'HIGH_VARIABILITY', severidad: 'MEDIUM',
+      titulo: 'Alta variabilidad en Impacto', evidencia: 'CV 40%', categoriaAfectada: 'Impacto',
+      detectedAt: '2026-08-11T10:00:00Z'
+    }];
+    const risksVelocidad: Risk[] = [{
+      proyectoId: 'proyecto-123', tipo: 'DECLINING_METRIC', severidad: 'LOW',
+      titulo: 'Velocidad en descenso', evidencia: 'Bajó 5.9% en 3 sprints', categoriaAfectada: 'Impacto',
+      detectedAt: '2026-08-11T10:00:00Z'
+    }];
+
+    function cargarConMetricas(metricas: MetricaEvaluacionDetalleDto[]): void {
+      mockAnalyticsService.getProjectOverview.and.returnValue(of(mockOverview));
+      mockAnalyticsService.identifyRisks.and.callFake((_id: string, variableId?: string | null) => {
+        if (variableId === 'v-velocidad') return of(risksVelocidad);
+        return of(risksGlobal);
+      });
+      mockSprintService.getActivo.and.returnValue(of(mockSprint));
+      mockMemberService.listar.and.returnValue(of(mockMembers));
+      mockAnalyticsService.getSprintTrends.and.returnValue(of(mockTrends));
+      mockEvaluacionService.detalle.and.returnValue(of(metricas));
+      fixture.detectChanges();
+    }
+
+    // ── A. Selector ──────────────────────────────────────────────────
+    it('A) carga "Todas las métricas" por defecto (metricaSeleccionada = null)', () => {
+      cargarConMetricas([mockSatisfaccion, mockVelocidad]);
+      expect(component.metricaSeleccionada()).toBeNull();
+      expect(component.metricaActual).toBeNull();
+    });
+
+    it('A) carga las métricas activas con datos reales (metricasDetalle), no el catálogo completo', () => {
+      cargarConMetricas([mockSatisfaccion, mockVelocidad]);
+      expect(component.metricasDetalle.length).toBe(2);
+      expect(component.metricasDetalle.map(m => m.metricaNombre)).toEqual(
+        jasmine.arrayContaining(['Satisfacción del Cliente', 'Velocidad (Story Points)'])
+      );
+    });
+
+    it('A) seleccionar la métrica A (Satisfacción) cambia la vista', () => {
+      cargarConMetricas([mockSatisfaccion, mockVelocidad]);
+      component.onMetricaChange('v-satisfaccion');
+      expect(component.metricaSeleccionada()).toBe('v-satisfaccion');
+      expect(component.metricaActual?.metricaNombre).toBe('Satisfacción del Cliente');
+    });
+
+    it('A) seleccionar la métrica B (Velocidad) cambia la vista', () => {
+      cargarConMetricas([mockSatisfaccion, mockVelocidad]);
+      component.onMetricaChange('v-velocidad');
+      expect(component.metricaSeleccionada()).toBe('v-velocidad');
+      expect(component.metricaActual?.metricaNombre).toBe('Velocidad (Story Points)');
+    });
+
+    it('A) volver a "" (Todas las métricas) restablece metricaSeleccionada a null', () => {
+      cargarConMetricas([mockSatisfaccion, mockVelocidad]);
+      component.onMetricaChange('v-satisfaccion');
+      component.onMetricaChange('');
+      expect(component.metricaSeleccionada()).toBeNull();
+    });
+
+    // ── B. Caso concreto: Satisfacción 70/90/80, Velocidad 90/80/85 ────
+    it('B) seleccionando Satisfacción: la evolución es EXACTAMENTE 70, 90, 80 (sin mezclar con Velocidad)', () => {
+      cargarConMetricas([mockSatisfaccion, mockVelocidad]);
+      const evolucion = component.getEvolutionDataParaMetrica(mockSatisfaccion);
+      expect(evolucion.map(p => p.value)).toEqual([70, 90, 80]);
+    });
+
+    it('B) seleccionando Velocidad: la evolución es EXACTAMENTE 90, 80, 85 (sin mezclar con Satisfacción)', () => {
+      cargarConMetricas([mockSatisfaccion, mockVelocidad]);
+      const evolucion = component.getEvolutionDataParaMetrica(mockVelocidad);
+      expect(evolucion.map(p => p.value)).toEqual([90, 80, 85]);
+    });
+
+    it('B) "Todas las métricas": las dos series quedan separadas, cada una accesible de forma independiente', () => {
+      cargarConMetricas([mockSatisfaccion, mockVelocidad]);
+      expect(component.metricaActual).toBeNull(); // modo "Todas"
+      const serieSatisfaccion = component.getEvolutionDataParaMetrica(component.metricasDetalle[0]).map(p => p.value);
+      const serieVelocidad = component.getEvolutionDataParaMetrica(component.metricasDetalle[1]).map(p => p.value);
+      expect(serieSatisfaccion).toEqual([70, 90, 80]);
+      expect(serieVelocidad).toEqual([90, 80, 85]);
+    });
+
+    it('B) NUNCA aparece el promedio combinado 80/85/82.5 (mezcla de Satisfacción y Velocidad)', () => {
+      cargarConMetricas([mockSatisfaccion, mockVelocidad]);
+      const combinadoProhibido = [80, 85, 82.5];
+      expect(component.getEvolutionDataParaMetrica(mockSatisfaccion).map(p => p.value)).not.toEqual(combinadoProhibido);
+      expect(component.getEvolutionDataParaMetrica(mockVelocidad).map(p => p.value)).not.toEqual(combinadoProhibido);
+    });
+
+    it('B) NUNCA aparece un "cumplimiento general" del 83% fabricado combinando las dos métricas', () => {
+      cargarConMetricas([mockSatisfaccion, mockVelocidad]);
+      // En modo "Todas las métricas" el único dato agregado válido es un
+      // conteo de métricas analizadas — nunca un porcentaje combinado.
+      expect(component.metricasDetalle.length).toBe(2);
+      expect(component.getCumplimientoMetrica(mockSatisfaccion)).toBe(0);
+      expect(component.getCumplimientoMetrica(mockVelocidad)).toBe(0);
+    });
+
+    // ── C. Cumplimiento ─────────────────────────────────────────────
+    // Corrección de auditoría (revisión final pre-commit): escalaMin/escalaMax
+    // en el modelo de datos son el rango de VALIDACIÓN DE CAPTURA de la
+    // variable (ver ParametrizacionService.validarEscalaEstructurada,
+    // EjecucionService), NUNCA una meta u objetivo de cumplimiento — no existe
+    // ningún campo "meta"/"sentidoMejora" en Variable/MetricParametrizacion.
+    // Por eso NINGUNA métrica, tenga o no escala configurada, produce un %
+    // de cumplimiento — "No aplica cumplimiento para esta métrica" es la
+    // única respuesta honesta hoy.
+    it('C) métrica CON escala configurada (0-100, ej. Satisfacción): tampoco se calcula cumplimiento — escalaMin/escalaMax es rango de captura, no una meta', () => {
+      cargarConMetricas([mockSatisfaccion, mockVelocidad]);
+      expect(mockSatisfaccion.escalaMin).toBe(0);
+      expect(mockSatisfaccion.escalaMax).toBe(100);
+      expect(component.tieneEscalaValidaParaCumplimiento(mockSatisfaccion)).toBeFalse();
+      expect(component.getCumplimientoMetrica(mockSatisfaccion)).toBe(0);
+    });
+
+    it('C) métrica SIN escala configurada (Story Points sin techo): tampoco se calcula cumplimiento, mismo resultado que con escala', () => {
+      cargarConMetricas([mockSatisfaccion, mockVelocidad]);
+      expect(component.tieneEscalaValidaParaCumplimiento(mockVelocidad)).toBeFalse();
+      expect(component.getCumplimientoMetrica(mockVelocidad)).toBe(0);
+    });
+
+    it('C) ningún valor de ultimoValor (incluyendo extremos) produce jamás un % de cumplimiento fabricado', () => {
+      cargarConMetricas([mockSatisfaccion, mockVelocidad]);
+      const metricaExtrema: MetricaEvaluacionDetalleDto = {
+        ...mockSatisfaccion,
+        estadisticas: { ...mockSatisfaccion.estadisticas, ultimoValor: 9999 }
+      };
+      expect(component.tieneEscalaValidaParaCumplimiento(metricaExtrema)).toBeFalse();
+      expect(component.getCumplimientoMetrica(metricaExtrema)).toBe(0);
+    });
+
+    // ── D. Riesgos ──────────────────────────────────────────────────
+    it('D) seleccionar una métrica vuelve a consultar identifyRisks con su variableId y filtra los riesgos mostrados', (done) => {
+      cargarConMetricas([mockSatisfaccion, mockVelocidad]);
+      component.onMetricaChange('v-velocidad');
+
+      setTimeout(() => {
+        expect(mockAnalyticsService.identifyRisks).toHaveBeenCalledWith('proyecto-123', 'v-velocidad');
+        expect(component.risks).toEqual(risksVelocidad);
+        done();
+      }, 50);
+    });
+
+    it('D) "Todas las métricas" mantiene el comportamiento global existente (identifyRisks sin variableId)', () => {
+      cargarConMetricas([mockSatisfaccion, mockVelocidad]);
+      expect(mockAnalyticsService.identifyRisks).toHaveBeenCalledWith('proyecto-123');
+      expect(component.risks).toEqual(risksGlobal);
+    });
+
+    // ── E. Mejor / peor sprint ──────────────────────────────────────
+    it('E) mejor/peor sprint se calculan exclusivamente sobre la métrica indicada', () => {
+      cargarConMetricas([mockSatisfaccion, mockVelocidad]);
+
+      const mejorSatisfaccion = component.getMejorSprintMetrica(mockSatisfaccion);
+      const peorSatisfaccion = component.getPeorSprintMetrica(mockSatisfaccion);
+      expect(mejorSatisfaccion?.sprintNumero).toBe(2); // 90
+      expect(peorSatisfaccion?.sprintNumero).toBe(1); // 70
+
+      const mejorVelocidad = component.getMejorSprintMetrica(mockVelocidad);
+      const peorVelocidad = component.getPeorSprintMetrica(mockVelocidad);
+      expect(mejorVelocidad?.sprintNumero).toBe(1); // 90
+      expect(peorVelocidad?.sprintNumero).toBe(2); // 80
+    });
+
+    it('E) mejor/peor sprint de una métrica no se ve afectado por los valores de otra métrica', () => {
+      cargarConMetricas([mockSatisfaccion, mockVelocidad]);
+      // Sprint 2 es el MEJOR para Satisfacción (90) pero el PEOR para
+      // Velocidad (80) — cada métrica calcula su propio resultado, sin cruzar datos.
+      expect(component.getMejorSprintMetrica(mockSatisfaccion)?.sprintNumero).toBe(2);
+      expect(component.getPeorSprintMetrica(mockVelocidad)?.sprintNumero).toBe(2);
+    });
+
+    // ── F. Regresión ────────────────────────────────────────────────
+    it('F) Dashboard con una sola métrica activa sigue funcionando', () => {
+      cargarConMetricas([mockSatisfaccion]);
+      expect(component.metricasDetalle.length).toBe(1);
+      expect(component.state()).toBe('success');
+      component.onMetricaChange('v-satisfaccion');
+      expect(component.metricaActual?.metricaNombre).toBe('Satisfacción del Cliente');
+    });
+
+    it('F) Dashboard con cero métricas con datos no rompe (selector solo con "Todas las métricas")', () => {
+      cargarConMetricas([]);
+      expect(component.metricasDetalle).toEqual([]);
+      expect(component.metricaActual).toBeNull();
+      expect(() => component.getMejorSprintMetrica).not.toThrow();
+    });
+
+    it('F) Dashboard con múltiples métricas (3+) funciona sin mezclarlas', () => {
+      const tercera: MetricaEvaluacionDetalleDto = {
+        ...mockVelocidad, variableId: 'v-defectos', metricaNombre: 'Defectos encontrados', categoria: 'Flexibilidad'
+      };
+      cargarConMetricas([mockSatisfaccion, mockVelocidad, tercera]);
+      expect(component.metricasDetalle.length).toBe(3);
+      component.onMetricaChange('v-defectos');
+      expect(component.metricaActual?.metricaNombre).toBe('Defectos encontrados');
+    });
+
+    it('F) cambiar de proyecto NO conserva la métrica seleccionada del proyecto anterior', () => {
+      cargarConMetricas([mockSatisfaccion, mockVelocidad]);
+      component.onMetricaChange('v-satisfaccion');
+      expect(component.metricaSeleccionada()).toBe('v-satisfaccion');
+
+      // Simula cambio de proyecto activo y recarga del Dashboard.
+      component.proyecto = { ...mockProyecto, id: 'proyecto-999' };
+      (component as any).loadDashboardData();
+
+      expect(component.metricaSeleccionada()).toBeNull();
+    });
+  });
 });

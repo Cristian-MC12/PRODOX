@@ -31,12 +31,21 @@ export class AnalyticsService {
 
   /**
    * Identifica riesgos en el proyecto basándose en señales objetivas.
-   * 
+   *
    * Requiere mínimo 3 sprints para tendencias.
    * NO incluye interpretación de IA, solo hechos detectables.
+   *
+   * @param variableId Auditoría Dashboard (selector de métrica individual):
+   * opcional. Sin él (comportamiento existente, sin cambios), riesgos de TODAS
+   * las categorías. Con él, riesgos exclusivamente de esa variable/métrica —
+   * mismo cálculo/umbrales del backend, sin duplicar lógica aquí.
    */
-  identifyRisks(proyectoId: string): Observable<Risk[]> {
-    return this.http.get<Risk[]>(`${this.base}/project/${proyectoId}/risks`);
+  identifyRisks(proyectoId: string, variableId?: string | null): Observable<Risk[]> {
+    let url = `${this.base}/project/${proyectoId}/risks`;
+    if (variableId) {
+      url += `?variableId=${encodeURIComponent(variableId)}`;
+    }
+    return this.http.get<Risk[]>(url);
   }
 
   /**

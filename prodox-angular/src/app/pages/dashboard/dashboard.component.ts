@@ -1,6 +1,7 @@
 // Autor: Cristian Santiago Martinez Cordoba — PRODOX
 import { AfterViewChecked, Component, ElementRef, OnDestroy, OnInit, ViewChild, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { forkJoin, catchError, of } from 'rxjs';
 import { Chart, registerables, ChartConfiguration, BarElement } from 'chart.js';
@@ -24,6 +25,7 @@ import { ProyectoDto } from '../../models/proyecto.model';
 import { ProjectOverview, Risk, TrendAnalysis } from '../../models/analytics.model';
 import { SprintDto, EstadoSprint } from '../../models/sprint.model';
 import { ProyectoMetricaDto } from '../../models/planeacion.model';
+import { MetricaEvaluacionDetalleDto, SprintStatsDto } from '../../models/evaluacion-detalle.model';
 import { construirSeccionesReporteGeneral } from '../../core/reporte-general.builder';
 import { generarYDescargarDocumento } from '../../core/word-report.util';
 
@@ -36,6 +38,7 @@ type DashboardState = 'loading' | 'success' | 'empty' | 'insufficient-data' | 'e
   standalone: true,
   imports: [
     CommonModule,
+    FormsModule,
     ShellComponent,
     KpiCardComponent,
     SprintComplianceGaugeComponent,
@@ -62,6 +65,17 @@ export class DashboardComponent implements OnInit, AfterViewChecked, OnDestroy {
   totalMiembros = 0;
   metricas: ProyectoMetricaDto[] = [];
   sprints: SprintDto[] = [];
+
+  /**
+   * Auditoría Dashboard (selector de métrica individual): detalle por variable
+   * (evolución real por sprint, estadísticas, escala) — misma fuente que ya usa
+   * la página Evaluación (GET /api/evaluacion/proyecto/{id}/detalle). Solo trae
+   * variables con actividad real (el backend ya excluye las que no tienen
+   * registros), nunca el catálogo completo de métricas.
+   */
+  metricasDetalle: MetricaEvaluacionDetalleDto[] = [];
+  /** variableId seleccionado, o null = "Todas las métricas" (default). */
+  metricaSeleccionada = signal<string | null>(null);
 
   // Arrays para los gráficos Chart.js, calculados UNA VEZ cuando sus datos
   // fuente cambian (no en el template): [dataPoints]="getEvolutionData()"
@@ -180,6 +194,10 @@ export class DashboardComponent implements OnInit, AfterViewChecked, OnDestroy {
     this.sprintActivo = null;
     this.evolutionData = [];
     this.distributionSegments = [];
+    this.metricasDetalle = [];
+    // Cambiar de proyecto nunca conserva la métrica seleccionada del proyecto
+    // anterior (esa variableId podría ni siquiera existir en el nuevo proyecto).
+    this.metricaSeleccionada.set(null);
     this.pendingSprintsChartRender = true; // destruye el gráfico viejo en el próximo ciclo
 
     const proyectoId = this.proyecto.id;
@@ -217,6 +235,16 @@ export class DashboardComponent implements OnInit, AfterViewChecked, OnDestroy {
           console.error('Error cargando métricas:', err);
           return of([]);
         })
+      ),
+      // Auditoría Dashboard (selector de métrica individual): NO se crea un
+      // endpoint nuevo — se reutiliza el mismo GET /evaluacion/proyecto/{id}/detalle
+      // que ya consume la página Evaluación (mismo servicio ya inyectado para
+      // exportarReporteGeneral()).
+      metricasDetalle: this.evaluacionService.detalle(proyectoId).pipe(
+        catchError(err => {
+          console.error('Error cargando detalle de métricas:', err);
+          return of([]);
+        })
       )
     };
 
@@ -232,6 +260,7 @@ export class DashboardComponent implements OnInit, AfterViewChecked, OnDestroy {
         this.sprints = results.sprints;
         this.totalMiembros = results.miembros.length;
         this.metricas = results.metricas;
+        this.metricasDetalle = results.metricasDetalle;
         this.distributionSegments = this.getDistributionSegments();
         this.pendingSprintsChartRender = true;
 
@@ -307,6 +336,126 @@ export class DashboardComponent implements OnInit, AfterViewChecked, OnDestroy {
 
   retry(): void {
     this.loadDashboardData();
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // Selector de métrica individual (auditoría Dashboard)
+  // ─────────────────────────────────────────────────────────────
+
+  /**
+   * Cambia la métrica analizada. '' (value del <option> "Todas las métricas")
+   * se normaliza a null. Los riesgos se re-consultan al backend filtrados por
+   * esa variable (identifyRisks ya soporta variableId opcional, mismo cálculo/
+   * umbrales existentes, sin duplicar lógica en Angular) — el resto de la
+   * vista (evolución, tendencia, variabilidad, estadísticas, cumplimiento,
+   * mejor/peor sprint) se deriva de metricasDetalle, ya cargado.
+   */
+  onMetricaChange(variableId: string): void {
+    this.metricaSeleccionada.set(variableId === '' ? null : variableId);
+    this.cargarRiesgosParaSeleccion();
+  }
+
+  private cargarRiesgosParaSeleccion(): void {
+    if (!this.proyecto) return;
+    const proyectoId = this.proyecto.id;
+    const variableId = this.metricaSeleccionada();
+
+    this.analyticsService.identifyRisks(proyectoId, variableId).pipe(
+      catchError(err => {
+        console.error('Error cargando riesgos de la métrica:', err);
+        return of([]);
+      })
+    ).subscribe(risks => {
+      // Descarta la respuesta si el proyecto o la selección cambiaron
+      // mientras la petición estaba en vuelo.
+      if (!this.proyecto || this.proyecto.id !== proyectoId) return;
+      if (this.metricaSeleccionada() !== variableId) return;
+      this.risks = risks;
+    });
+  }
+
+  /** La métrica actualmente seleccionada (con todos sus datos ya calculados por el backend), o null en modo "Todas las métricas". */
+  get metricaActual(): MetricaEvaluacionDetalleDto | null {
+    const id = this.metricaSeleccionada();
+    if (!id) return null;
+    return this.metricasDetalle.find(m => m.variableId === id) ?? null;
+  }
+
+  /**
+   * Puntos de evolución de UNA métrica, listos para <app-metrics-evolution-chart>.
+   * Usa DIRECTAMENTE resultadosCalculados/porSprint, ya calculados por el
+   * backend (EvaluacionService) — no se recalcula ninguna estadística acá,
+   * solo se da forma {label, value} al dato existente. Prefiere
+   * resultadosCalculados (resultado real del equipo) sobre porSprint (promedio
+   * de registros individuales crudos), mismo criterio que ya usa la página
+   * Evaluación (evaluacion.component.ts:registrosParaVista).
+   */
+  getEvolutionDataParaMetrica(m: MetricaEvaluacionDetalleDto): Array<{ label: string; value: number }> {
+    if (m.resultadosCalculados && m.resultadosCalculados.length > 0) {
+      return m.resultadosCalculados
+        .filter(r => r.sprintNumero !== null)
+        .map(r => ({ label: `S${r.sprintNumero}`, value: r.resultado }));
+    }
+    return m.porSprint.map(s => ({ label: `S${s.sprintNumero}`, value: s.promedio }));
+  }
+
+  /**
+   * Corrección de auditoría (revisión final pre-commit): esta implementación
+   * ANTES calculaba un % de cumplimiento re-escalando linealmente el último
+   * valor dentro de escalaMin/escalaMax — se elimina porque es una fórmula
+   * inventada sin respaldo en el modelo de datos.
+   *
+   * Auditoría de todos los usos reales de Variable.escalaMin/escalaMax en el
+   * backend (ParametrizacionService.validarEscalaEstructurada,
+   * EjecucionService — resolución de paso/valor por defecto del formulario,
+   * ejecucion.component.ts — min/max/step del <input> de captura) confirma
+   * que esos campos representan EXCLUSIVAMENTE el rango válido para REGISTRAR
+   * un valor (validación de entrada), nunca una meta, umbral u objetivo de
+   * cumplimiento. Ni Variable ni MetricParametrizacion tienen un campo
+   * meta/objetivo/sentidoMejora que indique si un valor más alto es mejor o
+   * peor para esa métrica en particular (ej. Velocidad: más es mejor;
+   * Defectos: más es peor — misma forma de escala, sentido opuesto).
+   *
+   * Sin esa información, "tener escalaMin/escalaMax" NO es matemáticamente
+   * suficiente para fabricar un % de cumplimiento — exactamente la regla que
+   * esta corrección debe respetar. Por eso este método SIEMPRE retorna false:
+   * hoy no existe ninguna métrica, con o sin escala, para la que el Dashboard
+   * pueda calcular un "cumplimiento" válido. La plantilla siempre muestra "No
+   * aplica cumplimiento para esta métrica" en modo métrica individual.
+   */
+  tieneEscalaValidaParaCumplimiento(_m: MetricaEvaluacionDetalleDto): boolean {
+    return false;
+  }
+
+  /** Sin fórmula válida (ver tieneEscalaValidaParaCumplimiento) — nunca se invoca desde la plantilla; se conserva solo por compatibilidad de la firma. */
+  getCumplimientoMetrica(_m: MetricaEvaluacionDetalleDto): number {
+    return 0;
+  }
+
+  /** Sprint con mayor promedio para esta métrica exclusivamente (nunca comparado con otra métrica). */
+  getMejorSprintMetrica(m: MetricaEvaluacionDetalleDto): SprintStatsDto | null {
+    if (!m.porSprint || m.porSprint.length === 0) return null;
+    return m.porSprint.reduce((mejor, s) => (s.promedio > mejor.promedio ? s : mejor));
+  }
+
+  /** Sprint con menor promedio para esta métrica exclusivamente (nunca comparado con otra métrica). */
+  getPeorSprintMetrica(m: MetricaEvaluacionDetalleDto): SprintStatsDto | null {
+    if (!m.porSprint || m.porSprint.length === 0) return null;
+    return m.porSprint.reduce((peor, s) => (s.promedio < peor.promedio ? s : peor));
+  }
+
+  labelTendencia(t: string | null): string {
+    const labels: Record<string, string> = {
+      ascendente: 'Ascendente', descendente: 'Descendente', estable: 'Estable'
+    };
+    return t ? (labels[t] ?? t) : 'Sin datos suficientes';
+  }
+
+  iconoTendencia(t: string | null): string {
+    if (t === 'ascendente') return 'bi-graph-up-arrow text-success';
+    if (t === 'descendente') return 'bi-graph-down-arrow text-danger';
+    if (t === 'estable') return 'bi-dash-lg text-secondary';
+    return 'bi-question-lg text-muted';
   }
 
   // ─────────────────────────────────────────────────────────────

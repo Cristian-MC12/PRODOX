@@ -239,6 +239,22 @@ public class AgileAnalyticsService {
      * @param numberOfSprints Número de sprints a incluir en el análisis
      */
     public List<TrendAnalysisDto> getSprintTrends(UUID proyectoId, String categoria, Integer numberOfSprints) {
+        return getSprintTrends(proyectoId, categoria, numberOfSprints, null);
+    }
+
+    /**
+     * Auditoría Dashboard (selector de métrica individual): variante con filtro
+     * opcional por variableId, para poder analizar UNA sola métrica sin mezclarla
+     * con otras variables de su misma categoría. Con variableId=null el
+     * comportamiento es IDÉNTICO al método de 3 argumentos (agrupación por
+     * categoría, sin filtrar) — no se cambia nada del comportamiento existente.
+     * Con variableId presente, cada sprint se filtra a esa única variable ANTES
+     * de agrupar por categoría, así que la "categoría" resultante contiene
+     * exactamente una variable — el mismo código de agregación (promedio,
+     * desviación estándar, tendencia) queda, en ese caso, calculado sobre la
+     * serie de una sola métrica, sin duplicar ninguna lógica de umbral.
+     */
+    public List<TrendAnalysisDto> getSprintTrends(UUID proyectoId, String categoria, Integer numberOfSprints, UUID variableId) {
         // Obtener últimos N sprints finalizados
         List<Sprint> sprints = sprintRepo.findByProyectoIdOrderByNumeroDesc(proyectoId)
                 .stream()
@@ -252,10 +268,16 @@ public class AgileAnalyticsService {
             return List.of();
         }
 
-        // Evaluar todos los sprints
+        // Evaluar todos los sprints. Si se pidió una variable específica, se
+        // filtra ACÁ (antes de agrupar por categoría) — así ninguna otra
+        // variable de la misma categoría entra en el promedio de esta serie.
         Map<UUID, List<EvaluacionSprintDto>> evaluacionesPorSprint = new HashMap<>();
         for (Sprint sprint : sprints) {
-            evaluacionesPorSprint.put(sprint.getId(), evaluacionService.evaluarSprint(sprint.getId()));
+            List<EvaluacionSprintDto> evals = evaluacionService.evaluarSprint(sprint.getId());
+            if (variableId != null) {
+                evals = evals.stream().filter(e -> variableId.equals(e.variableId())).toList();
+            }
+            evaluacionesPorSprint.put(sprint.getId(), evals);
         }
 
         // Obtener todas las categorías si no se especificó una
@@ -471,10 +493,24 @@ public class AgileAnalyticsService {
      * NO incluye interpretación de IA, solo hechos detectables.
      */
     public List<RiskDto> identifyRisks(UUID proyectoId) {
+        return identifyRisks(proyectoId, null);
+    }
+
+    /**
+     * Auditoría Dashboard (selector de métrica individual): variante con filtro
+     * opcional por variableId. Con variableId=null el comportamiento es
+     * IDÉNTICO al método de 1 argumento (todas las categorías, sin cambios).
+     * Con variableId presente, reutiliza el MISMO cálculo de tendencias/umbrales
+     * de más abajo, pero limitado a esa única variable (ver
+     * getSprintTrends(proyectoId, categoria, numberOfSprints, variableId)) — los
+     * riesgos devueltos (DECLINING_METRIC, HIGH_VARIABILITY) quedan acotados a
+     * esa métrica, sin duplicar ningún umbral.
+     */
+    public List<RiskDto> identifyRisks(UUID proyectoId, UUID variableId) {
         List<RiskDto> risks = new ArrayList<>();
 
         // Analizar tendencias de últimos 3 sprints
-        List<TrendAnalysisDto> trends = getSprintTrends(proyectoId, null, 3);
+        List<TrendAnalysisDto> trends = getSprintTrends(proyectoId, null, 3, variableId);
 
         for (TrendAnalysisDto trend : trends) {
             // Riesgo: Tendencia negativa sostenida

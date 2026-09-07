@@ -49,11 +49,22 @@ public class AnalyticsController {
         return ResponseEntity.ok(analyticsService.getProjectOverview(proyectoId));
     }
 
-    /** GET /api/analytics/project/{proyectoId}/risks */
+    /**
+     * GET /api/analytics/project/{proyectoId}/risks?variableId=
+     *
+     * Auditoría Dashboard (selector de métrica individual): variableId es
+     * opcional. Sin él, comportamiento IDÉNTICO al existente (todas las
+     * categorías). Con él, delega en AgileAnalyticsService.identifyRisks(
+     * proyectoId, variableId) — riesgos exclusivamente de esa métrica, mismos
+     * cálculos/umbrales, sin lógica nueva en este controller.
+     */
     @GetMapping("/project/{proyectoId}/risks")
-    public ResponseEntity<List<RiskDto>> risks(@PathVariable UUID proyectoId, Authentication auth) {
+    public ResponseEntity<List<RiskDto>> risks(
+            @PathVariable UUID proyectoId,
+            @RequestParam(required = false) UUID variableId,
+            Authentication auth) {
         validarAcceso(proyectoId, auth);
-        return ResponseEntity.ok(analyticsService.identifyRisks(proyectoId));
+        return ResponseEntity.ok(analyticsService.identifyRisks(proyectoId, variableId));
     }
 
     /** GET /api/analytics/project/{proyectoId}/trends?numberOfSprints=&categoria= */

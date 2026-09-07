@@ -523,8 +523,95 @@
   }
 }
 
+/* Selector de métrica individual (auditoría Dashboard) — mismo patrón visual
+   de filtros que ya usa la página Evaluación. */
+.filters-container {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.625rem 1rem;
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
+}
 
+.filters-label {
+  display: flex;
+  align-items: center;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  margin-right: 0.25rem;
+}
 
+.filters-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  flex: 1;
+}
 
+.filter-select {
+  min-width: 220px;
+  max-width: 360px;
+}
+
+/* Modo "Todas las métricas": grid de mini-tarjetas, una serie por métrica —
+   nunca combinadas en una sola línea/promedio. */
+.metricas-todas-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 0.5rem;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.metrica-mini-card {
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  padding: 0.375rem;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.metrica-mini-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.25rem;
+  margin-bottom: 0.25rem;
+}
+
+.metrica-mini-nombre {
+  font-size: 0.65rem;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.metrica-mini-chart {
+  height: 70px;
+  position: relative;
+}
+
+.metrica-mini-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.6rem;
+  margin-top: 0.25rem;
+}
+
+.metrica-detalle-panel {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
 
 

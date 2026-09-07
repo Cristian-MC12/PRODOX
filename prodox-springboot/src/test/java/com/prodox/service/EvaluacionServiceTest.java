@@ -553,4 +553,56 @@ class EvaluacionServiceTest {
         assertThat(dto.resultadosCalculados()).isEmpty();
         org.mockito.Mockito.verifyNoInteractions(resultadoMetricaRepo);
     }
+
+    // ════════════════════════════════════════════════════════════════════
+    // Auditoría Dashboard (selector de métrica individual): escalaMin/
+    // escalaMax/escalaTipo/tipoDato se transportan de Variable al DTO tal
+    // cual, sin ninguna interpretación/normalización en este servicio.
+    // ════════════════════════════════════════════════════════════════════
+
+    @Test
+    @DisplayName("evaluarDetalle: Variable con escala definida (0-100, NUMERICA_ENTERA) -> el DTO transporta esos valores tal cual")
+    void evaluarDetalle_variableConEscalaDefinida_transportaEscalaAlDto() {
+        Variable variable = crearVariable("satisfaccion_cliente", "Satisfacción del cliente");
+        variable.setEscalaMin(BigDecimal.ZERO);
+        variable.setEscalaMax(new BigDecimal("100"));
+        variable.setEscalaTipo("NUMERICA_ENTERA");
+        variable.setTipoDato("numerico");
+        Sprint sprint = crearSprint(1);
+        RegistroValor r1 = crearRegistro(variable, new BigDecimal("70"), Instant.now());
+
+        when(variableRepo.findByProyectoIdAndActivaTrue(proyectoId)).thenReturn(List.of(variable));
+        when(sprintRepo.findByProyectoIdOrderByNumeroDesc(proyectoId)).thenReturn(List.of(sprint));
+        when(registroRepo.findByVariable_IdOrderByRegistradoAtAsc(variable.getId())).thenReturn(List.of(r1));
+
+        MetricaEvaluacionDetalleDto dto = service.evaluarDetalle(proyectoId).get(0);
+
+        assertThat(dto.escalaMin()).isEqualByComparingTo(BigDecimal.ZERO);
+        assertThat(dto.escalaMax()).isEqualByComparingTo(new BigDecimal("100"));
+        assertThat(dto.escalaTipo()).isEqualTo("NUMERICA_ENTERA");
+        assertThat(dto.tipoDato()).isEqualTo("numerico");
+    }
+
+    @Test
+    @DisplayName("evaluarDetalle: Variable SIN escala definida (ej. Story Points sin techo) -> el DTO conserva escalaMin/escalaMax/escalaTipo null, sin inventar una escala")
+    void evaluarDetalle_variableSinEscalaDefinida_conservaEscalaNulaSinInventar() {
+        Variable variable = crearVariable("velocidad_story_points", "Story points completados por sprint");
+        // Ninguna escala configurada — refleja "Velocidad en Story Points", que
+        // no tiene techo natural (sin escalaMax), a diferencia de un % 0-100.
+        Sprint sprint = crearSprint(1);
+        RegistroValor r1 = crearRegistro(variable, new BigDecimal("85"), Instant.now());
+
+        when(variableRepo.findByProyectoIdAndActivaTrue(proyectoId)).thenReturn(List.of(variable));
+        when(sprintRepo.findByProyectoIdOrderByNumeroDesc(proyectoId)).thenReturn(List.of(sprint));
+        when(registroRepo.findByVariable_IdOrderByRegistradoAtAsc(variable.getId())).thenReturn(List.of(r1));
+
+        MetricaEvaluacionDetalleDto dto = service.evaluarDetalle(proyectoId).get(0);
+
+        assertThat(dto.escalaMin()).isNull();
+        assertThat(dto.escalaMax()).isNull();
+        assertThat(dto.escalaTipo()).isNull();
+        // tipoDato SÍ tiene default no-null en Variable ("numerico") — se
+        // conserva ese valor, no se convierte a null.
+        assertThat(dto.tipoDato()).isEqualTo("numerico");
+    }
 }
