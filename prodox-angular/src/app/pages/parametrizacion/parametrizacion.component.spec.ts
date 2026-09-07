@@ -209,20 +209,15 @@ describe('ParametrizacionComponent - Fase 16.5', () => {
     it('usarDelTop() debe copiar datos al formulario', () => {
       component.metrica = mockMetrica;
       component.top3 = mockTop3;
-      component.form = { 
-        objetivo: '', 
-        procedimiento: '', 
-        indicadorVariable: '', 
-        escala: '', 
-        frecuenciaCaptura: 'por_sprint' 
+      component.form = {
+        objetivo: '',
+        procedimiento: '',
+        indicadorVariable: '',
+        escala: '',
+        frecuenciaCaptura: 'por_sprint'
       };
 
       component.usarDelTop(mockTop3[0]);
-
-      // Debe capturar el request de incrementar uso
-      const req = httpMock.expectOne(`${environment.apiBaseUrl}/metric-ranking/${mockMetrica.factorId}/uso`);
-      expect(req.request.method).toBe('POST');
-      req.flush({});
 
       expect(component.form.objetivo).toBe(mockTop3[0].objetivo);
       expect(component.form.procedimiento).toBe(mockTop3[0].procedimiento);
@@ -248,8 +243,6 @@ describe('ParametrizacionComponent - Fase 16.5', () => {
 
       component.usarDelTop(entradaCompleta);
 
-      httpMock.expectOne(`${environment.apiBaseUrl}/metric-ranking/${mockMetrica.factorId}/uso`).flush({});
-
       expect(component.form.frecuenciaCaptura).toBe('semanal');
       expect(component.form.fuenteAcademica).toBe('Scrum Guide 2020');
       expect(component.form.formulaAcademica).toBe('SUMA(I3)');
@@ -271,12 +264,31 @@ describe('ParametrizacionComponent - Fase 16.5', () => {
 
       component.usarDelTop(sinAcademicos);
 
-      httpMock.expectOne(`${environment.apiBaseUrl}/metric-ranking/${mockMetrica.factorId}/uso`).flush({});
-
       expect(component.form.fuenteAcademica).toBeUndefined();
       expect(component.form.formulaAcademica).toBeUndefined();
       expect(component.form.tipoOperacion).toBeUndefined();
       expect(component.form.unidadResultado).toBeUndefined();
+    });
+
+    // Corrección de auditoría (ranking de parametrizaciones): "Usar" solo copia
+    // datos al formulario — el uso real se cuenta en el backend a partir de un
+    // guardado efectivo (ver MetricRankingService.getTop3ByMetricaId), nunca de
+    // este clic. Antes se llamaba a incrementarUso(this.metrica.factorId), que
+    // además usaba la clave equivocada para este flujo por métrica (factorId en
+    // vez de metricaId, MetricUsoRanking está indexado por factor). Verifica
+    // explícitamente que NINGUNA petición HTTP de incremento se dispare al usar
+    // una sugerencia del top3 — ni si el usuario cancela después, ni por doble
+    // clic (cada clic solo copia al formulario, nunca llama al backend).
+    it('usarDelTop() NO dispara ninguna petición de incremento de uso (ni una vez, ni por doble clic)', () => {
+      component.metrica = mockMetrica;
+      component.top3 = mockTop3;
+      component.form = { objetivo: '', procedimiento: '', indicadorVariable: '', escala: '', frecuenciaCaptura: 'por_sprint' };
+
+      component.usarDelTop(mockTop3[0]);
+      component.usarDelTop(mockTop3[0]); // doble clic
+
+      httpMock.expectNone(`${environment.apiBaseUrl}/metric-ranking/${mockMetrica.factorId}/uso`);
+      expect(component.form.objetivo).toBe(mockTop3[0].objetivo);
     });
   });
 

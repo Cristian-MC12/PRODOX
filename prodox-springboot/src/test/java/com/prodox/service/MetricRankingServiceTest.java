@@ -4,10 +4,13 @@ package com.prodox.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.prodox.dto.GuardarParametrizacionRequest;
 import com.prodox.dto.MetricParametrizacionDto;
+import com.prodox.dto.TopParametrizacionDto;
 import com.prodox.dto.VerificarParametrizacionRequest;
 import com.prodox.entity.MetricParametrizacion;
+import com.prodox.entity.MetricParametrizacionRanking;
 import com.prodox.entity.ProjectMember;
 import com.prodox.repository.FactorRepository;
+import com.prodox.repository.MetricParametrizacionRankingRepository;
 import com.prodox.repository.MetricParametrizacionRepository;
 import com.prodox.repository.MetricUsoRankingRepository;
 import com.prodox.repository.MetricaRepository;
@@ -52,6 +55,7 @@ class MetricRankingServiceTest {
     @Mock private PlaneacionService                planeacionService;
     @Mock private VariableDinamicaService          variableDinamicaService;
     @Mock private ProjectMemberRepository          projectMemberRepo;
+    @Mock private MetricParametrizacionRankingRepository rankingPorMetricaRepo;
 
     // Corrección de duplicados en Verificación: guardarPorMetrica() ahora adquiere un
     // advisory lock de Postgres vía EntityManager.createNativeQuery(...) antes de leer
@@ -78,11 +82,18 @@ class MetricRankingServiceTest {
         service = new MetricRankingService(
                 parametrizacionRepo, rankingRepo, factorRepo, metricaRepo,
                 planeacionService, variableDinamicaService, projectMemberRepo,
-                new ObjectMapper());
+                new ObjectMapper(), rankingPorMetricaRepo);
         ReflectionTestUtils.setField(service, "entityManager", entityManager);
         lenient().when(entityManager.createNativeQuery(anyString())).thenReturn(nativeQuery);
         lenient().when(nativeQuery.setParameter(anyString(), any())).thenReturn(nativeQuery);
         lenient().when(nativeQuery.getSingleResult()).thenReturn(null);
+        // V43: registrarUsoRanking() también pasa por entityManager.createNativeQuery(...)
+        // (el UPSERT atómico) — se mockea igual que el advisory lock, arriba, para que
+        // guardarPorMetrica() no falle con NullPointerException en los tests que no
+        // ejercitan específicamente el ranking. Los tests reales de concurrencia (con el
+        // UPSERT real de Postgres) están en MetricParametrizacionRankingConcurrenciaTest,
+        // contra la BD real.
+        lenient().when(nativeQuery.executeUpdate()).thenReturn(1);
 
         proyectoId = UUID.randomUUID();
         metricaId  = UUID.randomUUID();
@@ -126,6 +137,22 @@ class MetricRankingServiceTest {
                 null, "objetivo", "procedimiento", "indicador", "escala",
                 null, proyectoId, metricaId,
                 "SUMA", "SUMA(indicador)", "unidades", "fuente", frecuenciaCaptura, null, null, null, null, null, null);
+    }
+
+    /**
+     * Revisión final pre-commit (auditoría de callers): equivalente a request(),
+     * pero con usadaDesdeRankingId informado — simula un guardado que el
+     * frontend marcó como originado en el botón "Usar" del Top3. Usa el
+     * constructor canónico de 21 argumentos (único que expone este campo).
+     */
+    private GuardarParametrizacionRequest requestConUsarRanking(UUID usadaDesdeRankingId) {
+        return new GuardarParametrizacionRequest(
+                null, "objetivo", "procedimiento", "indicador", "escala",
+                null, proyectoId, metricaId,
+                "SUMA", "SUMA(indicador)", "unidades", "fuente",
+                null, null,
+                null, null, null, null, null, null,
+                usadaDesdeRankingId);
     }
 
     private MetricParametrizacion aprobadaExistente(int version) {
@@ -664,11 +691,23 @@ class MetricRankingServiceTest {
         return p;
     }
 
+    /** V43: fila de metric_parametrizacion_ranking apuntando a `canonica`, con `usos` dados. */
+    private MetricParametrizacionRanking rankingDe(MetricParametrizacion canonica, int usos) {
+        MetricParametrizacionRanking r = new MetricParametrizacionRanking();
+        r.setId(UUID.randomUUID());
+        r.setMetricaId(canonica.getMetricaId());
+        r.setFingerprint(com.prodox.util.FingerprintUtil.calcularFingerprint(canonica));
+        r.setParametrizacionCanonicaId(canonica.getId());
+        r.setUsos(usos);
+        return r;
+    }
+
     @Test
     void getTop3ByMetricaId_devuelveTodosLosCamposDeLaParametrizacion_noSoloObjetivo() {
         MetricParametrizacion completa = parametrizacionCompleta();
-        when(parametrizacionRepo.findTop3ByMetricaId(metricaId)).thenReturn(List.of(completa));
-        when(parametrizacionRepo.countByMetricaId(metricaId)).thenReturn(1L);
+        when(rankingPorMetricaRepo.findByMetricaIdOrderByUsosDesc(metricaId))
+                .thenReturn(List.of(rankingDe(completa, 1)));
+        when(parametrizacionRepo.findById(completa.getId())).thenReturn(Optional.of(completa));
 
         var resultado = service.getTop3ByMetricaId(metricaId);
 
@@ -712,8 +751,9 @@ class MetricRankingServiceTest {
         sinCamposAcademicos.setFormulaAcademica(null);
         sinCamposAcademicos.setTipoOperacion(null);
         sinCamposAcademicos.setUnidadResultado(null);
-        when(parametrizacionRepo.findTop3ByMetricaId(metricaId)).thenReturn(List.of(sinCamposAcademicos));
-        when(parametrizacionRepo.countByMetricaId(metricaId)).thenReturn(1L);
+        when(rankingPorMetricaRepo.findByMetricaIdOrderByUsosDesc(metricaId))
+                .thenReturn(List.of(rankingDe(sinCamposAcademicos, 1)));
+        when(parametrizacionRepo.findById(sinCamposAcademicos.getId())).thenReturn(Optional.of(sinCamposAcademicos));
 
         var dto = service.getTop3ByMetricaId(metricaId).get(0);
 
@@ -1127,5 +1167,331 @@ class MetricRankingServiceTest {
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // Corrección de auditoría (ranking de parametrizaciones): getTop3ByMetricaId()
+    // ya no muestra una fila por AUTOR con el mismo contador global repetido —
+    // agrupa por configuración sustantiva equivalente (FingerprintUtil, mismos
+    // campos que esMismoContenido()), conserva siempre el autor ORIGINAL (fila
+    // más antigua del grupo) y usos = cantidad real de filas equivalentes.
+    // ══════════════════════════════════════════════════════════════════════
+
+    private MetricParametrizacion parametrizacionParaRanking(
+            String userEmail, java.time.Instant createdAt, String objetivo,
+            String formulaAcademica, String escalaTipo) {
+        MetricParametrizacion p = new MetricParametrizacion();
+        p.setId(UUID.randomUUID());
+        p.setMetricaId(metricaId);
+        p.setProyectoId(UUID.randomUUID());
+        p.setUserEmail(userEmail);
+        p.setCreatedAt(createdAt);
+        p.setObjetivo(objetivo);
+        p.setProcedimiento("procedimiento estandar");
+        p.setIndicadorVariable("indicador");
+        p.setEscala("Numerica 0-100");
+        p.setEscalaTipo(escalaTipo);
+        p.setFormulaAcademica(formulaAcademica);
+        p.setTipoOperacion("SUMA");
+        p.setUnidadResultado("puntos");
+        p.setFuenteAcademica("Scrum Guide");
+        p.setFrecuenciaCaptura("por_sprint");
+        p.setResponsableCaptura("SCRUM_MASTER");
+        p.setStatus("aprobada");
+        return p;
+    }
+
+
+    // ══════════════════════════════════════════════════════════════════════
+    // V43 — Ranking de parametrizaciones: contador REAL de usos, independiente
+    // de cuántas filas físicas de metric_parametrizaciones existan. Corte
+    // limpio: sin backfill, sin fallback al cálculo antiguo — usos siempre
+    // arranca en 0, nunca se deriva de conteos históricos.
+    //
+    // Cierre del diseño (revisión final, segunda vuelta): dos operaciones
+    // separadas, evidenciadas acá por el SQL exacto enviado a
+    // entityManager.createNativeQuery(...) — ver contarLlamadasNativeQuery():
+    //   - asegurarExistenciaRanking(): INSERT ... ON CONFLICT DO NOTHING,
+    //     usos=0. Corre en TODO guardado exitoso (manual o "Usar") — es lo
+    //     único que hace publicable/visible una configuración en el Top3.
+    //     Nunca incrementa.
+    //   - registrarUsoRanking(): UPDATE ... SET usos = usos + 1. Solo corre
+    //     si usadaDesdeRankingId fue enviado y validado contra una fila REAL
+    //     y vigente de metric_parametrizacion_ranking para esta métrica.
+    // ══════════════════════════════════════════════════════════════════════
+
+    private static final String SQL_ASEGURAR_EXISTENCIA = "ON CONFLICT (metrica_id, fingerprint) DO NOTHING";
+    private static final String SQL_INCREMENTAR_USO = "usos = usos + 1";
+
+    /** Cuenta cuántas veces se pidió a entityManager una consulta nativa cuyo SQL contiene el fragmento dado. */
+    private long contarLlamadasNativeQuery(String fragmentoSql) {
+        ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
+        verify(entityManager, atLeast(0)).createNativeQuery(sqlCaptor.capture());
+        return sqlCaptor.getAllValues().stream().filter(sql -> sql.contains(fragmentoSql)).count();
+    }
+
+    @Test
+    @DisplayName("V43 revisión final — CASO A: guardado MANUAL de una configuración NUEVA -> crea la fila de ranking con usos=0, pero NO la incrementa")
+    void guardarPorMetrica_guardadoManualDeConfiguracionNueva_creaFilaDeRankingSinIncrementar() {
+        when(metricaRepo.existsById(metricaId)).thenReturn(true);
+        when(parametrizacionRepo.findHistorialVersiones(metricaId, proyectoId)).thenReturn(List.of());
+
+        service.guardar(request(), userId, userEmail);
+
+        assertThat(contarLlamadasNativeQuery(SQL_ASEGURAR_EXISTENCIA)).isEqualTo(1);
+        assertThat(contarLlamadasNativeQuery(SQL_INCREMENTAR_USO)).isZero();
+        verifyNoInteractions(rankingPorMetricaRepo); // sin señal de "Usar", ni siquiera se consulta
+    }
+
+    @Test
+    @DisplayName("V43 revisión final — CASO B: guardado MANUAL de una configuración cuyo fingerprint ya existía -> asegura existencia (no-op si ya está) pero NO incrementa")
+    void guardarPorMetrica_guardadoManualDeConfiguracionExistente_noIncrementaUsos() {
+        MetricParametrizacion pendienteExistente = pendienteConContenidoDeRequest(1);
+        when(parametrizacionRepo.findHistorialVersiones(metricaId, proyectoId))
+                .thenReturn(List.of(pendienteExistente));
+
+        service.guardar(request(), userId, userEmail);
+
+        verify(parametrizacionRepo, never()).save(any(MetricParametrizacion.class));
+        assertThat(contarLlamadasNativeQuery(SQL_ASEGURAR_EXISTENCIA)).isEqualTo(1);
+        assertThat(contarLlamadasNativeQuery(SQL_INCREMENTAR_USO)).isZero();
+        verifyNoInteractions(rankingPorMetricaRepo);
+    }
+
+    @Test
+    @DisplayName("V43 revisión final — CASO C: guardado ORIGINADO en 'Usar' (señal validada contra el ranking) y exitoso -> asegura existencia Y SÍ incrementa +1")
+    void guardarPorMetrica_guardadoOriginadoEnUsarYExitoso_incrementaUsoEnUno() {
+        UUID origenValidado = UUID.randomUUID();
+        when(metricaRepo.existsById(metricaId)).thenReturn(true);
+        when(parametrizacionRepo.findHistorialVersiones(metricaId, proyectoId)).thenReturn(List.of());
+        when(rankingPorMetricaRepo.existsByMetricaIdAndParametrizacionCanonicaId(metricaId, origenValidado))
+                .thenReturn(true);
+
+        service.guardar(requestConUsarRanking(origenValidado), userId, userEmail);
+
+        assertThat(contarLlamadasNativeQuery(SQL_ASEGURAR_EXISTENCIA)).isEqualTo(1);
+        assertThat(contarLlamadasNativeQuery(SQL_INCREMENTAR_USO)).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("V43 revisión final — CASO E: 'Usar' + guardado que falla -> NI asegura existencia NI incrementa (no debe quedar rastro parcial)")
+    void guardarPorMetrica_usarConGuardadoQueFalla_noTocaElRankingEnAbsoluto() {
+        UUID origenValidado = UUID.randomUUID();
+        when(parametrizacionRepo.findHistorialVersiones(metricaId, proyectoId)).thenReturn(List.of());
+        when(parametrizacionRepo.save(any(MetricParametrizacion.class)))
+                .thenThrow(new RuntimeException("fallo simulado de persistencia"));
+
+        assertThatThrownBy(() -> service.guardar(requestConUsarRanking(origenValidado), userId, userEmail))
+                .isInstanceOf(RuntimeException.class);
+
+        verifyNoInteractions(rankingPorMetricaRepo);
+        assertThat(contarLlamadasNativeQuery(SQL_ASEGURAR_EXISTENCIA)).isZero();
+        assertThat(contarLlamadasNativeQuery(SQL_INCREMENTAR_USO)).isZero();
+    }
+
+    @Test
+    @DisplayName("V43 revisión final — CASO F: 'Usar' sobre una versión pendiente existente (SIN fila física nueva) -> incrementa +1 y asegura existencia UNA sola vez (sin duplicar)")
+    void guardarPorMetrica_usarSobrePendienteExistenteSinFilaNueva_incrementaSinDuplicarFila() {
+        UUID origenValidado = UUID.randomUUID();
+        MetricParametrizacion pendienteExistente = pendienteConContenidoDeRequest(1);
+        when(parametrizacionRepo.findHistorialVersiones(metricaId, proyectoId))
+                .thenReturn(List.of(pendienteExistente));
+        when(rankingPorMetricaRepo.existsByMetricaIdAndParametrizacionCanonicaId(metricaId, origenValidado))
+                .thenReturn(true);
+
+        service.guardar(requestConUsarRanking(origenValidado), userId, userEmail);
+
+        // No crea fila física nueva de metric_parametrizaciones (comportamiento preexistente, sin cambios)...
+        verify(parametrizacionRepo, never()).save(any(MetricParametrizacion.class));
+        // ...pero SÍ asegura/reutiliza su fila de ranking exactamente una vez y SÍ incrementa +1 —
+        // regla de negocio confirmada: "si la configuración ya existía y no se crea una nueva fila
+        // física: igualmente +1", siempre que la señal "Usar" esté presente y validada.
+        assertThat(contarLlamadasNativeQuery(SQL_ASEGURAR_EXISTENCIA)).isEqualTo(1);
+        assertThat(contarLlamadasNativeQuery(SQL_INCREMENTAR_USO)).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("V43 revisión final — CASO G: usadaDesdeRankingId informado pero NO verificable contra el ranking (id ajeno/inventado/de otra métrica) -> el guardado NO falla, asegura existencia de SU PROPIA configuración pero NO incrementa")
+    void guardarPorMetrica_usadaDesdeRankingIdNoValidado_noIncrementaNiFallaElGuardado() {
+        UUID origenInventado = UUID.randomUUID();
+        when(metricaRepo.existsById(metricaId)).thenReturn(true);
+        when(parametrizacionRepo.findHistorialVersiones(metricaId, proyectoId)).thenReturn(List.of());
+        when(rankingPorMetricaRepo.existsByMetricaIdAndParametrizacionCanonicaId(metricaId, origenInventado))
+                .thenReturn(false);
+
+        MetricParametrizacionDto dto = service.guardar(requestConUsarRanking(origenInventado), userId, userEmail);
+
+        assertThat(dto).isNotNull(); // el guardado en sí nunca se bloquea por una señal inválida
+        assertThat(contarLlamadasNativeQuery(SQL_ASEGURAR_EXISTENCIA)).isEqualTo(1);
+        assertThat(contarLlamadasNativeQuery(SQL_INCREMENTAR_USO)).isZero();
+    }
+
+    @Test
+    @DisplayName("V43: sin metricaId real (no existe en el catálogo), NO se registra uso aunque la señal de 'Usar' esté presente — evita violar la FK de metric_parametrizacion_ranking hacia metricas(id)")
+    void guardarPorMetrica_metricaIdInexistente_noRegistraUso() {
+        UUID origenValidado = UUID.randomUUID();
+        when(metricaRepo.existsById(metricaId)).thenReturn(false);
+        when(parametrizacionRepo.findHistorialVersiones(metricaId, proyectoId)).thenReturn(List.of());
+
+        service.guardar(requestConUsarRanking(origenValidado), userId, userEmail);
+
+        // El guard de metricaId==null corta ANTES de siquiera consultar el ranking.
+        verifyNoInteractions(rankingPorMetricaRepo);
+        assertThat(contarLlamadasNativeQuery(SQL_ASEGURAR_EXISTENCIA)).isZero();
+        assertThat(contarLlamadasNativeQuery(SQL_INCREMENTAR_USO)).isZero();
+    }
+
+    @Test
+    @DisplayName("V43 (2): un guardado exitoso adicional (Usar validado) para la misma metricaId también asegura existencia e incrementa su propia fila")
+    void guardarPorMetrica_segundoGuardadoContenidoDistinto_aseguraExistenciaEIncrementa() {
+        UUID origenValidado = UUID.randomUUID();
+        MetricParametrizacion v1 = aprobadaExistente(1);
+        when(metricaRepo.existsById(metricaId)).thenReturn(true);
+        when(parametrizacionRepo.findHistorialVersiones(metricaId, proyectoId)).thenReturn(List.of(v1));
+        when(rankingPorMetricaRepo.existsByMetricaIdAndParametrizacionCanonicaId(metricaId, origenValidado))
+                .thenReturn(true);
+
+        MetricParametrizacionDto dto = service.guardar(requestConUsarRanking(origenValidado), userId, userEmail);
+
+        assertThat(contarLlamadasNativeQuery(SQL_ASEGURAR_EXISTENCIA)).isEqualTo(1);
+        assertThat(contarLlamadasNativeQuery(SQL_INCREMENTAR_USO)).isEqualTo(1);
+        assertThat(dto.version()).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("V43 (9): validación rechazada antes de guardarPorMetrica -> nunca toca el ranking (entityManager sin interacciones)")
+    void guardar_validacionRechazada_noRegistraUso() {
+        assertThatThrownBy(() -> service.guardar(requestConResponsable("CUALQUIERA"), userId, userEmail))
+                .isInstanceOf(ResponsableCapturaInvalidoException.class);
+
+        verifyNoInteractions(entityManager);
+    }
+
+    @Test
+    @DisplayName("V43 (9): usuario sin acceso al proyecto -> SecurityException antes de guardarPorMetrica, no registra uso")
+    void guardar_usuarioSinAcceso_noRegistraUso() {
+        String externoId = "externo-1";
+        when(projectMemberRepo.existsByProyectoIdAndUserId(proyectoId, externoId)).thenReturn(false);
+
+        assertThatThrownBy(() -> service.guardar(request(), externoId, "externo@example.com"))
+                .isInstanceOf(SecurityException.class);
+
+        verifyNoInteractions(entityManager);
+    }
+
+    @Test
+    @DisplayName("V43 (4/8): diferencia solo en el objetivo -> fingerprint distinto (verificado directamente, sin duplicar la lógica de FingerprintUtil)")
+    void fingerprint_diferenciaEnObjetivo_esDistinto() {
+        MetricParametrizacion p1 = parametrizacionParaRanking("a@x.com", java.time.Instant.parse("2026-01-01T00:00:00Z"),
+                "objetivo A", "SUMA(x)", "NUMERICA_ENTERA");
+        MetricParametrizacion p2 = parametrizacionParaRanking("a@x.com", java.time.Instant.parse("2026-01-01T00:00:00Z"),
+                "objetivo B", "SUMA(x)", "NUMERICA_ENTERA");
+
+        assertThat(com.prodox.util.FingerprintUtil.calcularFingerprint(p1))
+                .isNotEqualTo(com.prodox.util.FingerprintUtil.calcularFingerprint(p2));
+    }
+
+    @Test
+    @DisplayName("V43: diferencia solo en la fórmula académica -> fingerprint distinto")
+    void fingerprint_diferenciaEnFormula_esDistinto() {
+        MetricParametrizacion p1 = parametrizacionParaRanking("a@x.com", java.time.Instant.parse("2026-01-01T00:00:00Z"),
+                "objetivo comun", "SUMA(x)", "NUMERICA_ENTERA");
+        MetricParametrizacion p2 = parametrizacionParaRanking("a@x.com", java.time.Instant.parse("2026-01-01T00:00:00Z"),
+                "objetivo comun", "PROMEDIO(x)", "NUMERICA_ENTERA");
+
+        assertThat(com.prodox.util.FingerprintUtil.calcularFingerprint(p1))
+                .isNotEqualTo(com.prodox.util.FingerprintUtil.calcularFingerprint(p2));
+    }
+
+    @Test
+    @DisplayName("V43: diferencia solo en la escala -> fingerprint distinto")
+    void fingerprint_diferenciaEnEscala_esDistinto() {
+        MetricParametrizacion p1 = parametrizacionParaRanking("a@x.com", java.time.Instant.parse("2026-01-01T00:00:00Z"),
+                "objetivo comun", "SUMA(x)", "NUMERICA_ENTERA");
+        MetricParametrizacion p2 = parametrizacionParaRanking("a@x.com", java.time.Instant.parse("2026-01-01T00:00:00Z"),
+                "objetivo comun", "SUMA(x)", "NUMERICA_DECIMAL");
+
+        assertThat(com.prodox.util.FingerprintUtil.calcularFingerprint(p1))
+                .isNotEqualTo(com.prodox.util.FingerprintUtil.calcularFingerprint(p2));
+    }
+
+    @Test
+    @DisplayName("V43: diferencia SOLO en el autor -> mismo fingerprint (el autor no forma parte de la identidad de la configuración)")
+    void fingerprint_diferenciaSoloEnAutor_esIgual() {
+        MetricParametrizacion p1 = parametrizacionParaRanking("autor1@x.com", java.time.Instant.parse("2026-01-01T00:00:00Z"),
+                "objetivo identico", "SUMA(x)", "NUMERICA_ENTERA");
+        MetricParametrizacion p2 = parametrizacionParaRanking("autor2@x.com", java.time.Instant.parse("2026-01-02T00:00:00Z"),
+                "objetivo identico", "SUMA(x)", "NUMERICA_ENTERA");
+
+        assertThat(com.prodox.util.FingerprintUtil.calcularFingerprint(p1))
+                .isEqualTo(com.prodox.util.FingerprintUtil.calcularFingerprint(p2));
+    }
+
+    // rankingDe(...) ya está definido más arriba (junto a parametrizacionCompleta()),
+    // reutilizado acá — sin duplicar el helper.
+
+    @Test
+    @DisplayName("V43 (10/corte limpio): sin entradas de ranking para esta métrica, Top3 es lista vacía — nunca deriva un valor del historial antiguo")
+    void getTop3ByMetricaId_sinEntradasDeRanking_devuelveListaVaciaSinConsultarHistorial() {
+        when(rankingPorMetricaRepo.findByMetricaIdOrderByUsosDesc(metricaId)).thenReturn(List.of());
+
+        assertThat(service.getTop3ByMetricaId(metricaId)).isEmpty();
+        verifyNoInteractions(parametrizacionRepo);
+    }
+
+    @Test
+    @DisplayName("V43 (5/10): abrir/consultar el Top3 (solo lectura) nunca dispara el upsert de uso")
+    void getTop3ByMetricaId_soloLectura_nuncaTocaEntityManager() {
+        when(rankingPorMetricaRepo.findByMetricaIdOrderByUsosDesc(metricaId)).thenReturn(List.of());
+
+        service.getTop3ByMetricaId(metricaId);
+
+        verifyNoInteractions(entityManager);
+    }
+
+    @Test
+    @DisplayName("V43 (3): el Top3 muestra el usos real de la tabla de ranking, y el autor de la parametrización CANÓNICA referenciada — no de quien reutilizó la configuración")
+    void getTop3ByMetricaId_muestraUsosRealYAutorCanonico() {
+        MetricParametrizacion canonica = parametrizacionParaRanking("autorOriginal@x.com",
+                java.time.Instant.parse("2026-01-01T00:00:00Z"), "objetivo", "SUMA(x)", "NUMERICA_ENTERA");
+        when(rankingPorMetricaRepo.findByMetricaIdOrderByUsosDesc(metricaId))
+                .thenReturn(List.of(rankingDe(canonica, 11))); // usos NO es 1, ni el tamaño de ningún grupo — es el contador real
+        when(parametrizacionRepo.findById(canonica.getId())).thenReturn(Optional.of(canonica));
+
+        var dto = service.getTop3ByMetricaId(metricaId).get(0);
+
+        assertThat(dto.usos()).isEqualTo(11);
+        assertThat(dto.userEmail()).isEqualTo("autorOriginal@x.com");
+    }
+
+    @Test
+    @DisplayName("V43 (13): con más de 3 entradas de ranking, Top3 devuelve solo las 3 con más usos (ya ordenadas por el repositorio) y no consulta las restantes")
+    void getTop3ByMetricaId_limitaATresEntradas() {
+        MetricParametrizacion p1 = parametrizacionParaRanking("a@x.com", java.time.Instant.parse("2026-01-01T00:00:00Z"), "config1", "F1", "NUMERICA_ENTERA");
+        MetricParametrizacion p2 = parametrizacionParaRanking("b@x.com", java.time.Instant.parse("2026-01-01T00:00:00Z"), "config2", "F2", "NUMERICA_ENTERA");
+        MetricParametrizacion p3 = parametrizacionParaRanking("c@x.com", java.time.Instant.parse("2026-01-01T00:00:00Z"), "config3", "F3", "NUMERICA_ENTERA");
+        MetricParametrizacion p4 = parametrizacionParaRanking("d@x.com", java.time.Instant.parse("2026-01-01T00:00:00Z"), "config4", "F4", "NUMERICA_ENTERA");
+        when(rankingPorMetricaRepo.findByMetricaIdOrderByUsosDesc(metricaId)).thenReturn(
+                List.of(rankingDe(p1, 4), rankingDe(p2, 3), rankingDe(p3, 2), rankingDe(p4, 1)));
+        when(parametrizacionRepo.findById(p1.getId())).thenReturn(Optional.of(p1));
+        when(parametrizacionRepo.findById(p2.getId())).thenReturn(Optional.of(p2));
+        when(parametrizacionRepo.findById(p3.getId())).thenReturn(Optional.of(p3));
+
+        var top3 = service.getTop3ByMetricaId(metricaId);
+
+        assertThat(top3).hasSize(3);
+        assertThat(top3).extracting(TopParametrizacionDto::usos).containsExactly(4, 3, 2);
+        verify(parametrizacionRepo, never()).findById(p4.getId());
+    }
+
+    @Test
+    @DisplayName("V43: guardarPorMetrica nunca toca metric_uso_ranking (flujo legacy por factor) — sin cambios en esta tarea")
+    void guardarPorMetrica_nuncaTocaRankingLegacyPorFactor() {
+        when(metricaRepo.existsById(metricaId)).thenReturn(true);
+        when(parametrizacionRepo.findHistorialVersiones(metricaId, proyectoId)).thenReturn(List.of());
+
+        service.guardar(request(), userId, userEmail);
+
+        verifyNoInteractions(rankingRepo); // rankingRepo = MetricUsoRankingRepository, el legacy — sin cambios
     }
 }

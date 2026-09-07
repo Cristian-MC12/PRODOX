@@ -207,6 +207,18 @@ import { ToastService } from '../../shared/toast/toast.service';
           </div>
         }
 
+        <!-- Corrección de auditoría (ranking de parametrizaciones, V43): corte
+             limpio — sin backfill del historial anterior. Si todavía no hay
+             ninguna entrada en el ranking nuevo (nadie completó "Usar" desde
+             que existe esta funcionalidad) NI una parametrización de
+             referencia, se muestra un mensaje honesto en vez de un número
+             derivado del historial antiguo. -->
+        @if (!parametrizacionBase && top3.length === 0) {
+          <div class="alert alert-light border small mb-4 py-2">
+            <i class="bi bi-info-circle me-1"></i>Aún no hay usos registrados para esta métrica.
+          </div>
+        }
+
         <!-- Asistente GenAI -->
         <div class="card mb-4">
           <div class="card-header d-flex align-items-center gap-2">
@@ -726,10 +738,23 @@ export class ParametrizacionComponent implements OnInit {
    * frecuencia de captura ya definidos — bug corregido acá). Un campo que
    * realmente está vacío en el original se conserva vacío/undefined, nunca
    * se inventa un valor.
+   *
+   * Corrección de auditoría (ranking de parametrizaciones): este método SOLO
+   * copia los datos al formulario — todavía no hay ningún guardado. El "uso"
+   * real de esta configuración se cuenta en el backend (MetricRankingService.
+   * getTop3ByMetricaId) a partir de las parametrizaciones efectivamente
+   * guardadas, no de este clic. Por eso ya NO se llama a
+   * rankingService.incrementarUso() acá: antes se llamaba con
+   * this.metrica.factorId (que en este flujo por métrica en realidad es un
+   * metricaId, no un factorId — MetricUsoRanking está indexado por factor,
+   * así que esa llamada nunca encontraba la fila y no tenía ningún efecto
+   * real) y, aunque hubiera funcionado, habría incrementado el contador con
+   * solo copiar al formulario, ANTES de que el usuario guarde o incluso
+   * cancele — exactamente el caso que no debe incrementar usos.
    */
   usarDelTop(t: TopParametrizacion): void {
     console.log('🔍 Datos de TopParametrizacion:', t);
-    
+
     this.form = {
       objetivo:          t.objetivo || '',
       procedimiento:     t.procedimiento || '',
@@ -746,7 +771,13 @@ export class ParametrizacionComponent implements OnInit {
       escalaPaso:        t.escalaPaso ?? undefined,
       escalaSinLimite:   t.escalaSinLimite ?? false,
       escalaDescripcion: t.escalaDescripcion ?? undefined,
-      responsableCaptura: this.form.responsableCaptura || 'SCRUM_MASTER'
+      responsableCaptura: this.form.responsableCaptura || 'SCRUM_MASTER',
+      // Auditoría (ranking de parametrizaciones, V43): registra que ESTA
+      // selección vino de "Usar" — guardar() lo envía al backend, que lo
+      // valida antes de contar un uso real. Solo esta acción (usarDelTop)
+      // fija este campo; usarBase()/usarPropuesta() reemplazan this.form
+      // por completo y lo dejan sin definir.
+      usadaDesdeRankingId: t.id
     };
     
     console.log('🔍 Formulario después de copiar:', this.form);
@@ -761,11 +792,6 @@ export class ParametrizacionComponent implements OnInit {
         formulario.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }
     }, 100);
-    
-    // Incrementar el ranking de uso de esta parametrización
-    if (this.metrica?.factorId) {
-      this.rankingService.incrementarUso(this.metrica.factorId).pipe(catchError(() => of(null))).subscribe();
-    }
   }
 
   /**
@@ -1066,7 +1092,12 @@ export class ParametrizacionComponent implements OnInit {
       escalaMax:         this.form.escalaMax,
       escalaPaso:        this.form.escalaPaso,
       escalaSinLimite:   this.form.escalaSinLimite,
-      escalaDescripcion: this.form.escalaDescripcion
+      escalaDescripcion: this.form.escalaDescripcion,
+      // Auditoría (ranking de parametrizaciones, V43): viaja tal cual se
+      // fijó en usarDelTop() (o queda undefined/null si el formulario nunca
+      // vino de "Usar") — el backend es quien decide si cuenta como uso,
+      // nunca este componente.
+      usadaDesdeRankingId: this.form.usadaDesdeRankingId ?? null
     }).pipe(
       catchError(err => {
         this.guardando = false;

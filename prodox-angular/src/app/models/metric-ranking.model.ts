@@ -48,6 +48,17 @@ export interface GuardarParametrizacionRequest extends EscalaEstructurada {
   frecuenciaCaptura?: string | null;
   /** Revisión de captura por parametrización: "EQUIPO" | "SCRUM_MASTER". */
   responsableCaptura?: string | null;
+  /**
+   * Auditoría (ranking de parametrizaciones, V43): id de la parametrización
+   * CANÓNICA (el mismo TopParametrizacion.id del Top3) que el usuario
+   * seleccionó mediante el botón "Usar" del ranking, si este guardado se
+   * originó ahí. null/ausente = guardado que NO vino de "Usar" (formulario
+   * en blanco, "Usar como base", propuesta GenAI, o envío en lote desde
+   * Resumen de una métrica nunca tocada en el ranking) — el backend
+   * (MetricRankingService) valida este id contra la tabla de ranking antes
+   * de confiar en él; nunca se asume válido solo por venir informado.
+   */
+  usadaDesdeRankingId?: string | null;
 }
 
 /**

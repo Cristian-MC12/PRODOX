@@ -46,8 +46,42 @@ public record GuardarParametrizacionRequest(
     BigDecimal escalaMax,
     BigDecimal escalaPaso,
     Boolean escalaSinLimite,
-    String escalaDescripcion
+    String escalaDescripcion,
+    /**
+     * V43 (ranking de parametrizaciones): id de la parametrización CANÓNICA
+     * (el mismo TopParametrizacionDto.id que ve el frontend en el Top3) que
+     * el usuario seleccionó mediante el botón "Usar" del ranking, si este
+     * guardado se originó ahí.
+     *
+     * null = guardado que NO vino de "Usar" (formulario en blanco, "Usar
+     * como base", propuesta GenAI, envío en lote desde Resumen de una
+     * métrica nunca tocada en el ranking) — NUNCA incrementa el contador de
+     * usos (MetricRankingService.guardarPorMetrica() NO confía ciegamente en
+     * este valor: lo valida contra metric_parametrizacion_ranking antes de
+     * registrar cualquier uso — un id ajeno, inventado o de otra métrica
+     * simplemente no incrementa nada).
+     */
+    UUID usadaDesdeRankingId
 ) {
+    /**
+     * Constructor de compatibilidad: firma previa a la incorporación de
+     * usadaDesdeRankingId (V43, ranking de parametrizaciones). Delega en el
+     * constructor canónico con usadaDesdeRankingId=null — mismo
+     * comportamiento que antes de este campo (nunca registra un uso).
+     */
+    public GuardarParametrizacionRequest(
+        UUID factorId, String objetivo, String procedimiento, String indicadorVariable, String escala,
+        UUID metricaBaseId, UUID proyectoId, UUID metricaId,
+        String tipoOperacion, String formulaAcademica, String unidadResultado, String fuenteAcademica,
+        String frecuenciaCaptura, String responsableCaptura,
+        String escalaTipo, BigDecimal escalaMin, BigDecimal escalaMax, BigDecimal escalaPaso,
+        Boolean escalaSinLimite, String escalaDescripcion
+    ) {
+        this(factorId, objetivo, procedimiento, indicadorVariable, escala, metricaBaseId, proyectoId, metricaId,
+            tipoOperacion, formulaAcademica, unidadResultado, fuenteAcademica, frecuenciaCaptura, responsableCaptura,
+            escalaTipo, escalaMin, escalaMax, escalaPaso, escalaSinLimite, escalaDescripcion, null);
+    }
+
     /**
      * Constructor de compatibilidad: firma previa a la incorporación de
      * responsableCaptura (Revisión de captura por parametrización). Delega en

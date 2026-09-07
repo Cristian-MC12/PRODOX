@@ -12,10 +12,12 @@ import com.prodox.entity.MetricParametrizacion;
 import com.prodox.entity.MetricUsoRanking;
 import com.prodox.entity.ProjectMember;
 import com.prodox.repository.FactorRepository;
+import com.prodox.repository.MetricParametrizacionRankingRepository;
 import com.prodox.repository.MetricParametrizacionRepository;
 import com.prodox.repository.MetricUsoRankingRepository;
 import com.prodox.repository.MetricaRepository;
 import com.prodox.repository.ProjectMemberRepository;
+import com.prodox.util.FingerprintUtil;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import lombok.RequiredArgsConstructor;
@@ -42,6 +44,8 @@ public class MetricRankingService {
     private final VariableDinamicaService         variableDinamicaService;
     private final ProjectMemberRepository         projectMemberRepo;
     private final ObjectMapper                    objectMapper;
+    /** V43: ranking global por métrica, contador real de usos — ver registrarUsoRanking()/getTop3ByMetricaId(). */
+    private final MetricParametrizacionRankingRepository rankingPorMetricaRepo;
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -442,6 +446,16 @@ public class MetricRankingService {
             // Un reenvío con contenido distinto, o sobre una versión ya aprobada o
             // rechazada, sigue creando una versión nueva exactamente como antes.
             if ("pendiente".equals(ultima.getStatus()) && esMismoContenido(ultima, req)) {
+                // Cierre del diseño V43 (elimina la dependencia circular
+                // Top3->fila de ranking->"Usar"->fila de ranking): CUALQUIER
+                // guardado exitoso — venga o no de "Usar" — garantiza que la
+                // fila de ranking de esta configuración exista (usos=0 si es
+                // nueva; se reutiliza si ya existía). Eso es lo único que hace
+                // publicable/visible una configuración en el Top3. El
+                // incremento real (+1) es un paso aparte, gated por la señal
+                // "Usar" validada — ver registrarUsoRankingSiCorrespondeUsar().
+                asegurarExistenciaRanking(ultima);
+                registrarUsoRankingSiCorrespondeUsar(ultima, req.usadaDesdeRankingId());
                 return toDto(ultima, null);
             }
             siguienteVersion = ultima.getVersion() + 1;
@@ -484,7 +498,137 @@ public class MetricRankingService {
         p.setStatus("pendiente");
 
         MetricParametrizacion saved = parametrizacionRepo.save(p);
+        // Cierre del diseño V43: único otro punto de retorno exitoso de este
+        // método — ver comentario en el punto de retorno anterior. Exactamente
+        // uno de los dos se ejecuta por invocación, nunca ambos, así que
+        // asegurarExistenciaRanking() corre como mucho una vez, y el
+        // incremento (si corresponde) también.
+        asegurarExistenciaRanking(saved);
+        registrarUsoRankingSiCorrespondeUsar(saved, req.usadaDesdeRankingId());
         return toDto(saved, null);
+    }
+
+    /**
+     * Cierre del diseño V43 (revisión final pre-commit, segunda vuelta): la
+     * primera versión de esta corrección (gatear TODO incremento detrás de
+     * `usadaDesdeRankingId` validado) introdujo sin querer una dependencia
+     * circular real, descubierta por los propios tests de concurrencia contra
+     * Postgres: el Top3 solo muestra configuraciones que ya tienen fila en
+     * metric_parametrizacion_ranking; "Usar" solo puede pulsarse sobre algo
+     * visible en el Top3; y el único punto que creaba esa fila
+     * (registrarUsoRanking(), antes con INSERT ... ON CONFLICT DO UPDATE)
+     * solo se ejecutaba si `usadaDesdeRankingId` ya era válido — es decir, ya
+     * exigía que la fila existiera para crearla. Ninguna configuración nueva
+     * podía entrar jamás a la tabla; el Top3 habría quedado vacío para
+     * siempre en producción.
+     *
+     * Corrección definitiva: se separan dos operaciones independientes.
+     * asegurarExistenciaRanking() (abajo) se invoca en AMBOS puntos de retorno
+     * exitoso de guardarPorMetrica() — venga o no de "Usar" — y garantiza que
+     * la fila exista con usos=0 si es la primera vez que se ve este
+     * fingerprint para esta métrica (esa creación en sí NUNCA cuenta como
+     * uso: usos arranca siempre en 0, nunca se deriva de conteos históricos —
+     * ver AJUSTE 1 ya aprobado). Esta otra función sigue siendo el único
+     * lugar donde el contador +1 puede ocurrir, y sigue exigiendo la misma
+     * validación explícita de origen que antes: `usadaDesdeRankingId`
+     * (GuardarParametrizacionRequest) es una señal EXPLÍCITA de contexto — el
+     * id de la parametrización canónica que el usuario vio y seleccionó en el
+     * Top3 — nunca inferida de estado temporal del frontend. El backend NUNCA
+     * confía en ese valor a ciegas: lo valida acá contra
+     * metric_parametrizacion_ranking (debe existir realmente como canónica
+     * vigente PARA ESTA MISMA métrica) antes de incrementar. Un id null
+     * (guardado manual), inexistente, ya no vigente, o de otra métrica,
+     * simplemente no incrementa nada — sin lanzar error, sin bloquear el
+     * guardado en sí.
+     */
+    private void registrarUsoRankingSiCorrespondeUsar(MetricParametrizacion p, UUID usadaDesdeRankingId) {
+        if (usadaDesdeRankingId == null || p.getMetricaId() == null) {
+            return;
+        }
+        if (!rankingPorMetricaRepo.existsByMetricaIdAndParametrizacionCanonicaId(p.getMetricaId(), usadaDesdeRankingId)) {
+            // Señal presente pero no verificable (id inventado, de otra métrica,
+            // o ya no vigente) — se ignora sin bloquear el guardado ya exitoso.
+            return;
+        }
+        registrarUsoRanking(p);
+    }
+
+    /**
+     * V43 (cierre del diseño): garantiza que exista una fila de ranking para
+     * (metricaId, fingerprint-de-p) — la crea con usos=0 y
+     * parametrizacionCanonicaId = p.getId() si es la primera vez que se ve
+     * esta configuración para esta métrica; si ya existía (misma
+     * configuración guardada antes, por cualquier vía), no la toca — ni su
+     * usos ni su parametrizacionCanonicaId cambian.
+     *
+     * Se invoca en TODO guardado exitoso de guardarPorMetrica(), manual o vía
+     * "Usar" — es lo único que hace a una configuración "publicable"/visible
+     * en el Top3. Deliberadamente NUNCA incrementa usos: crear la fila no es
+     * un uso real, es simplemente hacerla existir para que, más adelante,
+     * alguien pueda reutilizarla genuinamente vía "Usar" (ver
+     * registrarUsoRankingSiCorrespondeUsar()).
+     *
+     * INSERT ... ON CONFLICT (metrica_id, fingerprint) DO NOTHING: atómico —
+     * dos guardados concurrentes de la MISMA configuración nueva (ninguno vía
+     * "Usar" todavía, porque todavía no existe nada que usar) nunca producen
+     * dos filas; el que pierde la carrera simplemente no hace nada, sin
+     * excepción, sin dejar la transacción rollback-only.
+     *
+     * Corre dentro de la misma transacción @Transactional que
+     * parametrizacionRepo.save(p) (heredada de guardar()) — si el guardado
+     * global termina en rollback por cualquier motivo posterior, Postgres
+     * deshace esta fila igual que cualquier otra escritura de la transacción;
+     * no puede quedar huérfana.
+     */
+    private void asegurarExistenciaRanking(MetricParametrizacion p) {
+        if (p.getMetricaId() == null) {
+            return;
+        }
+        String fingerprint = FingerprintUtil.calcularFingerprint(p);
+        entityManager.createNativeQuery("""
+                INSERT INTO metric_parametrizacion_ranking
+                    (metrica_id, fingerprint, parametrizacion_canonica_id, usos, created_at, updated_at)
+                VALUES (:metricaId, :fingerprint, :parametrizacionId, 0, NOW(), NOW())
+                ON CONFLICT (metrica_id, fingerprint) DO NOTHING
+                """)
+                .setParameter("metricaId", p.getMetricaId())
+                .setParameter("fingerprint", fingerprint)
+                .setParameter("parametrizacionId", p.getId())
+                .executeUpdate();
+    }
+
+    /**
+     * V43 (cierre del diseño): incrementa atómicamente en +1 el contador de
+     * usos de la fila de ranking para (metricaId, fingerprint-de-p). Un
+     * simple UPDATE — nunca un upsert — porque para cuando este método se
+     * invoca, asegurarExistenciaRanking() (llamada justo antes, en ambos
+     * puntos de retorno de guardarPorMetrica()) ya garantizó que esa fila
+     * existe; no hay caso en el que este UPDATE deba crear nada.
+     *
+     * El UPDATE en sí es atómico bajo el lock de fila que Postgres toma
+     * automáticamente: dos incrementos concurrentes de la MISMA fila se
+     * serializan a nivel de motor (nunca en memoria de la aplicación) y
+     * ambos aplican — dos solicitudes simultáneas sobre la misma
+     * configuración suman +2 en total, nunca +1 (incremento perdido).
+     * Tampoco depende de capturar una excepción de violación de constraint.
+     *
+     * Solo se invoca desde registrarUsoRankingSiCorrespondeUsar() — nunca
+     * directamente — para que la validación del origen "Usar" sea imposible
+     * de saltarse por accidente.
+     *
+     * NO toca metric_uso_ranking (flujo legacy por factor) ni
+     * guardarPorFactor()/incrementarUso(factorId) — sin cambios en esta tarea.
+     */
+    private void registrarUsoRanking(MetricParametrizacion p) {
+        String fingerprint = FingerprintUtil.calcularFingerprint(p);
+        entityManager.createNativeQuery("""
+                UPDATE metric_parametrizacion_ranking
+                SET usos = usos + 1, updated_at = NOW()
+                WHERE metrica_id = :metricaId AND fingerprint = :fingerprint
+                """)
+                .setParameter("metricaId", p.getMetricaId())
+                .setParameter("fingerprint", fingerprint)
+                .executeUpdate();
     }
 
     /**
@@ -674,38 +818,65 @@ public class MetricRankingService {
     }
 
     /**
-     * Top 3 parametrizaciones por metricaId (flujo desde Planeación).
-     * Los "usos" se calculan como la cantidad total de parametrizaciones
-     * guardadas para esta métrica (indica popularidad).
+     * Top 3 parametrizaciones por metricaId (flujo desde Planeación), por
+     * cantidad REAL de usos.
+     *
+     * Corrección de auditoría (ranking de parametrizaciones, V43): la versión
+     * original mostraba UNA FILA POR AUTOR con el mismo "usosTotales" (conteo
+     * global de TODAS las filas de metric_parametrizaciones de la métrica)
+     * repetido en cada una — bug reportado ("Configuración X - autor A - 9
+     * usos / autor B - 9 usos / autor C - 9 usos"). Una corrección intermedia
+     * agrupó filas en memoria por configuración equivalente (usos = cantidad
+     * de filas), pero se descartó: una fila de metric_parametrizaciones
+     * representa una versión guardada por proyecto, no necesariamente una
+     * pulsación real de "Usar" (puede venir de datos de prueba, ediciones
+     * manuales, reenvíos) — contar filas no es contar usos reales.
+     *
+     * Ahora se lee directamente metric_parametrizacion_ranking (V43): un
+     * contador REAL, incrementado atómicamente en cada guardado exitoso vía
+     * "Usar" (ver registrarUsoRanking()), independiente de cuántas filas
+     * físicas existan. CORTE LIMPIO por decisión explícita: si esta métrica
+     * todavía no tiene ninguna entrada de ranking (nadie completó un "Usar"
+     * desde que existe esta tabla), se devuelve una lista vacía — nunca se
+     * deriva/aproxima un número a partir del historial antiguo de
+     * metric_parametrizaciones.
+     *
+     * El autor mostrado (userEmail) sale de la parametrización CANÓNICA
+     * (parametrizacionCanonicaId, la que produjo el primer uso registrado) —
+     * nunca cambia porque otro usuario haya reutilizado la configuración
+     * después.
      */
     public List<TopParametrizacionDto> getTop3ByMetricaId(UUID metricaId) {
-        List<MetricParametrizacion> todas = parametrizacionRepo.findTop3ByMetricaId(metricaId);
-        // Contar usos totales para esta métrica (todas las parametrizaciones de todos los usuarios)
-        long usosTotales = parametrizacionRepo.countByMetricaId(metricaId);
-
-        return todas.stream()
-                .map(p -> new TopParametrizacionDto(
-                        p.getId(),
-                        p.getUserEmail(),
-                        p.getObjetivo(),
-                        p.getProcedimiento(),
-                        p.getIndicadorVariable(),
-                        p.getEscala(),
-                        (int) usosTotales,
-                        p.getCreatedAt(),
-                        p.getFrecuenciaCaptura(),
-                        p.getFuenteAcademica(),
-                        p.getFormulaAcademica(),
-                        p.getTipoOperacion(),
-                        p.getUnidadResultado(),
-                        // Campos de escala estructurada
-                        p.getEscalaTipo(),
-                        p.getEscalaMin(),
-                        p.getEscalaMax(),
-                        p.getEscalaPaso(),
-                        p.getEscalaSinLimite(),
-                        p.getEscalaDescripcion()
-                ))
+        return rankingPorMetricaRepo.findByMetricaIdOrderByUsosDesc(metricaId).stream()
+                .limit(3)
+                .map(r -> {
+                    MetricParametrizacion canonica = parametrizacionRepo
+                            .findById(r.getParametrizacionCanonicaId())
+                            .orElseThrow(() -> new IllegalStateException(
+                                    "Ranking " + r.getId() + " referencia una parametrización canónica inexistente"));
+                    return new TopParametrizacionDto(
+                            canonica.getId(),
+                            canonica.getUserEmail(),
+                            canonica.getObjetivo(),
+                            canonica.getProcedimiento(),
+                            canonica.getIndicadorVariable(),
+                            canonica.getEscala(),
+                            r.getUsos(),
+                            canonica.getCreatedAt(),
+                            canonica.getFrecuenciaCaptura(),
+                            canonica.getFuenteAcademica(),
+                            canonica.getFormulaAcademica(),
+                            canonica.getTipoOperacion(),
+                            canonica.getUnidadResultado(),
+                            // Campos de escala estructurada
+                            canonica.getEscalaTipo(),
+                            canonica.getEscalaMin(),
+                            canonica.getEscalaMax(),
+                            canonica.getEscalaPaso(),
+                            canonica.getEscalaSinLimite(),
+                            canonica.getEscalaDescripcion()
+                    );
+                })
                 .toList();
     }
 

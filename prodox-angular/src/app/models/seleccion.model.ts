@@ -58,6 +58,16 @@ export interface Parametrizacion extends EscalaEstructurada {
   nombreVariable?: string;     // Identificador técnico snake_case (Fase 16.10-E)
   // Propuesta elegida de las 3 que da GenAI
   propuestaElegida?: number;   // 0, 1 o 2
+  /**
+   * Auditoría (ranking de parametrizaciones, V43): id de la parametrización
+   * canónica del Top3 que el usuario seleccionó mediante "Usar" — se
+   * conserva en el formulario local para viajar en el guardado real
+   * (parametrizacion.component.ts:guardar() y, si esta selección se envía
+   * en lote, resumen-seleccion.component.ts:aceptar()). Cualquier acción
+   * que reemplaza el formulario completo (usarBase(), usarPropuesta(), un
+   * formulario nuevo) lo deja sin definir — solo usarDelTop() lo fija.
+   */
+  usadaDesdeRankingId?: string | null;
 }
 
 export interface PropuestaGenAI extends EscalaEstructurada {

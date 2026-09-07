@@ -376,7 +376,14 @@ export class ResumenSeleccionComponent implements OnInit {
         escalaMax:         s.parametrizacion!.escalaMax ?? null,
         escalaPaso:        s.parametrizacion!.escalaPaso ?? null,
         escalaSinLimite:   s.parametrizacion!.escalaSinLimite ?? null,
-        escalaDescripcion: s.parametrizacion!.escalaDescripcion ?? null
+        escalaDescripcion: s.parametrizacion!.escalaDescripcion ?? null,
+        // Auditoría (ranking de parametrizaciones, V43): este envío en lote
+        // guarda TODAS las métricas seleccionadas, ninguna necesariamente
+        // vinculada a "Usar" del ranking — se reenvía tal cual quedó
+        // guardado en la selección (null salvo que esa métrica específica sí
+        // haya venido de usarDelTop() en parametrizacion.component.ts). El
+        // backend es quien decide si cuenta como uso, nunca este componente.
+        usadaDesdeRankingId: s.parametrizacion!.usadaDesdeRankingId ?? null
       }).pipe(
         map(() => ({ ok: true as const, nombre: s.metricaNombre })),
         catchError(err => of({
