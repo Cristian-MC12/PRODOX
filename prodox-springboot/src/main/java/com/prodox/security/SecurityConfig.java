@@ -46,7 +46,13 @@ public class SecurityConfig {
                         "/api/auth/forgot-password", "/api/auth/reset-password").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/health").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/project-members/invitacion/*").permitAll()
-                .requestMatchers("/api/dev/**").permitAll()
+                // P0 seguridad: DevResetController solo existe como bean bajo
+                // @Profile("dev") — sin ese perfil activo, Spring ni siquiera
+                // registra la ruta y esta regla no tiene nada que proteger. Se
+                // retira el permitAll global: si el perfil "dev" llegara a
+                // activarse en un entorno menos controlado, /api/dev/** cae en
+                // .anyRequest().authenticated() (la regla de cierre de abajo),
+                // nunca queda abierto sin autenticación.
                 .requestMatchers("/oauth2/**", "/login/oauth2/**", "/login/**").permitAll()
                 .requestMatchers("/api/copiloto-plan/**").authenticated()
                 .anyRequest().authenticated()

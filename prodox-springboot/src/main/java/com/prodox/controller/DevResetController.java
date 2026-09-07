@@ -3,6 +3,7 @@
 package com.prodox.controller;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.annotation.Profile;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -15,10 +16,22 @@ import java.util.Map;
  * Endpoint de desarrollo para limpiar datos de prueba.
  * Borra proyectos y toda su data asociada (cascada),
  * pero mantiene el catálogo de métricas y usuarios.
+ *
+ * P0 seguridad: este controller (y sus tres endpoints, incluido
+ * /api/dev/activar-variables) solo se registra como bean cuando el perfil
+ * "dev" está activo explícitamente (SPRING_PROFILES_ACTIVE=dev o
+ * spring.profiles.active=dev). Fail-closed por diseño: ningún perfil
+ * activa "dev" por defecto — ni la ausencia de spring.profiles.active en
+ * el application.properties local, ni SPRING_PROFILES_ACTIVE=prod en
+ * Railway (ver RAILWAY_DEPLOYMENT.md) lo activan. Sin este perfil, Spring
+ * no registra ninguna ruta bajo /api/dev/** — no es una cuestión de
+ * permisos o autenticación, el controller simplemente no existe en el
+ * contexto de la aplicación.
  */
 @RestController
 @RequestMapping("/api/dev")
 @RequiredArgsConstructor
+@Profile("dev")
 public class DevResetController {
 
     private final JdbcTemplate jdbc;
