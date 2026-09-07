@@ -37,9 +37,28 @@ type Paso = 'metricas' | 'variables' | 'sprints';
               <span class="badge" style="background: #8B5CF6; font-size: 11px; padding: 4px 10px; border-radius: 6px; font-weight: 600;">
                 {{ proyecto.metodo | uppercase }}
               </span>
-              <span class="badge" style="background: #10B981; font-size: 11px; padding: 4px 10px; border-radius: 6px; font-weight: 600;">
-                Sprint 5 de 5
-              </span>
+              <!-- Corrección de auditoría: este badge mostraba el texto
+                   literal "Sprint 5 de 5", sin ningún binding a datos reales
+                   — el mismo texto aparecía para cualquier proyecto, sin
+                   importar cuántos sprints tuviera en verdad (ver
+                   panel/banner de abajo, que sí usa proyecto.numeroSprints).
+                   Ahora se deriva de this.sprints (ya cargado en ngOnInit
+                   desde sprintService.listar(), la MISMA fuente que usa la
+                   tabla "Calendario de Sprints" más abajo en esta misma
+                   página) — así el encabezado nunca puede desincronizarse
+                   del resto de Planeación ni de un proyecto distinto,
+                   porque ngOnInit vuelve a cargar sprints desde cero en cada
+                   entrada a la página (sin arrastrar datos de otro proyecto
+                   ni de una sesión anterior). -->
+              @if (sprintActual) {
+                <span class="badge" style="background: #10B981; font-size: 11px; padding: 4px 10px; border-radius: 6px; font-weight: 600;">
+                  Sprint {{ sprintActual.numero }} de {{ sprints.length }}
+                </span>
+              } @else if (sprints.length > 0) {
+                <span class="badge" style="background: #6B7280; font-size: 11px; padding: 4px 10px; border-radius: 6px; font-weight: 600;">
+                  Sin sprint activo · {{ sprints.length }} sprint{{ sprints.length === 1 ? '' : 's' }}
+                </span>
+              }
             }
           </div>
         </div>
@@ -624,6 +643,20 @@ export class PlaneacionComponent implements OnInit {
     private seleccionService: SeleccionService,
     private http: HttpClient
   ) {}
+
+  /**
+   * Corrección de auditoría (badge "Sprint N de M" del encabezado): el
+   * sprint activo es el que tiene estado="en_ejecucion" — mismo criterio
+   * usado en todo el resto de la app (ShellComponent, SprintsComponent,
+   * AiReportComponent, etc.). Se deriva de this.sprints, ya cargado desde
+   * el backend en ngOnInit, sin hacer una llamada HTTP adicional. Puede ser
+   * null legítimamente (ej. se cerró el último sprint del proyecto sin
+   * iniciar uno nuevo) — en ese caso el encabezado NO debe inventar un
+   * número de sprint "actual" que no existe.
+   */
+  get sprintActual(): SprintDto | null {
+    return this.sprints.find(s => s.estado === 'en_ejecucion') ?? null;
+  }
 
   // "Seleccionadas" representa únicamente las métricas que están dentro del
   // estado pendiente de Planeación: seleccionadas pero todavía NO aprobadas.

@@ -1,8 +1,8 @@
 // Autor: Cristian Santiago Martinez Cordoba — PRODOX
 // FASE 4: tests del filtro de catálogo de métricas visibles
-import { Component } from '@angular/core';
+import { Component, Input } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { HttpClientTestingModule } from '@angular/common/http/testing';
+import { HttpClientTestingModule, HttpTestingController } from '@angular/common/http/testing';
 import { Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { CommonModule } from '@angular/common';
@@ -12,6 +12,9 @@ import { ShellComponent } from '../../layout/shell/shell.component';
 import { PlaneacionService } from '../../services/planeacion.service';
 import { SprintService } from '../../services/sprint.service';
 import { ProyectoMetricaDto } from '../../models/planeacion.model';
+import { ProyectoDto } from '../../models/proyecto.model';
+import { SprintDto } from '../../models/sprint.model';
+import { environment } from '../../../environments/environment';
 
 // Mock de ShellComponent para aislar tests
 @Component({
@@ -19,7 +22,10 @@ import { ProyectoMetricaDto } from '../../models/planeacion.model';
   standalone: true,
   template: '<ng-content></ng-content>'
 })
-class MockShellComponent {}
+class MockShellComponent {
+  @Input() title?: string;
+  @Input() showBanner?: boolean;
+}
 
 function metrica(id: string, nombre: string, categoria: string, opts: Partial<ProyectoMetricaDto> = {}): ProyectoMetricaDto {
   return {
@@ -59,10 +65,31 @@ const CATALOGO_MOCK: ProyectoMetricaDto[] = [
   metrica('2ffdb8da-71d0-4bda-9925-982a112ea65a', 'Cambios de alcance por sprint', 'Impacto'),
 ];
 
+function mockProyecto(overrides: Partial<ProyectoDto> = {}): ProyectoDto {
+  return {
+    id: 'proj-1', nombre: 'sq', descripcion: null, metodo: 'scrum',
+    timeBoxSemanas: 2, numeroSprints: 3, fechaInicio: '2026-07-01', productGoal: 'x',
+    sprintGoal: '', estado: 'activo', scrumMasterEmail: 'sm@test.com', totalMiembros: 2,
+    createdAt: '2026-07-01T00:00:00Z',
+    ...overrides
+  };
+}
+
+function mockSprint(numero: number, estado: SprintDto['estado']): SprintDto {
+  return {
+    id: `sprint-${numero}`, proyectoId: 'proj-1', proyectoNombre: 'sq', metodo: 'scrum',
+    timeBoxSemanas: 2, numero, sprintGoal: `Sprint ${numero}`, estado,
+    fechaInicio: '2026-07-01', fechaFin: '2026-07-14', cerradoPor: null, cerradoAt: null,
+    createdAt: '2026-07-01T00:00:00Z'
+  };
+}
+
 describe('PlaneacionComponent', () => {
   let component: PlaneacionComponent;
   let fixture: ComponentFixture<PlaneacionComponent>;
   let planeacionService: jasmine.SpyObj<PlaneacionService>;
+  let sprintService: jasmine.SpyObj<SprintService>;
+  let httpMock: HttpTestingController;
 
   beforeEach(async () => {
     const planeacionServiceSpy = jasmine.createSpyObj('PlaneacionService', [
@@ -71,6 +98,12 @@ describe('PlaneacionComponent', () => {
     ]);
     const sprintServiceSpy = jasmine.createSpyObj('SprintService', ['listar']);
     const routerSpy = jasmine.createSpyObj('Router', ['navigate']);
+
+    // Defaults inofensivos para las pruebas existentes (que no ejercitan
+    // ngOnInit()/el encabezado): un catálogo vacío y sin sprints.
+    planeacionServiceSpy.listarMetricas.and.returnValue(of([]));
+    planeacionServiceSpy.listarVariables.and.returnValue(of([]));
+    sprintServiceSpy.listar.and.returnValue(of([]));
 
     await TestBed.configureTestingModule({
       imports: [HttpClientTestingModule, FormsModule, CommonModule],
@@ -87,6 +120,8 @@ describe('PlaneacionComponent', () => {
     .compileComponents();
 
     planeacionService = TestBed.inject(PlaneacionService) as jasmine.SpyObj<PlaneacionService>;
+    sprintService = TestBed.inject(SprintService) as jasmine.SpyObj<SprintService>;
+    httpMock = TestBed.inject(HttpTestingController);
 
     fixture = TestBed.createComponent(PlaneacionComponent);
     component = fixture.componentInstance;
@@ -94,6 +129,7 @@ describe('PlaneacionComponent', () => {
 
   afterEach(() => {
     localStorage.clear();
+    httpMock.verify();
   });
 
   it('should create', () => {
@@ -284,6 +320,122 @@ describe('PlaneacionComponent', () => {
       expect(
         component.seleccionadasList.some(m => m.metricaId === '2345492b-16a3-464e-983d-0176c0f911c2')
       ).toBe(true);
+    });
+  });
+
+  // ══════════════════════════════════════════════════════════════════════
+  // Corrección de auditoría: el badge del encabezado mostraba el texto
+  // LITERAL "Sprint 5 de 5" (hardcodeado, sin binding a ningún dato),
+  // mientras el panel lateral y el banner de esta misma página mostraban
+  // proyecto.numeroSprints (el valor real). Ninguno de los tests anteriores
+  // de este archivo ejecuta ngOnInit()/renderiza el encabezado — por eso
+  // esta inconsistencia nunca fue detectada. Estos tests SÍ ejercitan
+  // ngOnInit() (vía fixture.detectChanges()) y verifican el texto renderizado.
+  // ══════════════════════════════════════════════════════════════════════
+  describe('Encabezado "Sprint N de M" (corrección de auditoría)', () => {
+    function montarCon(sprints: SprintDto[], proyecto = mockProyecto()): void {
+      localStorage.setItem('mpdia_proyecto_activo', JSON.stringify(proyecto));
+      sprintService.listar.and.returnValue(of(sprints));
+      fixture.detectChanges();
+      // ngOnInit() dispara un forkJoin que incluye una llamada HTTP cruda
+      // (no vía service) a /metric-ranking/pendientes — HttpClientTestingModule
+      // no la resuelve sola, hay que flushearla para que el forkJoin complete
+      // y this.sprints quede asignado.
+      httpMock.expectOne(`${environment.apiBaseUrl}/metric-ranking/pendientes?proyectoId=${proyecto.id}`).flush([]);
+      // El primer detectChanges() ya renderizó (con sprints todavía vacío);
+      // hace falta un segundo ciclo para reflejar this.sprints tras el flush.
+      fixture.detectChanges();
+    }
+
+    it('proyecto de 3 sprints (1 en ejecución): muestra "Sprint 2 de 3", nunca "Sprint 5 de 5"', () => {
+      montarCon([
+        mockSprint(1, 'finalizado'),
+        mockSprint(2, 'en_ejecucion'),
+        mockSprint(3, 'pendiente')
+      ], mockProyecto({ numeroSprints: 3 }));
+
+      expect(component.sprints.length).toBe(3);
+      expect(component.sprintActual?.numero).toBe(2);
+
+      const texto = fixture.nativeElement.textContent;
+      expect(texto).toContain('Sprint 2 de 3');
+      expect(texto).not.toContain('Sprint 5 de 5');
+    });
+
+    it('proyecto de 5 sprints (sprint 5 en ejecución): muestra "Sprint 5 de 5" — pero porque corresponde a los datos reales, no hardcodeado', () => {
+      montarCon([
+        mockSprint(1, 'finalizado'), mockSprint(2, 'finalizado'), mockSprint(3, 'finalizado'),
+        mockSprint(4, 'finalizado'), mockSprint(5, 'en_ejecucion')
+      ], mockProyecto({ numeroSprints: 5 }));
+
+      expect(component.sprints.length).toBe(5);
+      expect(component.sprintActual?.numero).toBe(5);
+      expect(fixture.nativeElement.textContent).toContain('Sprint 5 de 5');
+    });
+
+    it('proyecto de 1 sprint: muestra "Sprint 1 de 1"', () => {
+      montarCon([mockSprint(1, 'en_ejecucion')], mockProyecto({ numeroSprints: 1 }));
+
+      expect(component.sprints.length).toBe(1);
+      expect(component.sprintActual?.numero).toBe(1);
+      expect(fixture.nativeElement.textContent).toContain('Sprint 1 de 1');
+    });
+
+    it('sin sprint en ejecución (ej. se cerró el último sin iniciar uno nuevo): sprintActual es null, no inventa un número', () => {
+      montarCon([
+        mockSprint(1, 'finalizado'), mockSprint(2, 'finalizado'), mockSprint(3, 'finalizado')
+      ], mockProyecto({ numeroSprints: 3 }));
+
+      expect(component.sprintActual).toBeNull();
+      const texto = fixture.nativeElement.textContent;
+      expect(texto).toContain('Sin sprint activo');
+      expect(texto).toContain('3 sprint');
+      expect(texto).not.toMatch(/Sprint \d+ de \d+/);
+    });
+
+    it('proyecto recién creado, sin sprints todavía: no muestra ningún badge de sprint ni división por cero', () => {
+      montarCon([], mockProyecto({ numeroSprints: 0 }));
+
+      expect(component.sprints.length).toBe(0);
+      expect(component.sprintActual).toBeNull();
+      expect(() => fixture.detectChanges()).not.toThrow();
+      expect(fixture.nativeElement.textContent).not.toContain('Sprint 5 de 5');
+    });
+
+    it('cambiar de proyecto (nueva instancia del componente) NO arrastra el total de sprints del proyecto anterior', () => {
+      // Proyecto A: 5 sprints.
+      montarCon([
+        mockSprint(1, 'finalizado'), mockSprint(2, 'finalizado'), mockSprint(3, 'finalizado'),
+        mockSprint(4, 'finalizado'), mockSprint(5, 'en_ejecucion')
+      ], mockProyecto({ id: 'proj-A', numeroSprints: 5 }));
+      expect(fixture.nativeElement.textContent).toContain('Sprint 5 de 5');
+
+      // Angular recrea el componente en cada navegación a la ruta (mismo
+      // comportamiento que el resto de la app) — se simula creando una
+      // instancia nueva, como ocurriría al volver a entrar a /planeacion
+      // tras cambiar el proyecto activo.
+      const fixtureB = TestBed.createComponent(PlaneacionComponent);
+      sprintService.listar.and.returnValue(of([mockSprint(1, 'en_ejecucion'), mockSprint(2, 'pendiente'), mockSprint(3, 'pendiente')]));
+      localStorage.setItem('mpdia_proyecto_activo', JSON.stringify(mockProyecto({ id: 'proj-B', numeroSprints: 3 })));
+      fixtureB.detectChanges();
+      httpMock.expectOne(`${environment.apiBaseUrl}/metric-ranking/pendientes?proyectoId=proj-B`).flush([]);
+      fixtureB.detectChanges();
+
+      const textoB = fixtureB.nativeElement.textContent;
+      expect(textoB).toContain('Sprint 1 de 3');
+      expect(textoB).not.toContain('Sprint 5 de 5');
+      expect(textoB).not.toContain('5 de 5');
+    });
+
+    it('el sprint actual corresponde al proyecto activo (estado="en_ejecucion" del proyecto cargado, no de otro)', () => {
+      montarCon([
+        mockSprint(1, 'finalizado'),
+        mockSprint(2, 'finalizado'),
+        mockSprint(3, 'en_ejecucion')
+      ], mockProyecto({ numeroSprints: 3 }));
+
+      expect(component.sprintActual?.numero).toBe(3);
+      expect(component.sprintActual?.estado).toBe('en_ejecucion');
     });
   });
 });
