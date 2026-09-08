@@ -4,6 +4,7 @@ package com.prodox.controller;
 import com.prodox.dto.GuardarValoresRequest;
 import com.prodox.dto.VariablesMetricaResponse;
 import com.prodox.service.VariableDinamicaService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -57,7 +58,7 @@ public class VariableDinamicaController {
     @PostMapping("/{metricaId}/valores")
     public ResponseEntity<Void> guardarValores(
             @PathVariable UUID metricaId,
-            @RequestBody GuardarValoresRequest request,
+            @Valid @RequestBody GuardarValoresRequest request,
             Authentication authentication) {
         
         String userId = authentication.getName();

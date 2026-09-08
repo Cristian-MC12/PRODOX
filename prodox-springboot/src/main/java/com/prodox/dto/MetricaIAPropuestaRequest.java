@@ -2,6 +2,7 @@
 package com.prodox.dto;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 
 /**
  * FASE 15 — "Crear métrica con IA": Paso 1, necesidad en texto libre del
@@ -11,5 +12,6 @@ import jakarta.validation.constraints.NotBlank;
  * partir de texto libre, no crea ni asocia nada a ningún proyecto todavía.
  */
 public record MetricaIAPropuestaRequest(
-    @NotBlank String necesidad
+    /** Va directo al prompt de Gemini, nunca se persiste — mismo límite que ChatRequest.message. */
+    @NotBlank @Size(max = 4000) String necesidad
 ) {}

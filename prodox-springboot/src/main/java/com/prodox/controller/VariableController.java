@@ -40,7 +40,7 @@ public class VariableController {
     public ResponseEntity<VariableDto> actualizarFormula(
             @PathVariable UUID proyectoId,
             @PathVariable UUID variableId,
-            @RequestBody ActualizarFormulaRequest request,
+            @Valid @RequestBody ActualizarFormulaRequest request,
             Authentication auth) {
         return ResponseEntity.ok(variableService.actualizarFormula(auth.getName(), proyectoId, variableId, request));
     }

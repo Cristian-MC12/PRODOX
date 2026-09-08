@@ -3,6 +3,7 @@ package com.prodox.dto;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 
 import java.util.UUID;
 
@@ -35,10 +36,13 @@ import java.util.UUID;
 public record CrearMetricaIARequest(
     @NotNull UUID proyectoId,
     @NotNull Short categoriaId,
-    @NotBlank String nombre,
-    @NotBlank String descripcion,
-    String objetivo,
-    String queMide,
-    String variablesSugeridas,
+    /** Se persiste como Metrica.nombre (@Column(length = 120)). */
+    @NotBlank @Size(max = 120) String nombre,
+    /** Se persiste como Metrica.descripcion (TEXT, sin límite en BD) — acotado como texto de prompt, mismo criterio que ChatRequest.message. */
+    @NotBlank @Size(max = 4000) String descripcion,
+    /** Nunca se persiste (FASE 23) — solo señal para MetricaSimilitudService. */
+    @Size(max = 4000) String objetivo,
+    @Size(max = 4000) String queMide,
+    @Size(max = 4000) String variablesSugeridas,
     Boolean confirmarCreacionDiferente
 ) {}

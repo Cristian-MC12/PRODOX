@@ -5,6 +5,7 @@ package com.prodox.controller;
 import com.prodox.dto.*;
 import com.prodox.entity.MetricParametrizacion;
 import com.prodox.service.MetricaAcademicaService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -39,7 +40,7 @@ public class MetricaAcademicaController {
     @PostMapping("/propuesta")
     @PreAuthorize("hasRole('USER')")
     public ResponseEntity<PropuestaParametrizacionDto> generarPropuesta(
-            @RequestBody MetricaAcademicaRequest request) {
+            @Valid @RequestBody MetricaAcademicaRequest request) {
         
         PropuestaParametrizacionDto propuesta = service.generarPropuestaAcademica(request);
         return ResponseEntity.ok(propuesta);
@@ -52,7 +53,7 @@ public class MetricaAcademicaController {
     @PostMapping("/guardar-propuesta")
     @PreAuthorize("hasRole('USER')")
     public ResponseEntity<MetricParametrizacion> guardarPropuesta(
-            @RequestBody GuardarPropuestaAcademicaRequest request) {
+            @Valid @RequestBody GuardarPropuestaAcademicaRequest request) {
         
         // Construir request para métrica académica
         MetricaAcademicaRequest metricaRequest = new MetricaAcademicaRequest(
@@ -109,7 +110,7 @@ public class MetricaAcademicaController {
     @PreAuthorize("hasRole('USER')")
     public ResponseEntity<ResultadoMetricaDto> ejecutar(
             @PathVariable UUID metricaId,
-            @RequestBody EjecutarMetricaAcademicaRequest request) {
+            @Valid @RequestBody EjecutarMetricaAcademicaRequest request) {
         
         ResultadoMetricaDto resultado = service.ejecutarMetricaAcademica(metricaId, request);
         return ResponseEntity.ok(resultado);
@@ -145,21 +146,29 @@ public class MetricaAcademicaController {
 
 /**
  * Request para guardar propuesta académica.
+ *
+ * Límites @Size elegidos para coincidir EXACTO con las columnas de
+ * MetricParametrizacion que estos valores terminan poblando (ver entidad):
+ * indicadorVariable/formulaAcademica length=500, escala length=255,
+ * escalaTipo length=30, frecuenciaCaptura/tipoOperacion length=20,
+ * unidadResultado length=50. objetivo/procedimiento/fuenteAcademica/
+ * escalaDescripcion son columnDefinition="TEXT" en la entidad: sin límite en
+ * BD, sin @Size (no inventar uno).
  */
 record GuardarPropuestaAcademicaRequest(
-    UUID proyectoId,
-    UUID metricaId,
+    @jakarta.validation.constraints.NotNull UUID proyectoId,
+    @jakarta.validation.constraints.NotNull UUID metricaId,
     String fuenteAcademica,
-    String formulaAcademica,
-    String tipoOperacion,
-    String unidadResultado,
+    @jakarta.validation.constraints.Size(max = 500) String formulaAcademica,
+    @jakarta.validation.constraints.Size(max = 20) String tipoOperacion,
+    @jakarta.validation.constraints.Size(max = 50) String unidadResultado,
     String objetivo,
     String procedimiento,
-    String indicadorVariable,
-    String escala,
-    String frecuenciaCaptura,
+    @jakarta.validation.constraints.Size(max = 500) String indicadorVariable,
+    @jakarta.validation.constraints.Size(max = 255) String escala,
+    @jakarta.validation.constraints.Size(max = 20) String frecuenciaCaptura,
     /** Escala estructurada — ver ParametrizacionService.validarEscalaEstructurada(). */
-    String escalaTipo,
+    @jakarta.validation.constraints.Size(max = 30) String escalaTipo,
     java.math.BigDecimal escalaMin,
     java.math.BigDecimal escalaMax,
     java.math.BigDecimal escalaPaso,

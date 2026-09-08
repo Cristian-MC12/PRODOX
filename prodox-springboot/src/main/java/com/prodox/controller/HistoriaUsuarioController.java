@@ -107,7 +107,7 @@ public class HistoriaUsuarioController {
     @PatchMapping("/{historiaId}/sprint")
     public ResponseEntity<HistoriaUsuarioDto> asignarSprint(
             @PathVariable UUID historiaId,
-            @RequestBody AsignarSprintHistoriaRequest request,
+            @Valid @RequestBody AsignarSprintHistoriaRequest request,
             Authentication auth) {
         HistoriaUsuarioDto actual = historiaService.detalle(historiaId);
         validarProductOwner(actual.proyectoId(), auth);

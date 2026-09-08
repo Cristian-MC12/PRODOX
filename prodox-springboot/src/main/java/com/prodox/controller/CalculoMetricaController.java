@@ -7,6 +7,7 @@ import com.prodox.entity.ResultadoMetrica;
 import com.prodox.repository.ProjectMemberRepository;
 import com.prodox.repository.ResultadoMetricaRepository;
 import com.prodox.service.CalculoMetricaService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -49,7 +50,7 @@ public class CalculoMetricaController {
     @PostMapping("/{metricaId}/calcular")
     public ResponseEntity<?> calcularMetrica(
             @PathVariable UUID metricaId,
-            @RequestBody CalcularMetricaRequest request,
+            @Valid @RequestBody CalcularMetricaRequest request,
             Authentication auth) {
         
         try {

@@ -1,6 +1,9 @@
 // Autor: Cristian Santiago Martinez Cordoba — PRODOX
 package com.prodox.dto;
 
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotNull;
+
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
@@ -8,17 +11,24 @@ import java.util.UUID;
 /**
  * Request para guardar valores de variables en un sprint.
  * Fase 16.7: Captura dinámica de variables.
+ *
+ * proyectoId/sprintId nulos hacían fallar VariableDinamicaService con un 500
+ * (findById(null) de Spring Data JPA) en vez de un 400 claro — @NotNull
+ * corrige eso sin cambiar ningún caso válido.
  */
 public record GuardarValoresRequest(
-    UUID proyectoId,
-    UUID sprintId,
-    List<ValorVariable> valores
+    @NotNull UUID proyectoId,
+    @NotNull UUID sprintId,
+    @Valid List<ValorVariable> valores
 ) {
     public record ValorVariable(
-        UUID variableId,
+        /** Sin este valor la fila no identifica qué variable se está capturando. */
+        @NotNull UUID variableId,
         BigDecimal valorNum,
+        /** RegistroValor.valorTexto es columnDefinition="TEXT": sin límite en BD, sin @Size. */
         String valorTexto,
         Boolean valorBool,
+        /** RegistroValor.observacion es columnDefinition="TEXT": sin límite en BD, sin @Size. */
         String observacion,
         /**
          * FASE 16 — fecha de captura explícita (ISO-8601 instant, ej.

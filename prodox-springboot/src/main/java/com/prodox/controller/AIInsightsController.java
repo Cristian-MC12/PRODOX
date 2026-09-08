@@ -5,6 +5,7 @@ import com.prodox.dto.ai.AIInsightDto;
 import com.prodox.dto.ai.GenerateInsightsResultDto;
 import com.prodox.dto.ai.UpdateInsightDto;
 import com.prodox.service.AIInsightsService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -127,7 +128,7 @@ public class AIInsightsController {
     @PutMapping("/{insightId}")
     public ResponseEntity<AIInsightDto> updateInsight(
             @PathVariable UUID insightId,
-            @RequestBody UpdateInsightDto updateDto,
+            @Valid @RequestBody UpdateInsightDto updateDto,
             Authentication auth) {
         
         String userId = auth.getName();
