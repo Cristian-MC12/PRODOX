@@ -90,3 +90,17 @@ prodox.ai.rate-limit.window-seconds=60
 prodox.ai.max-history-messages=10
 prodox.ai.max-tool-iterations=5
 prodox.ai.max-message-length=4000
+
+# Rate limiting de autenticación (login/register/forgot-password/reset-password)
+# Protección POR INSTANCIA (en memoria) — ver AuthRateLimitService para el
+# detalle de por qué se usa getRemoteAddr() y no X-Forwarded-For.
+prodox.auth.rate-limit.login.max-per-email=10
+prodox.auth.rate-limit.login.max-per-ip=20
+prodox.auth.rate-limit.login.window-seconds=300
+prodox.auth.rate-limit.register.max-per-ip=5
+prodox.auth.rate-limit.register.window-seconds=3600
+prodox.auth.rate-limit.forgot-password.max-per-ip=5
+prodox.auth.rate-limit.forgot-password.max-per-email=5
+prodox.auth.rate-limit.forgot-password.window-seconds=3600
+prodox.auth.rate-limit.reset-password.max-per-ip=20
+prodox.auth.rate-limit.reset-password.window-seconds=3600
