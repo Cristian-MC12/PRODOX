@@ -44,7 +44,12 @@ public class SecurityConfig {
             .csrf(csrf -> csrf.disable())
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(HttpMethod.POST, "/api/auth/login", "/api/auth/register",
-                        "/api/auth/forgot-password", "/api/auth/reset-password").permitAll()
+                        "/api/auth/forgot-password", "/api/auth/reset-password",
+                        // Bloque JWT/OAuth2: canje del código opaco de un solo uso por el
+                        // JWT real — se llama ANTES de que el frontend tenga un JWT, así
+                        // que no puede requerir autenticación. El propio código (corto,
+                        // de un solo uso, ~60s de vida) es la credencial de este paso.
+                        "/api/auth/oauth2/exchange").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/health").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/project-members/invitacion/*").permitAll()
                 // P0 seguridad: DevResetController solo existe como bean bajo

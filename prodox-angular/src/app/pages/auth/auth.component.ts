@@ -955,7 +955,7 @@ export class AuthComponent implements OnInit {
   ngOnInit(): void {
     // Manejar callback de OAuth2
     this.route.queryParams.subscribe(params => {
-      const token = params['token'];
+      const code = params['code'];
       const error = params['error'];
 
       // /invitacion redirige acá con ?tab=register cuando el usuario todavía
@@ -966,12 +966,26 @@ export class AuthComponent implements OnInit {
         this.switchTab('register');
       }
 
-      if (token) {
-        // Token recibido desde OAuth2: reutiliza el mismo mecanismo de sesión
-        // que el login tradicional (misma clave de localStorage y mismo signal
-        // currentUser), para que el authGuard reconozca la sesión de inmediato.
-        this.authService.persistFromToken(token);
-        this.redirectAfterAuth();
+      if (code) {
+        // Bloque de seguridad JWT/OAuth2: el redirect de Google ya NO trae el
+        // JWT (antes: ?token=<jwt> directo en la URL) — trae únicamente un
+        // código opaco de un solo uso que se canjea por HTTPS. Se limpia la
+        // URL con replaceUrl INMEDIATAMENTE (antes de esperar la respuesta
+        // del canje): el code no debe sobrevivir en el historial del
+        // navegador ni un instante más de lo necesario, y de cualquier forma
+        // es inútil una vez leído — el backend lo consume en el primer canje.
+        this.router.navigate([], {
+          relativeTo: this.route,
+          queryParams: {},
+          replaceUrl: true
+        });
+
+        this.authService.exchangeOAuth2Code(code).subscribe({
+          next: () => this.redirectAfterAuth(),
+          error: () => {
+            this.errorMsg = 'Error al autenticar con Google. Por favor, intenta nuevamente.';
+          }
+        });
       } else if (error) {
         // Error en OAuth2
         this.errorMsg = 'Error al autenticar con Google. Por favor, intenta nuevamente.';

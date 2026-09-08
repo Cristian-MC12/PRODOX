@@ -104,3 +104,8 @@ prodox.auth.rate-limit.forgot-password.max-per-email=5
 prodox.auth.rate-limit.forgot-password.window-seconds=3600
 prodox.auth.rate-limit.reset-password.max-per-ip=20
 prodox.auth.rate-limit.reset-password.window-seconds=3600
+
+# Bloque JWT/OAuth2 — código de intercambio de un solo uso (evita el JWT en
+# la URL de redirect de Google OAuth2). Protección POR INSTANCIA (en
+# memoria) — ver OAuth2ExchangeCodeService.
+prodox.oauth2.exchange.ttl-seconds=60

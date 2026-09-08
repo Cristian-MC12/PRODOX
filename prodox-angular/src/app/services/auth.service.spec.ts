@@ -133,20 +133,53 @@ describe('AuthService', () => {
     expect(newService.currentUser()?.email).toBe('test@mpdia.com');
   });
 
-  // ── persistFromToken (callback de Google OAuth2) ──────────────────────
+  // ── exchangeOAuth2Code (callback de Google OAuth2) ─────────────────────
+  // Bloque de seguridad JWT/OAuth2: el callback ya no recibe el JWT en la
+  // URL (?token=...), solo un código opaco de un solo uso (?code=...) que
+  // se canjea aquí por HTTPS POST. El JWT solo existe en el cuerpo JSON de
+  // esta respuesta, nunca en la URL ni en el historial del navegador.
 
-  it('persistFromToken: decodifica el JWT del callback y persiste la sesión con la misma clave que login/register', () => {
-    const payload = { sub: 'uuid-google-1', email: 'google@mpdia.com', role: 'scrum_member', nombre: 'Google User', exp: 4070908800 };
-    const fakeJwt = `${btoa(JSON.stringify({ alg: 'HS256' }))}.${btoa(JSON.stringify(payload))}.signature`;
+  it('exchangeOAuth2Code: hace POST a /auth/oauth2/exchange con el código y persiste la sesión con la misma clave que login/register', () => {
+    const googleResponse: AuthResponse = {
+      token: 'jwt.google.token',
+      userId: 'uuid-google-1',
+      email: 'google@mpdia.com',
+      role: 'scrum_member',
+      nombre: 'Google User'
+    };
 
-    service.persistFromToken(fakeJwt);
+    service.exchangeOAuth2Code('codigo-opaco-de-un-solo-uso').subscribe(res => {
+      expect(res.token).toBe('jwt.google.token');
+      expect(res.email).toBe('google@mpdia.com');
+    });
 
-    expect(localStorage.getItem('mpdia_token')).toBe(fakeJwt);
+    const http = httpMock.expectOne(`${environment.apiBaseUrl}/auth/oauth2/exchange`);
+    expect(http.request.method).toBe('POST');
+    expect(http.request.body).toEqual({ code: 'codigo-opaco-de-un-solo-uso' });
+    http.flush(googleResponse);
+
+    expect(localStorage.getItem('mpdia_token')).toBe('jwt.google.token');
     expect(service.currentUser()?.email).toBe('google@mpdia.com');
     expect(service.currentUser()?.role).toBe('scrum_member');
     expect(service.currentUser()?.userId).toBe('uuid-google-1');
     expect(service.currentUser()?.nombre).toBe('Google User');
     expect(service.isLoggedIn()).toBeTrue();
+  });
+
+  it('exchangeOAuth2Code: si el código es inválido o expirado, propaga el error y no persiste ninguna sesión', () => {
+    let errorRecibido: unknown = null;
+
+    service.exchangeOAuth2Code('codigo-invalido').subscribe({
+      next: () => fail('no debería emitir un valor exitoso'),
+      error: (err) => (errorRecibido = err)
+    });
+
+    const http = httpMock.expectOne(`${environment.apiBaseUrl}/auth/oauth2/exchange`);
+    http.flush({ error: 'Código de intercambio inválido o expirado.' }, { status: 400, statusText: 'Bad Request' });
+
+    expect(errorRecibido).not.toBeNull();
+    expect(localStorage.getItem('mpdia_token')).toBeNull();
+    expect(service.currentUser()).toBeNull();
   });
 
   // ── invitación pendiente (preservada durante login/registro/Google) ────

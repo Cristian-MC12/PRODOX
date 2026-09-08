@@ -13,10 +13,13 @@ describe('AuthComponent — callback de Google OAuth2', () => {
   let routerSpy: jasmine.SpyObj<Router>;
   let queryParamsSubject: Subject<any>;
 
+  const authResponseDeEjemplo = { token: 'jwt.real.exchanged', userId: 'u1', email: 'x@test.com', role: 'scrum_member', nombre: 'X' };
+
   function setup(queryParams: Record<string, string>): void {
     queryParamsSubject = new Subject();
-    authServiceSpy = jasmine.createSpyObj('AuthService', ['login', 'register', 'persistFromToken', 'getInvitacionPendiente']);
+    authServiceSpy = jasmine.createSpyObj('AuthService', ['login', 'register', 'exchangeOAuth2Code', 'getInvitacionPendiente']);
     authServiceSpy.getInvitacionPendiente.and.returnValue(null);
+    authServiceSpy.exchangeOAuth2Code.and.returnValue(of(authResponseDeEjemplo));
     routerSpy = jasmine.createSpyObj('Router', ['navigate']);
 
     TestBed.configureTestingModule({
@@ -34,19 +37,57 @@ describe('AuthComponent — callback de Google OAuth2', () => {
     queryParamsSubject.next(queryParams);
   }
 
-  it('token recibido: persiste la sesión vía AuthService (misma clave que login normal) y navega a la app', () => {
-    setup({ token: 'jwt.callback.token' });
+  // Bloque de seguridad JWT/OAuth2: el callback ya NO recibe el JWT directo
+  // (?token=...) — recibe únicamente un código opaco de un solo uso
+  // (?code=...) que se canjea por HTTPS vía AuthService.exchangeOAuth2Code().
 
-    expect(authServiceSpy.persistFromToken).toHaveBeenCalledWith('jwt.callback.token');
+  it('code recibido: lo canjea vía AuthService.exchangeOAuth2Code() y, al resolver, navega a la app', () => {
+    setup({ code: 'codigo.de.intercambio' });
+
+    expect(authServiceSpy.exchangeOAuth2Code).toHaveBeenCalledWith('codigo.de.intercambio');
     expect(routerSpy.navigate).toHaveBeenCalledWith(['/']);
+  });
+
+  it('code recibido: limpia el code de la URL INMEDIATAMENTE con replaceUrl, antes de que el canje resuelva', () => {
+    setup({ code: 'codigo.de.intercambio' });
+
+    expect(routerSpy.navigate).toHaveBeenCalledWith([], jasmine.objectContaining({
+      queryParams: {},
+      replaceUrl: true
+    }));
+  });
+
+  it('code recibido pero el canje falla (código inválido/expirado): muestra error controlado, NO navega a la app', () => {
+    authServiceSpy = jasmine.createSpyObj('AuthService', ['login', 'register', 'exchangeOAuth2Code', 'getInvitacionPendiente']);
+    authServiceSpy.getInvitacionPendiente.and.returnValue(null);
+    authServiceSpy.exchangeOAuth2Code.and.returnValue(throwError(() => new Error('Código de intercambio inválido o expirado.')));
+    routerSpy = jasmine.createSpyObj('Router', ['navigate']);
+    queryParamsSubject = new Subject();
+
+    TestBed.configureTestingModule({
+      imports: [AuthComponent, HttpClientTestingModule],
+      providers: [
+        { provide: AuthService, useValue: authServiceSpy },
+        { provide: Router, useValue: routerSpy },
+        { provide: ActivatedRoute, useValue: { queryParams: queryParamsSubject.asObservable() } }
+      ]
+    });
+    fixture = TestBed.createComponent(AuthComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+    queryParamsSubject.next({ code: 'codigo-invalido' });
+
+    expect(component.errorMsg).toBeTruthy();
+    expect(routerSpy.navigate).not.toHaveBeenCalledWith(['/']);
   });
 
   // Corrección: el enlace de invitación por correo apuntaba a una ruta que
   // nunca existió (/proyectos/unirse) — el código pendiente guardado antes
   // de ir a Google debe recuperar exactamente el mismo flujo de aceptación.
-  it('token recibido con una invitación pendiente: redirige a /invitacion con el código en vez de a la app', () => {
-    authServiceSpy = jasmine.createSpyObj('AuthService', ['login', 'register', 'persistFromToken', 'getInvitacionPendiente']);
+  it('code recibido con una invitación pendiente: redirige a /invitacion con el código en vez de a la app', () => {
+    authServiceSpy = jasmine.createSpyObj('AuthService', ['login', 'register', 'exchangeOAuth2Code', 'getInvitacionPendiente']);
     authServiceSpy.getInvitacionPendiente.and.returnValue('PRJ-ABC123');
+    authServiceSpy.exchangeOAuth2Code.and.returnValue(of(authResponseDeEjemplo));
     routerSpy = jasmine.createSpyObj('Router', ['navigate']);
     queryParamsSubject = new Subject();
 
@@ -60,7 +101,7 @@ describe('AuthComponent — callback de Google OAuth2', () => {
     });
     fixture = TestBed.createComponent(AuthComponent);
     fixture.detectChanges();
-    queryParamsSubject.next({ token: 'jwt.callback.token' });
+    queryParamsSubject.next({ code: 'codigo.de.intercambio' });
 
     expect(routerSpy.navigate).toHaveBeenCalledWith(['/invitacion'], { queryParams: { codigo: 'PRJ-ABC123' } });
     expect(routerSpy.navigate).not.toHaveBeenCalledWith(['/']);
@@ -72,18 +113,18 @@ describe('AuthComponent — callback de Google OAuth2', () => {
     expect(component.tab).toBe('register');
   });
 
-  it('Google OAuth falla: muestra error controlado y no navega ni entra en loop hacia la app', () => {
+  it('Google OAuth falla (error de Spring Security, no de canje): muestra error controlado y no navega ni entra en loop hacia la app', () => {
     setup({ error: 'oauth_failed' });
 
     expect(component.errorMsg).toBeTruthy();
-    expect(authServiceSpy.persistFromToken).not.toHaveBeenCalled();
+    expect(authServiceSpy.exchangeOAuth2Code).not.toHaveBeenCalled();
     expect(routerSpy.navigate).not.toHaveBeenCalledWith(['/']);
   });
 
-  it('sin token ni error (carga normal de /auth): no persiste sesión ni redirige automáticamente', () => {
+  it('sin code ni error (carga normal de /auth): no canjea nada ni redirige automáticamente', () => {
     setup({});
 
-    expect(authServiceSpy.persistFromToken).not.toHaveBeenCalled();
+    expect(authServiceSpy.exchangeOAuth2Code).not.toHaveBeenCalled();
     expect(routerSpy.navigate).not.toHaveBeenCalledWith(['/']);
   });
 });
@@ -147,7 +188,7 @@ describe('AuthComponent — recuperar contraseña', () => {
   let authServiceSpy: jasmine.SpyObj<AuthService>;
 
   beforeEach(() => {
-    authServiceSpy = jasmine.createSpyObj('AuthService', ['login', 'register', 'persistFromToken', 'forgotPassword']);
+    authServiceSpy = jasmine.createSpyObj('AuthService', ['login', 'register', 'exchangeOAuth2Code', 'forgotPassword']);
 
     TestBed.configureTestingModule({
       imports: [AuthComponent, HttpClientTestingModule],
@@ -232,7 +273,7 @@ describe('AuthComponent — redirección después de login con invitación pendi
 
   function setup(): void {
     authServiceSpy = jasmine.createSpyObj('AuthService',
-      ['login', 'register', 'persistFromToken', 'getInvitacionPendiente']);
+      ['login', 'register', 'exchangeOAuth2Code', 'getInvitacionPendiente']);
     routerSpy = jasmine.createSpyObj('Router', ['navigate']);
 
     TestBed.configureTestingModule({

@@ -40,6 +40,20 @@ export class AuthService {
     return this.http.post<{ message: string }>(`${this.base}/forgot-password`, { email });
   }
 
+  /**
+   * Bloque de seguridad JWT/OAuth2: canjea el código opaco de un solo uso
+   * recibido en el callback de Google OAuth2 (?code=...) por el JWT real de
+   * sesión. El JWT viaja únicamente en el cuerpo JSON de esta respuesta —
+   * antes, el propio JWT llegaba directamente en la URL del redirect
+   * (?token=...); ahora esa URL solo contiene el código de un solo uso, que
+   * ya no sirve para nada una vez canjeado.
+   */
+  exchangeOAuth2Code(code: string): Observable<AuthResponse> {
+    return this.http.post<AuthResponse>(`${this.base}/oauth2/exchange`, { code }).pipe(
+      tap(res => this.persist(res))
+    );
+  }
+
   /** Establece una nueva contraseña a partir del token recibido por correo. */
   resetPassword(token: string, newPassword: string): Observable<{ message: string }> {
     return this.http.post<{ message: string }>(`${this.base}/reset-password`, { token, newPassword });
@@ -61,18 +75,6 @@ export class AuthService {
 
   clearInvitacionPendiente(): void {
     localStorage.removeItem(INVITACION_KEY);
-  }
-
-  /** Persiste la sesión a partir de un JWT recibido por el callback de OAuth2 (Google). */
-  persistFromToken(token: string): void {
-    const payload = this.decodeToken(token);
-    this.persist({
-      token,
-      userId: payload.sub,
-      email:  payload.email,
-      role:   payload.role,
-      nombre: payload.nombre
-    });
   }
 
   logout(): void {
@@ -103,9 +105,5 @@ export class AuthService {
   private loadUser(): AuthResponse | null {
     const raw = localStorage.getItem(USER_KEY);
     return raw ? JSON.parse(raw) : null;
-  }
-
-  private decodeToken(token: string): any {
-    return JSON.parse(atob(token.split('.')[1]));
   }
 }

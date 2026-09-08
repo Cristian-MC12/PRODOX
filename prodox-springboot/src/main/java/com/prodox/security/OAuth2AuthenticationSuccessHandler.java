@@ -19,6 +19,16 @@ import java.util.Optional;
 /**
  * Handler para autenticación exitosa con Google OAuth 2.0
  * Autor: Cristian Santiago Martinez Cordoba — PRODOX
+ *
+ * Bloque de seguridad JWT/OAuth2: el JWT real de sesión NUNCA viaja en la URL
+ * de este redirect ni en ningún log — se genera acá, pero solo se entrega al
+ * frontend a través de OAuth2ExchangeCodeService: el redirect lleva
+ * exclusivamente un código opaco de un solo uso y de vida muy corta
+ * (?code=...), que el frontend canjea por el JWT real mediante POST
+ * (AuthController.exchangeOAuth2Code(), cuerpo JSON, nunca URL). Antes de
+ * esta corrección, el JWT completo viajaba tanto en la URL de este redirect
+ * como en el log de "Redirigiendo a: {targetUrl}" — ambos puntos de
+ * exposición se corrigen acá.
  */
 @Slf4j
 @Component
@@ -27,6 +37,7 @@ public class OAuth2AuthenticationSuccessHandler extends SimpleUrlAuthenticationS
 
     private final AppUserRepository appUserRepository;
     private final JwtUtil jwtUtil;
+    private final OAuth2ExchangeCodeService exchangeCodeService;
 
     @Value("${prodox.app.url}")
     private String frontendUrl;
@@ -48,16 +59,20 @@ public class OAuth2AuthenticationSuccessHandler extends SimpleUrlAuthenticationS
             AppUser user = appUserRepository.findByEmail(email)
                     .orElseGet(() -> createNewOAuth2User(email, name, picture));
 
-            // Generar JWT token
-            String token = jwtUtil.generateToken(user.getId().toString(), user.getEmail(), user.getRole(), user.getNombre());
+            // Generar JWT real (nunca se loguea, nunca viaja en esta URL) y
+            // emitir en su lugar un código opaco de un solo uso para el redirect.
+            String jwt = jwtUtil.generateToken(user.getId().toString(), user.getEmail(), user.getRole(), user.getNombre());
+            String exchangeCode = exchangeCodeService.emitirCodigo(jwt);
 
-            // Redirigir al frontend con el token
             String targetUrl = UriComponentsBuilder.fromUriString(frontendUrl + "/auth")
-                    .queryParam("token", token)
+                    .queryParam("code", exchangeCode)
                     .build()
                     .toUriString();
 
-            log.info("Redirigiendo a: {}", targetUrl);
+            // Log seguro: ni el JWT ni el código de intercambio se imprimen —
+            // solo metadata del evento (antes acá se logueaba targetUrl
+            // completo, que incluía el JWT en texto plano).
+            log.info("OAuth2: redirect con código de intercambio de un solo uso emitido");
             getRedirectStrategy().sendRedirect(request, response, targetUrl);
 
         } catch (Exception e) {
