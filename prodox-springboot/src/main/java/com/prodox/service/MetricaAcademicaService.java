@@ -64,8 +64,9 @@ public class MetricaAcademicaService {
             List<PropuestaParametrizacionDto> propuestas = parsePropuestas(raw, request);
             return propuestas.isEmpty() ? fallbackPropuesta(request) : propuestas.get(0);
         } catch (Exception e) {
+            // Bloque de seguridad Secretos/Config: nunca reimprimir e.getMessage().
             System.err.println("=== ERROR GEMINI ===");
-            System.err.println(e.getMessage());
+            System.err.println("Tipo de error: " + e.getClass().getSimpleName());
             System.err.println("===================");
             return fallbackPropuesta(request);
         }

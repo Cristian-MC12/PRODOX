@@ -36,6 +36,30 @@ public class GeminiService {
     private final ObjectMapper mapper = new ObjectMapper();
 
     /**
+     * Bloque de seguridad Secretos/Config: excepción interna exclusiva para
+     * el error HTTP de Gemini (onStatus, más abajo), cuyo mensaje se
+     * construye SIEMPRE a partir de errorBody (el cuerpo de error que Gemini
+     * mismo devuelve) — nunca de la URL de la petición, así que es segura de
+     * propagar tal cual.
+     *
+     * Se distingue de cualquier otra RuntimeException que pueda lanzar el
+     * cliente HTTP subyacente (ResourceAccessException u otra, ante un fallo
+     * real de I/O) precisamente porque ESAS sí pueden llevar la URL completa
+     * — con "?key=<API key>" — en su mensaje. Antes de esta clase, un
+     * "catch (RuntimeException e) { throw e; }" genérico dejaba pasar
+     * CUALQUIER RuntimeException sin sanitizar, incluida una excepción de
+     * I/O del cliente HTTP (que también es una RuntimeException) — este tipo
+     * dedicado es la única forma de diferenciar "excepción nuestra, ya
+     * segura" de "excepción de la librería HTTP, potencialmente insegura"
+     * sin depender de heurísticas sobre el mensaje.
+     */
+    private static final class GeminiHttpErrorException extends RuntimeException {
+        GeminiHttpErrorException(String message) {
+            super(message);
+        }
+    }
+
+    /**
      * Llama a Gemini y devuelve el texto generado para el prompt dado.
      * MÉTODO ORIGINAL - Mantiene compatibilidad con código existente.
      */
@@ -62,16 +86,28 @@ public class GeminiService {
                         System.err.println("=== GEMINI HTTP " + res.getStatusCode() + " ===");
                         System.err.println(errorBody);
                         System.err.println("===========================================");
-                        throw new RuntimeException("Gemini error " + res.getStatusCode() + ": " + errorBody);
+                        throw new GeminiHttpErrorException("Gemini error " + res.getStatusCode() + ": " + errorBody);
                     })
                     .body(String.class);
-        } catch (RuntimeException e) {
+        } catch (GeminiHttpErrorException e) {
+            // Construida enteramente por nosotros arriba, a partir del cuerpo
+            // de error de Gemini — nunca de la URL — segura de propagar tal cual.
             throw e;
         } catch (Exception e) {
-            System.err.println("=== GEMINI ERROR ===");
-            System.err.println(e.getMessage());
-            System.err.println("===================");
-            throw new RuntimeException("Error al llamar Gemini: " + e.getMessage());
+            // Bloque de seguridad Secretos/Config: NUNCA loguear ni propagar
+            // e.getMessage() acá. Cualquier excepción que llegue hasta acá
+            // (RuntimeException o no) viene del cliente HTTP subyacente, no
+            // de nuestro propio código — y la URL de esta llamada lleva
+            // "?key=<API key real de Gemini>" (línea de arriba). Ante un
+            // fallo de I/O (timeout, DNS, conexión rechazada), esa URI
+            // completa puede terminar dentro de e.getMessage() (formato
+            // típico de ResourceAccessException: "I/O error on ... request
+            // for \"<URI>\": <causa>"). Por eso solo se registra el tipo de
+            // excepción (nunca su mensaje, nunca la excepción completa) y se
+            // lanza una excepción propia con un mensaje fijo, sin causa
+            // encadenada, que no reproduce nada del original.
+            log.error("Error al llamar a Gemini (tipo de error: {})", e.getClass().getSimpleName());
+            throw new RuntimeException("Error al llamar a Gemini. Intentá nuevamente en unos segundos.");
         }
 
         try {
@@ -133,14 +169,17 @@ public class GeminiService {
                         try { bytes = res.getBody().readAllBytes(); } catch (Exception ex) { bytes = new byte[0]; }
                         String errorBody = new String(bytes);
                         log.error("Gemini HTTP {}: {}", res.getStatusCode(), errorBody);
-                        throw new RuntimeException("Gemini error " + res.getStatusCode() + ": " + errorBody);
+                        throw new GeminiHttpErrorException("Gemini error " + res.getStatusCode() + ": " + errorBody);
                     })
                     .body(String.class);
-        } catch (RuntimeException e) {
+        } catch (GeminiHttpErrorException e) {
             throw e;
         } catch (Exception e) {
-            log.error("Error al llamar Gemini: {}", e.getMessage());
-            throw new RuntimeException("Error al llamar Gemini: " + e.getMessage());
+            // Mismo motivo que en generate(): la URL de esta llamada también
+            // lleva "?key=<API key real>" — nunca loguear ni propagar
+            // e.getMessage() acá, ni encadenarla como causa.
+            log.error("Error al llamar a Gemini (tipo de error: {})", e.getClass().getSimpleName());
+            throw new RuntimeException("Error al llamar a Gemini. Intentá nuevamente en unos segundos.");
         }
 
         return parseResponse(responseJson);

@@ -177,13 +177,18 @@ public class AICopilotService {
                 executor
             );
         } catch (Exception e) {
-            log.error("Error en AI Agent: {}", e.getMessage(), e);
+            // Bloque de seguridad Secretos/Config: nunca loguear e.getMessage()
+            // ni pasar la excepción completa al logger acá — este catch recibe
+            // lo que sea que aiAgentService/GeminiService.chatWithTools()
+            // propaguen, y esta capa no debe depender de que las capas
+            // inferiores ya lo hayan sanitizado para ser segura por sí misma.
+            log.error("Error en AI Agent (tipo: {})", e.getClass().getSimpleName());
 
             // Guardar mensaje del usuario aunque falle la IA
             guardarMensaje(userId, request.proyectoId(), request.sprintId(),
                           "user", request.message());
 
-            throw new RuntimeException("Error al procesar mensaje con IA: " + e.getMessage());
+            throw new RuntimeException("Error al procesar mensaje con IA. Intentá nuevamente en unos segundos.");
         }
 
         // 12. GUARDAR MENSAJES EN BASE DE DATOS
@@ -366,7 +371,10 @@ public class AICopilotService {
         try {
             respuesta = geminiService.generate(prompt);
         } catch (Exception e) {
-            log.error("Error generando respuesta Tipo B con Gemini: {}", e.getMessage(), e);
+            // Bloque de seguridad Secretos/Config: nunca loguear e.getMessage()
+            // ni la excepción completa acá — geminiService.generate() se llama
+            // directo arriba.
+            log.error("Error generando respuesta Tipo B con Gemini (tipo: {})", e.getClass().getSimpleName());
             respuesta = "No fue posible generar la interpretación en este momento. Intenta de nuevo más tarde.";
         }
         return new ChatResponse(respuesta, List.of(), Instant.now(), true);

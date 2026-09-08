@@ -180,7 +180,36 @@ class MetricaAcademicaServiceTest {
         assertNotNull(propuesta);
         assertTrue(propuesta.titulo().contains("Problemas reportados por el cliente"));
     }
-    
+
+    // Bloque de seguridad Secretos/Config (Sub-bloque 4A): esta capa no debe
+    // reimprimir e.getMessage() de la excepción que venga de geminiService.generate().
+    @Test
+    void generarPropuestaAcademica_siLaExcepcionDeGeminiTraeUnSecreto_noLoReimprimeEnSystemErr() {
+        MetricaAcademicaRequest request = new MetricaAcademicaRequest(
+            proyectoId, metricaId, "SIG-SC-02", "Problemas reportados por el cliente",
+            "Definición", "Fuente académica", "Σ problemas_reportados", "SUMA",
+            "problemas", "por_sprint"
+        );
+        String secretoDePrueba = "SECRET_TEST_VALUE_XYZ123";
+        when(geminiService.generate(anyString())).thenThrow(new RuntimeException(
+                "I/O error on POST request for \"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key="
+                        + secretoDePrueba + "\": Connection refused"));
+
+        java.io.ByteArrayOutputStream capturado = new java.io.ByteArrayOutputStream();
+        java.io.PrintStream errOriginal = System.err;
+        System.setErr(new java.io.PrintStream(capturado));
+        PropuestaParametrizacionDto propuesta;
+        try {
+            propuesta = service.generarPropuestaAcademica(request); // nunca falla: retorna fallback
+        } finally {
+            System.setErr(errOriginal);
+        }
+
+        assertNotNull(propuesta); // el flujo de fallback sigue funcionando (no regresión)
+        String salida = capturado.toString(java.nio.charset.StandardCharsets.UTF_8);
+        assertFalse(salida.contains(secretoDePrueba));
+    }
+
     @Test
     void guardarPropuestaAcademica_estadoInicial_esPropuesta() {
         // Arrange

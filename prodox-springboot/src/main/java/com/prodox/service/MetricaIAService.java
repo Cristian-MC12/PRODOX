@@ -72,8 +72,12 @@ public class MetricaIAService {
             // que el usuario apruebe pensando que fue generado correctamente.
             // El detalle técnico queda en el log; el mensaje de la excepción es
             // el que se le muestra al usuario tal cual (GlobalExceptionHandler).
+            // Bloque de seguridad Secretos/Config: nunca reimprimir e.getMessage()
+            // acá — puede provenir de GeminiService y, aunque GeminiService ya
+            // sanitiza su propio mensaje, esta capa no debe depender de eso para
+            // ser segura por sí misma.
             System.err.println("=== ERROR GEMINI (MetricaIAService.generarPropuesta) ===");
-            System.err.println(e.getMessage());
+            System.err.println("Tipo de error: " + e.getClass().getSimpleName());
             System.err.println("=========================================================");
             throw new PropuestaIANoDisponibleException(
                     "La IA no pudo generar una propuesta en este momento. Intentá nuevamente en unos segundos.",

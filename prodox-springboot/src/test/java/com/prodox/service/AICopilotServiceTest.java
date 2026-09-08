@@ -35,6 +35,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
@@ -174,6 +175,48 @@ class AICopilotServiceTest {
 
         // Se guardan ambos mensajes (user + assistant), como en el comportamiento actual.
         verify(chatMessageRepo, times(2)).save(any());
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════════
+    // Bloque de seguridad Secretos/Config (Sub-bloque 4A) — AICopilotService no debe
+    // reimprimir e.getMessage() de una excepción que venga de aiAgentService/Gemini:
+    // esta capa no debe depender de que GeminiService ya la haya sanitizado para ser
+    // segura por sí misma (defensa en profundidad).
+    // ══════════════════════════════════════════════════════════════════════════════
+
+    @Test
+    void fallaAiAgent_noReimprimeElMensajeOriginalNiLoAdjuntaAlLog() {
+        String secretoDePrueba = "SECRET_TEST_VALUE_XYZ123";
+
+        var logger = (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(AICopilotService.class);
+        var appender = new ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>();
+        appender.start();
+        logger.addAppender(appender);
+
+        try {
+            when(chatMessageRepo.findByUserIdAndProyectoIdOrderByCreatedAtAsc(userId, proyectoId))
+                    .thenReturn(List.of());
+            when(toolsService.getAvailableTools()).thenReturn(List.of());
+            when(aiAgentService.processMessage(any(), any(), any(), any()))
+                    .thenThrow(new RuntimeException(
+                            "I/O error on POST request for \"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key="
+                                    + secretoDePrueba + "\": Connection refused"));
+
+            ChatRequest request = new ChatRequest("¿Cómo estuvo el último sprint?", proyectoId, null);
+
+            assertThatThrownBy(() -> service.chat(request, userId))
+                    .isInstanceOf(RuntimeException.class)
+                    .satisfies(e -> assertThat(e.getMessage()).doesNotContain(secretoDePrueba));
+
+            for (ch.qos.logback.classic.spi.ILoggingEvent event : appender.list) {
+                assertThat(event.getFormattedMessage()).doesNotContain(secretoDePrueba);
+                if (event.getThrowableProxy() != null) {
+                    assertThat(event.getThrowableProxy().getMessage()).doesNotContain(secretoDePrueba);
+                }
+            }
+        } finally {
+            logger.detachAppender(appender);
+        }
     }
 
     // ══════════════════════════════════════════════════════════════════════════════

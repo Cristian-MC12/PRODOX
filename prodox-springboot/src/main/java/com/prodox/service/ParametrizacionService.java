@@ -284,8 +284,9 @@ public class ParametrizacionService {
             String raw = geminiService.generate(prompt);
             return parsePropuestas(raw, request);
         } catch (Exception e) {
+            // Bloque de seguridad Secretos/Config: nunca reimprimir e.getMessage().
             System.err.println("=== ERROR GEMINI ===");
-            System.err.println(e.getMessage());
+            System.err.println("Tipo de error: " + e.getClass().getSimpleName());
             System.err.println("===================");
             return fallbackPropuestas(request);
         }
