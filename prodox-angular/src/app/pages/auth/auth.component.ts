@@ -826,7 +826,7 @@ import { environment } from '../../../environments/environment';
                   type="text"
                   class="form-input"
                   formControlName="nombre"
-                  placeholder="Ej: Juan Pérez"
+                  placeholder="Ej: Cristian Martinez"
                   autocomplete="name">
               </div>
             </div>
