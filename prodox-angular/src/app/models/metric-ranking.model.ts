@@ -14,7 +14,14 @@ export interface MetricParametrizacionBase extends EscalaEstructurada {
   factorId:          string;
   factorNombre:      string;
   factorCategoria:   string;
-  userEmail:         string;
+  /**
+   * Seguridad P1 (BOLA/IDOR — auditoría de autorización de APIs): esta vista
+   * es GLOBAL cross-proyecto por diseño; el backend ahora redacta el email
+   * del autor (puede pertenecer a un proyecto ajeno) — ver
+   * MetricRankingService.redactarParaVistaGlobal(). Siempre llega null/
+   * ausente desde /metric-ranking/{factorId|metrica}/base.
+   */
+  userEmail?:        string | null;
   objetivo:          string;
   procedimiento:     string;
   indicadorVariable: string;
@@ -79,7 +86,8 @@ export interface PendienteNotificacion {
 
 export interface TopParametrizacion extends EscalaEstructurada {
   id:                string;
-  userEmail:         string;
+  /** Seguridad P1: redactado por el backend en el ranking global — ver MetricParametrizacionBase.userEmail. */
+  userEmail?:        string | null;
   objetivo:          string;
   procedimiento:     string;
   indicadorVariable: string;

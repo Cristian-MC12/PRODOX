@@ -764,6 +764,99 @@ class MetricRankingServiceTest {
     }
 
     // ══════════════════════════════════════════════════════════════════════
+    // Seguridad P1 (BOLA/IDOR — auditoría de autorización de APIs): getTop3(),
+    // getTop3ByMetricaId(), getBase() y getBaseByMetricaId() son vistas
+    // deliberadamente GLOBALES cross-proyecto por diseño (cualquier proyecto
+    // puede ver qué configuración es más popular para un factor/métrica del
+    // catálogo compartido) — pero antes de esta corrección devolvían el email
+    // real del autor (userEmail) y, en el caso de getBase()/getBaseByMetricaId(),
+    // también el proyectoId REAL de un proyecto ajeno, JSON internos
+    // (propuestaIAJson/configuracionAprobadaJson) y motivoRechazo — sin
+    // ninguna relación con el propósito de "qué configuración reutilizar".
+    // Un usuario de CUALQUIER proyecto podía así conocer el email de un
+    // usuario de un proyecto con el que no tiene ninguna relación, y
+    // enumerar UUIDs de proyectos ajenos. Estos tests confirman que la
+    // redacción realmente ocurre — el contenido legítimamente global
+    // (objetivo/procedimiento/escala/usos/campos académicos) se conserva.
+    // ══════════════════════════════════════════════════════════════════════
+
+    @Test
+    @DisplayName("Seguridad P1: getTop3ByMetricaId() NO expone el email del autor de la parametrización canónica")
+    void getTop3ByMetricaId_noExponeUserEmail() {
+        MetricParametrizacion completa = parametrizacionCompleta();
+        assertThat(completa.getUserEmail()).isNotBlank(); // precondición: el email SÍ existe en la entidad
+        when(rankingPorMetricaRepo.findByMetricaIdOrderByUsosDesc(metricaId))
+                .thenReturn(List.of(rankingDe(completa, 5)));
+        when(parametrizacionRepo.findById(completa.getId())).thenReturn(Optional.of(completa));
+
+        var dto = service.getTop3ByMetricaId(metricaId).get(0);
+
+        assertThat(dto.userEmail()).isNull();
+        // El resto de la información global se conserva — no es un borrado total.
+        assertThat(dto.objetivo()).isEqualTo("objetivo completo");
+        assertThat(dto.usos()).isEqualTo(5);
+    }
+
+    @Test
+    @DisplayName("Seguridad P1: getTop3() (flujo legacy por factor) NO expone el email del autor")
+    void getTop3_noExponeUserEmail() {
+        UUID factorId = UUID.randomUUID();
+        MetricParametrizacion completa = parametrizacionCompleta();
+        assertThat(completa.getUserEmail()).isNotBlank();
+        when(parametrizacionRepo.findTop3BaseByFactorId(factorId)).thenReturn(List.of(completa));
+        when(rankingRepo.findAll()).thenReturn(List.of());
+
+        var dto = service.getTop3(factorId).get(0);
+
+        assertThat(dto.userEmail()).isNull();
+        assertThat(dto.objetivo()).isEqualTo("objetivo completo");
+    }
+
+    @Test
+    @DisplayName("Seguridad P1: getBaseByMetricaId() NO expone userEmail, proyectoId ajeno, revisadoPor ni JSON internos")
+    void getBaseByMetricaId_redactaCamposSensiblesDeProyectoAjeno() {
+        MetricParametrizacion completa = parametrizacionCompleta();
+        completa.setRevisadoPor("scrum.master.ajeno@otraempresa.com");
+        completa.setPropuestaIAJson("{\"interno\":true}");
+        completa.setConfiguracionAprobadaJson("{\"snapshot\":true}");
+        completa.setMotivoRechazo("detalle interno de otro proyecto");
+        assertThat(completa.getProyectoId()).isNotNull(); // precondición: el proyectoId real existe en la entidad
+        when(parametrizacionRepo.findTopByMetricaIdOrderByCreatedAtDesc(metricaId))
+                .thenReturn(Optional.of(completa));
+
+        var dto = service.getBaseByMetricaId(metricaId).orElseThrow();
+
+        assertThat(dto.userEmail()).isNull();
+        assertThat(dto.proyectoId()).isNull();
+        assertThat(dto.revisadoPor()).isNull();
+        assertThat(dto.propuestaIAJson()).isNull();
+        assertThat(dto.configuracionAprobadaJson()).isNull();
+        assertThat(dto.motivoRechazo()).isNull();
+        // Lo que el frontend SÍ usa de esta vista (parametrizacion.component.ts)
+        // se conserva intacto.
+        assertThat(dto.objetivo()).isEqualTo("objetivo completo");
+        assertThat(dto.procedimiento()).isEqualTo("procedimiento completo");
+        assertThat(dto.indicadorVariable()).isEqualTo("indicador_completo");
+        assertThat(dto.escala()).isEqualTo("Numérica 1-5");
+        assertThat(dto.createdAt()).isEqualTo(completa.getCreatedAt());
+    }
+
+    @Test
+    @DisplayName("Seguridad P1: getBase() (flujo legacy por factor) NO expone userEmail ni proyectoId ajeno")
+    void getBase_redactaCamposSensiblesDeProyectoAjeno() {
+        UUID factorId = UUID.randomUUID();
+        MetricParametrizacion completa = parametrizacionCompleta();
+        when(parametrizacionRepo.findTopByFactor_IdAndMetricaBaseIdIsNullOrderByCreatedAtDesc(factorId))
+                .thenReturn(Optional.of(completa));
+
+        var dto = service.getBase(factorId).orElseThrow();
+
+        assertThat(dto.userEmail()).isNull();
+        assertThat(dto.proyectoId()).isNull();
+        assertThat(dto.objetivo()).isEqualTo("objetivo completo");
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
     // Auditoría transversal de autorización — verificar()/getPendientesPorProyecto()/
     // getResumenPorProyecto()/guardar() no validaban membresía ni rol de Scrum Master
     // por proyecto: cualquier usuario autenticado podía aprobar/rechazar
@@ -1450,8 +1543,8 @@ class MetricRankingServiceTest {
     }
 
     @Test
-    @DisplayName("V43 (3): el Top3 muestra el usos real de la tabla de ranking, y el autor de la parametrización CANÓNICA referenciada — no de quien reutilizó la configuración")
-    void getTop3ByMetricaId_muestraUsosRealYAutorCanonico() {
+    @DisplayName("V43 (3) + Seguridad P1: el Top3 muestra el usos real de la tabla de ranking y el ID de la parametrización CANÓNICA referenciada (no de quien reutilizó la configuración) — pero NUNCA su email, ni siquiera el del autor canónico")
+    void getTop3ByMetricaId_muestraUsosRealYCanonica_sinExponerSuEmail() {
         MetricParametrizacion canonica = parametrizacionParaRanking("autorOriginal@x.com",
                 java.time.Instant.parse("2026-01-01T00:00:00Z"), "objetivo", "SUMA(x)", "NUMERICA_ENTERA");
         when(rankingPorMetricaRepo.findByMetricaIdOrderByUsosDesc(metricaId))
@@ -1461,7 +1554,15 @@ class MetricRankingServiceTest {
         var dto = service.getTop3ByMetricaId(metricaId).get(0);
 
         assertThat(dto.usos()).isEqualTo(11);
-        assertThat(dto.userEmail()).isEqualTo("autorOriginal@x.com");
+        assertThat(dto.id()).isEqualTo(canonica.getId());
+        // Seguridad P1 (BOLA/IDOR): antes de la corrección, este test verificaba
+        // que el email del autor CANÓNICO viajara en el DTO (para confirmar que
+        // no se mostraba el de quien simplemente reutilizó la configuración).
+        // Esa distinción ya no aplica: NINGÚN email viaja en esta vista global
+        // cross-proyecto, sea el autor canónico o cualquier otro — ver
+        // MetricRankingService.getTop3ByMetricaId() y los tests dedicados de
+        // redacción más abajo.
+        assertThat(dto.userEmail()).isNull();
     }
 
     @Test

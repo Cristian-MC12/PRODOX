@@ -772,15 +772,68 @@ public class MetricRankingService {
 
     /**
      * Devuelve la parametrización base más reciente de un factor.
+     *
+     * Seguridad P1 (BOLA/IDOR — auditoría de autorización de APIs): esta
+     * lectura es deliberadamente GLOBAL por diseño (cualquier proyecto puede
+     * ver la configuración base de un factor/métrica del catálogo compartido
+     * para decidir la suya, igual que getTop3()/getTop3ByMetricaId()). Pero
+     * "global" no significa "sin filtrar": antes de esta corrección se
+     * devolvía toDto(p, ...) completo — el MISMO DTO interno que usan las
+     * vistas autorizadas por proyecto — exponiendo a CUALQUIER usuario
+     * autenticado, para CUALQUIER proyecto, el email real de quien creó la
+     * configuración (userEmail/revisadoPor) y el proyectoId REAL de un
+     * proyecto ajeno (permitiendo enumerar UUIDs de proyectos de otros
+     * tenants), además de JSON internos (propuestaIAJson/
+     * configuracionAprobadaJson) y motivoRechazo, sin relación con el
+     * propósito de esta vista. redactarParaVistaGlobal() deja solo lo que el
+     * frontend realmente usa de esta vista (objetivo/procedimiento/escala/
+     * fechas/campos académicos) — nunca PII ni proyectoId ajeno.
      */
     public Optional<MetricParametrizacionDto> getBase(UUID factorId) {
         return parametrizacionRepo
                 .findTopByFactor_IdAndMetricaBaseIdIsNullOrderByCreatedAtDesc(factorId)
-                .map(p -> toDto(p, p.getFactor()));
+                .map(p -> toDto(p, p.getFactor()))
+                .map(this::redactarParaVistaGlobal);
+    }
+
+    /**
+     * Elimina de un MetricParametrizacionDto los campos que no deben viajar
+     * en una vista GLOBAL cross-proyecto (getBase/getBaseByMetricaId): PII
+     * (userEmail, revisadoPor), el proyectoId real de un proyecto ajeno, y
+     * contenido interno (propuestaIAJson, configuracionAprobadaJson,
+     * motivoRechazo) sin relación con "qué configuración es la más popular
+     * para reutilizar". El resto de campos (objetivo, procedimiento, escala,
+     * datos académicos, status, fechas) sí es información legítimamente
+     * global — ver comentario de getBase().
+     */
+    private MetricParametrizacionDto redactarParaVistaGlobal(MetricParametrizacionDto p) {
+        return new MetricParametrizacionDto(
+                p.id(), p.version(), p.factorId(), p.factorNombre(), p.factorCategoria(),
+                null, // userEmail — PII de otro proyecto, no debe exponerse en una vista global
+                p.objetivo(), p.procedimiento(), p.indicadorVariable(), p.escala(),
+                p.frecuenciaCaptura(), p.metricaBaseId(), p.status(),
+                null, // revisadoPor — PII del aprobador de otro proyecto
+                p.revisadoAt(),
+                null, // motivoRechazo — detalle interno del flujo de otro proyecto
+                null, // proyectoId — no debe permitir enumerar proyectos ajenos
+                p.createdAt(),
+                null, // propuestaIAJson — contenido interno, no forma parte de esta vista
+                null, // configuracionAprobadaJson — snapshot interno, no forma parte de esta vista
+                p.fuenteAcademica(), p.formulaAcademica(), p.tipoOperacion(), p.unidadResultado(),
+                p.responsableCaptura(),
+                p.escalaTipo(), p.escalaMin(), p.escalaMax(), p.escalaPaso(),
+                p.escalaSinLimite(), p.escalaDescripcion()
+        );
     }
 
     /**
      * Top 3 parametrizaciones de un factor, ordenadas por fecha de creación descendente.
+     *
+     * Seguridad P1: usosMap/objetivo/procedimiento/escala/usos son
+     * información global legítima (mismo razonamiento que getBase()), pero
+     * userEmail se anonimiza acá — es el autor de una configuración que
+     * puede pertenecer a un proyecto completamente ajeno al del usuario que
+     * consulta este ranking.
      */
     public List<TopParametrizacionDto> getTop3(UUID factorId) {
         Map<UUID, Integer> usosMap = rankingRepo.findAll().stream()
@@ -794,7 +847,7 @@ public class MetricRankingService {
         return parametrizacionRepo.findTop3BaseByFactorId(factorId).stream()
                 .map(p -> new TopParametrizacionDto(
                         p.getId(),
-                        p.getUserEmail(),
+                        null, // userEmail — PII de otro proyecto, no debe exponerse en un ranking global
                         p.getObjetivo(),
                         p.getProcedimiento(),
                         p.getIndicadorVariable(),
@@ -841,10 +894,12 @@ public class MetricRankingService {
      * deriva/aproxima un número a partir del historial antiguo de
      * metric_parametrizaciones.
      *
-     * El autor mostrado (userEmail) sale de la parametrización CANÓNICA
-     * (parametrizacionCanonicaId, la que produjo el primer uso registrado) —
-     * nunca cambia porque otro usuario haya reutilizado la configuración
-     * después.
+     * El autor de la parametrización CANÓNICA (parametrizacionCanonicaId, la
+     * que produjo el primer uso registrado) nunca cambia porque otro usuario
+     * haya reutilizado la configuración después — pero su identidad (email)
+     * NO se expone acá: la canónica puede pertenecer a un proyecto
+     * completamente ajeno al del usuario que consulta este ranking global
+     * (seguridad P1 — auditoría BOLA/IDOR, mismo criterio que getTop3()).
      */
     public List<TopParametrizacionDto> getTop3ByMetricaId(UUID metricaId) {
         return rankingPorMetricaRepo.findByMetricaIdOrderByUsosDesc(metricaId).stream()
@@ -856,7 +911,7 @@ public class MetricRankingService {
                                     "Ranking " + r.getId() + " referencia una parametrización canónica inexistente"));
                     return new TopParametrizacionDto(
                             canonica.getId(),
-                            canonica.getUserEmail(),
+                            null, // userEmail — PII de otro proyecto, no debe exponerse en un ranking global
                             canonica.getObjetivo(),
                             canonica.getProcedimiento(),
                             canonica.getIndicadorVariable(),
@@ -881,12 +936,14 @@ public class MetricRankingService {
     }
 
     /**
-     * Parametrización base más reciente por metricaId.
+     * Parametrización base más reciente por metricaId. Seguridad P1: mismo
+     * criterio de redacción que getBase() — ver redactarParaVistaGlobal().
      */
     public Optional<MetricParametrizacionDto> getBaseByMetricaId(UUID metricaId) {
         return parametrizacionRepo
                 .findTopByMetricaIdOrderByCreatedAtDesc(metricaId)
-                .map(p -> toDto(p, p.getFactor()));
+                .map(p -> toDto(p, p.getFactor()))
+                .map(this::redactarParaVistaGlobal);
     }
 
     /**

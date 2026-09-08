@@ -134,7 +134,6 @@ import { ToastService } from '../../shared/toast/toast.service';
                     <tr>
                       <th class="ps-3" style="width:40px">#</th>
                       <th style="min-width:220px">Objetivo</th>
-                      <th style="min-width:150px">Autor</th>
                       <th class="text-center" style="width:80px">Usos</th>
                       <th style="width:120px"></th>
                     </tr>
@@ -155,7 +154,6 @@ import { ToastService } from '../../shared/toast/toast.service';
                             Escala: {{ t.escala }}
                           </div>
                         </td>
-                        <td class="align-middle small text-muted text-nowrap">{{ t.userEmail }}</td>
                         <td class="text-center align-middle">
                           <span class="badge bg-primary rounded-pill">{{ t.usos }}</span>
                         </td>
@@ -182,8 +180,7 @@ import { ToastService } from '../../shared/toast/toast.service';
               <div>
                 <div class="fw-semibold small">parametrización de referencia</div>
                 <div class="text-muted" style="font-size:0.75rem">
-                  Creada por <strong>{{ parametrizacionBase.userEmail }}</strong>
-                  el {{ parametrizacionBase.createdAt | date:'dd/MM/yyyy' }}.
+                  Configuración más reciente, del {{ parametrizacionBase.createdAt | date:'dd/MM/yyyy' }}.
                   Podés usarla como base o crear la tuya propia.
                 </div>
               </div>
