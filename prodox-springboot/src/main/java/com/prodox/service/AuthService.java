@@ -6,6 +6,7 @@ import com.prodox.dto.AuthResponse;
 import com.prodox.entity.AppUser;
 import com.prodox.repository.AppUserRepository;
 import com.prodox.security.JwtUtil;
+import com.prodox.util.PasswordPolicy;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -26,6 +27,11 @@ public class AuthService {
         if (userRepository.existsByEmail(request.email())) {
             throw new IllegalArgumentException("El correo ya está registrado.");
         }
+
+        // Bloque de seguridad Validación/Config (C4): solo al CREAR una
+        // contraseña nueva — login (más abajo) nunca aplica este límite, para
+        // no arriesgar romper la autenticación de una cuenta ya existente.
+        PasswordPolicy.validarLongitudMaxima(request.password());
 
         String role = (request.role() != null &&
                        List.of("scrum_master", "scrum_member").contains(request.role()))
