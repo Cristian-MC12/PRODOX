@@ -15,6 +15,7 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -64,6 +65,63 @@ public class SecurityConfig {
             .sessionManagement(sm -> sm
                 .sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED)
             )
+            // Bloque de seguridad HTTP (headers): X-Content-Type-Options=nosniff,
+            // X-Frame-Options=DENY, Cache-Control/Pragma/Expires y X-XSS-Protection=0
+            // ya los envía Spring Security 6 por defecto (verificado con peticiones
+            // reales contra el backend corriendo — ver informe) y no se tocan acá.
+            // Se agregan explícitamente los tres que SÍ faltaban:
+            //
+            // - Referrer-Policy: PRODOX es una API JSON pura (Spring Boot no sirve
+            //   el HTML/JS/CSS de Angular — eso corre aparte en Vercel/Railway como
+            //   servicio estático). strict-origin-when-cross-origin es la política
+            //   por defecto recomendada: nunca filtra la URL completa a un origen
+            //   distinto, solo el origen cuando corresponde.
+            //
+            // - Permissions-Policy: se deshabilitan explícitamente cámara, micrófono,
+            //   geolocalización, pagos y fullscreen — ninguno se usa en todo
+            //   prodox-angular (confirmado por auditoría: 0 referencias a
+            //   getUserMedia/geolocation/requestFullscreen/Notification/Payment
+            //   Request). navigator.clipboard.writeText() SÍ se usa (copiar código
+            //   de invitación en equipo.component.ts) — deliberadamente NO se
+            //   restringe clipboard-write.
+            //
+            // - Content-Security-Policy: default-src 'none' — la política más
+            //   restrictiva posible, justificada porque este backend NUNCA sirve
+            //   HTML/CSS/JS propios (confirmado: sin resource handlers, sin
+            //   forward a index.html — ver EncodingConfig, el único WebMvcConfigurer
+            //   del proyecto, que solo toca encoding). Sin unsafe-inline, sin
+            //   unsafe-eval — no hacen falta porque no hay nada que ejecutar aquí.
+            //   frame-ancestors 'none' refuerza X-Frame-Options: DENY (PRODOX no se
+            //   embebe en iframes, confirmado: 0 usos de <iframe> en el frontend).
+            //   base-uri/form-action 'none' por la misma razón: no hay documentos
+            //   HTML propios cuya base o formularios proteger.
+            //
+            //   Esta CSP protege las respuestas del backend en sí (JSON, redirects
+            //   de OAuth2, página whitelabel de error si alguna vez se navega
+            //   directo a una URL rota). NO sustituye una CSP para el documento
+            //   HTML de Angular — esa la debe emitir quien sirve ese HTML (Vercel/
+            //   Railway estático), fuera del alcance de este repo backend; ver
+            //   informe para el detalle de por qué la build de Angular (critical
+            //   CSS inline vía Critters, sin nonce/hash) no sería compatible con
+            //   una CSP estricta sin 'unsafe-inline' si se aplicara ahí.
+            //
+            // Strict-Transport-Security: NO se fuerza acá. El HstsHeaderWriter de
+            // Spring Security ya está activo por defecto y solo escribe el header
+            // cuando request.isSecure()==true — nunca en HTTP plano de desarrollo.
+            // Si en producción (Railway, detrás de un proxy TLS-terminating) HSTS
+            // no aparece, la causa más probable es que Spring no está interpretando
+            // X-Forwarded-Proto (ver informe: server.forward-headers-strategy=
+            // framework existe en el application-prod.properties LOCAL, pero no
+            // está confirmado como variable de entorno real en Railway) — un cambio
+            // de infraestructura, no de este archivo.
+            .headers(headers -> {
+                headers.referrerPolicy(referrer -> referrer
+                        .policy(ReferrerPolicyHeaderWriter.ReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN));
+                headers.permissionsPolicy(permissions -> permissions
+                        .policy("camera=(), microphone=(), geolocation=(), payment=(), fullscreen=()"));
+                headers.contentSecurityPolicy(csp -> csp
+                        .policyDirectives("default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"));
+            })
             // Sin esto, Spring Security no tiene ningún AuthenticationEntryPoint
             // configurado (no hay .formLogin()/.httpBasic()) y por defecto responde
             // 403 también para una petición SIN autenticar o con un token inválido —
