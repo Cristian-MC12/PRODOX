@@ -178,6 +178,7 @@ import { timeboxAbreviado } from '../../models/timebox.model';
                       <th>Desde</th>
                       @if (esScrumMaster) {
                         <th>Cambiar rol</th>
+                        <th class="text-end pe-3">Eliminar</th>
                       }
                     </tr>
                   </thead>
@@ -216,6 +217,17 @@ import { timeboxAbreviado } from '../../models/timebox.model';
                               <span class="text-muted small">—</span>
                             }
                           </td>
+                          <td class="align-middle text-nowrap text-end pe-3">
+                            @if (m.rol !== ROL_SCRUM_MASTER) {
+                              <button class="btn btn-sm btn-outline-danger py-0"
+                                      title="Eliminar del proyecto"
+                                      (click)="pedirEliminarMiembro(m)">
+                                <i class="bi bi-person-x"></i>
+                              </button>
+                            } @else {
+                              <span class="text-muted small">—</span>
+                            }
+                          </td>
                         }
                       </tr>
                     }
@@ -223,6 +235,39 @@ import { timeboxAbreviado } from '../../models/timebox.model';
                 </table>
               </div>
             }
+          </div>
+        </div>
+      }
+
+      <!-- Modal confirmación eliminar miembro (F2) -->
+      @if (miembroAEliminar) {
+        <div class="modal d-block" style="background-color: rgba(0,0,0,0.5)" (click)="cancelarEliminarMiembro()">
+          <div class="modal-dialog" (click)="$event.stopPropagation()">
+            <div class="modal-content">
+              <div class="modal-header">
+                <h5 class="modal-title text-danger">
+                  <i class="bi bi-exclamation-triangle-fill me-2"></i>Eliminar miembro
+                </h5>
+                <button type="button" class="btn-close" [disabled]="eliminandoMiembro" (click)="cancelarEliminarMiembro()"></button>
+              </div>
+              <div class="modal-body">
+                <p>¿Seguro que querés eliminar a <strong>{{ miembroAEliminar.userEmail }}</strong> de este proyecto?</p>
+                <p class="text-danger small mb-0">
+                  <i class="bi bi-exclamation-circle me-1"></i>
+                  Perderá acceso a este proyecto. Podés volver a invitarlo más adelante si hace falta.
+                </p>
+              </div>
+              <div class="modal-footer">
+                <button class="btn btn-outline-secondary btn-sm" [disabled]="eliminandoMiembro" (click)="cancelarEliminarMiembro()">
+                  Cancelar
+                </button>
+                <button class="btn btn-danger btn-sm" [disabled]="eliminandoMiembro" (click)="confirmarEliminarMiembro()">
+                  @if (eliminandoMiembro) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                  @else { <i class="bi bi-person-x me-1"></i> }
+                  Sí, eliminar miembro
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       }
@@ -243,6 +288,10 @@ export class EquipoComponent implements OnInit {
   cambiandoRolDe: string | null = null;
   alertMsg   = '';
   alertClass = 'alert-success';
+
+  /** F2 — miembro pendiente de confirmación de eliminación; null = modal cerrado. */
+  miembroAEliminar: ProjectMemberDto | null = null;
+  eliminandoMiembro = false;
 
   /** Expuestos al template para no repetir literales de string en el HTML. */
   readonly ROL_SCRUM_MASTER = ROL_SCRUM_MASTER;
@@ -391,6 +440,42 @@ export class EquipoComponent implements OnInit {
         this.showAlert(`Rol actualizado a ${etiquetaRol(actualizado.rol)}.`, 'alert-success');
       }
       this.cambiandoRolDe = null;
+    });
+  }
+
+  /** F2 — Abre el modal de confirmación; no elimina nada todavía. */
+  pedirEliminarMiembro(m: ProjectMemberDto): void {
+    this.miembroAEliminar = m;
+  }
+
+  cancelarEliminarMiembro(): void {
+    if (this.eliminandoMiembro) return;
+    this.miembroAEliminar = null;
+  }
+
+  /**
+   * Elimina al miembro confirmado. La autorización real la hace el backend
+   * (solo el Scrum Master del proyecto, nunca contra el propio Scrum
+   * Master — ver ProjectMemberService.eliminarMiembro); acá solo se
+   * refleja el resultado o el error, sin duplicar ninguna regla de
+   * negocio en el frontend.
+   */
+  confirmarEliminarMiembro(): void {
+    if (!this.proyecto || !this.miembroAEliminar || this.eliminandoMiembro) return;
+    const m = this.miembroAEliminar;
+    this.eliminandoMiembro = true;
+    this.memberService.eliminar(this.proyecto.id, m.userId).subscribe({
+      next: () => {
+        this.miembros = this.miembros.filter(x => x.userId !== m.userId);
+        this.eliminandoMiembro = false;
+        this.miembroAEliminar = null;
+        this.showAlert(`${m.userEmail} fue eliminado del proyecto.`, 'alert-success');
+      },
+      error: (err) => {
+        this.eliminandoMiembro = false;
+        this.miembroAEliminar = null;
+        this.showAlert(err?.error?.error ?? 'No se pudo eliminar al miembro.', 'alert-danger');
+      }
     });
   }
 

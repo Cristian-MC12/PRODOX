@@ -74,4 +74,21 @@ public class ProjectMemberController {
             Authentication auth) {
         return ResponseEntity.ok(service.cambiarRol(proyectoId, auth.getName(), userId, request.rol()));
     }
+
+    /**
+     * F2 — DELETE /api/project-members/{proyectoId}/{userId} — elimina a un
+     * miembro del proyecto. Restringido al Scrum Master del proyecto (mismo
+     * patrón de autorización que cambiarRol). El userId de la ruta es el
+     * MIEMBRO OBJETIVO, nunca el solicitante — el solicitante se obtiene
+     * siempre de auth.getName() (JWT ya validado), jamás de un valor
+     * enviado por el frontend.
+     */
+    @DeleteMapping("/{proyectoId}/{userId}")
+    public ResponseEntity<Void> eliminarMiembro(
+            @PathVariable UUID proyectoId,
+            @PathVariable String userId,
+            Authentication auth) {
+        service.eliminarMiembro(proyectoId, auth.getName(), userId);
+        return ResponseEntity.noContent().build();
+    }
 }

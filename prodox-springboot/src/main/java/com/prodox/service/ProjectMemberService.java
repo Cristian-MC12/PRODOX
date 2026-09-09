@@ -280,6 +280,54 @@ public class ProjectMemberService {
     }
 
     /**
+     * F2 — elimina a un miembro del proyecto.
+     * <p>
+     * Reglas de seguridad, en el MISMO orden y con el mismo criterio que
+     * {@link #cambiarRol}, sin inventar una política nueva:
+     * <ol>
+     *   <li>El solicitante debe ser miembro de {@code proyectoId} (si no,
+     *       SecurityException — cubre tanto "usuario externo" como "SM de
+     *       otro proyecto intentando tocar este").</li>
+     *   <li>El solicitante debe tener rol scrum_master EN ESE proyecto (si
+     *       no, SecurityException) — nunca se confía en el rol global de
+     *       {@link com.prodox.entity.AppUser}, solo en {@link ProjectMember#getRol()}.</li>
+     *   <li>El usuario objetivo debe ser miembro de ESTE mismo proyecto —
+     *       si no lo es (o es miembro de otro proyecto distinto), se
+     *       rechaza como "no es miembro de este proyecto", igual que
+     *       cambiarRol.</li>
+     *   <li>No se permite eliminar al miembro que actualmente es
+     *       scrum_master del proyecto — evita dejar el proyecto sin Scrum
+     *       Master. Como el propio solicitante SIEMPRE es ese scrum_master
+     *       (paso 2), esto también impide, como corolario directo, que un
+     *       Scrum Master se elimine a sí mismo mediante este endpoint — sin
+     *       necesitar un caso especial adicional.</li>
+     * </ol>
+     * Sin FK desde ninguna otra tabla hacia project_members (verificado:
+     * ninguna migración declara REFERENCES project_members) — eliminar esta
+     * fila no afecta historias, sprints, variables, resultados ni el
+     * historial de invitaciones (ProjectInvitacion no se toca: conserva el
+     * rastro de cómo se unió, igual que hoy).
+     */
+    @Transactional
+    public void eliminarMiembro(UUID proyectoId, String solicitanteId, String targetUserId) {
+        ProjectMember solicitante = memberRepo.findByProyectoIdAndUserId(proyectoId, solicitanteId)
+                .orElseThrow(() -> new SecurityException("No tienes acceso a este proyecto"));
+
+        if (!ProjectMember.ROL_SCRUM_MASTER.equals(solicitante.getRol())) {
+            throw new SecurityException("Solo el Scrum Master del proyecto puede eliminar miembros.");
+        }
+
+        ProjectMember target = memberRepo.findByProyectoIdAndUserId(proyectoId, targetUserId)
+                .orElseThrow(() -> new IllegalArgumentException("El usuario no es miembro de este proyecto."));
+
+        if (ProjectMember.ROL_SCRUM_MASTER.equals(target.getRol())) {
+            throw new IllegalArgumentException("No se puede eliminar al Scrum Master del proyecto.");
+        }
+
+        memberRepo.delete(target);
+    }
+
+    /**
      * V40 — a lo sumo un Product Owner activo por proyecto. Se usa desde
      * invitar(), unirse() y cambiarRol(); el respaldo real ante llamadas
      * concurrentes es el índice único parcial de la migración V40 sobre

@@ -37,7 +37,7 @@ describe('EquipoComponent', () => {
   let memberService: jasmine.SpyObj<ProjectMemberService>;
 
   async function crearComponente(miRol: string): Promise<void> {
-    const memberServiceSpy = jasmine.createSpyObj('ProjectMemberService', ['listar', 'invitar', 'unirse', 'cambiarRol']);
+    const memberServiceSpy = jasmine.createSpyObj('ProjectMemberService', ['listar', 'invitar', 'unirse', 'cambiarRol', 'eliminar']);
     const routerSpy = jasmine.createSpyObj('Router', ['navigate']);
     const authServiceSpy = jasmine.createSpyObj('AuthService', ['logout']);
     (authServiceSpy as any).currentUser = signal({ userId: 'u1', email: 'sm@test.com', role: 'scrum_master', token: 't' });
@@ -143,6 +143,64 @@ describe('EquipoComponent', () => {
 
       expect(filaSm.querySelector('select')).toBeFalsy();
       expect(filaPo.querySelector('select')).toBeTruthy();
+    });
+
+    // ── F2: eliminar miembro ──────────────────────────────────────────────
+
+    it('F2: no ofrece el botón "Eliminar" en la fila del propio Scrum Master, pero sí en las demás', () => {
+      const compiled = fixture.nativeElement;
+      const filas: HTMLTableRowElement[] = Array.from(compiled.querySelectorAll('tbody tr'));
+      const filaSm = filas.find(f => f.textContent?.includes('sm@test.com'))!;
+      const filaPo = filas.find(f => f.textContent?.includes('po@test.com'))!;
+
+      expect(filaSm.querySelector('button[title="Eliminar del proyecto"]')).toBeFalsy();
+      expect(filaPo.querySelector('button[title="Eliminar del proyecto"]')).toBeTruthy();
+    });
+
+    it('F2: pedirEliminarMiembro abre el modal de confirmación sin llamar al backend todavía', () => {
+      const target = component.miembros.find(m => m.userId === 'u3')!;
+
+      component.pedirEliminarMiembro(target);
+      fixture.detectChanges();
+
+      expect(component.miembroAEliminar).toBe(target);
+      expect(memberService.eliminar).not.toHaveBeenCalled();
+      expect(fixture.nativeElement.textContent).toContain('¿Seguro que querés eliminar a');
+    });
+
+    it('F2: cancelarEliminarMiembro cierra el modal sin llamar al backend', () => {
+      const target = component.miembros.find(m => m.userId === 'u3')!;
+      component.pedirEliminarMiembro(target);
+
+      component.cancelarEliminarMiembro();
+
+      expect(component.miembroAEliminar).toBeNull();
+      expect(memberService.eliminar).not.toHaveBeenCalled();
+    });
+
+    it('F2: confirmarEliminarMiembro llama al servicio con proyectoId+userId y quita al miembro de la lista', () => {
+      const target = component.miembros.find(m => m.userId === 'u3')!;
+      memberService.eliminar.and.returnValue(of(undefined));
+      component.pedirEliminarMiembro(target);
+
+      component.confirmarEliminarMiembro();
+
+      expect(memberService.eliminar).toHaveBeenCalledWith('proj-1', 'u3');
+      expect(component.miembros.find(m => m.userId === 'u3')).toBeUndefined();
+      expect(component.miembroAEliminar).toBeNull();
+      expect(component.alertMsg).toContain('member@test.com');
+    });
+
+    it('F2: si el backend rechaza, conserva al miembro en la lista y muestra alerta segura', () => {
+      const target = component.miembros.find(m => m.userId === 'u3')!;
+      memberService.eliminar.and.returnValue(throwError(() => ({ error: { error: 'Solo el Scrum Master del proyecto puede eliminar miembros.' } })));
+      component.pedirEliminarMiembro(target);
+
+      component.confirmarEliminarMiembro();
+
+      expect(component.miembros.find(m => m.userId === 'u3')).toBe(target);
+      expect(component.miembroAEliminar).toBeNull();
+      expect(component.alertMsg).toContain('Solo el Scrum Master');
     });
   });
 

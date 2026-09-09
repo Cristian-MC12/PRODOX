@@ -384,6 +384,143 @@ class ProjectMemberServiceTest {
         verify(memberRepo, never()).save(any());
     }
 
+    // ── F2: eliminarMiembro ─────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("eliminarMiembro: el Scrum Master elimina a un Scrum Member de su proyecto")
+    void eliminarMiembro_smEliminaScrumMember_eliminaCorrectamente() {
+        ProjectMember sm = new ProjectMember();
+        sm.setProyectoId(proyectoId); sm.setUserId(smId.toString()); sm.setRol("scrum_master");
+        ProjectMember target = new ProjectMember();
+        target.setProyectoId(proyectoId); target.setUserId(memberId.toString());
+        target.setUserEmail("member@prodox.com"); target.setRol("scrum_member");
+
+        when(memberRepo.findByProyectoIdAndUserId(proyectoId, smId.toString())).thenReturn(Optional.of(sm));
+        when(memberRepo.findByProyectoIdAndUserId(proyectoId, memberId.toString())).thenReturn(Optional.of(target));
+
+        service.eliminarMiembro(proyectoId, smId.toString(), memberId.toString());
+
+        verify(memberRepo).delete(target);
+    }
+
+    @Test
+    @DisplayName("eliminarMiembro: el Scrum Master elimina a un Product Owner de su proyecto")
+    void eliminarMiembro_smEliminaProductOwner_eliminaCorrectamente() {
+        ProjectMember sm = new ProjectMember();
+        sm.setProyectoId(proyectoId); sm.setUserId(smId.toString()); sm.setRol("scrum_master");
+        ProjectMember target = new ProjectMember();
+        target.setProyectoId(proyectoId); target.setUserId(memberId.toString());
+        target.setUserEmail("po@prodox.com"); target.setRol("product_owner");
+
+        when(memberRepo.findByProyectoIdAndUserId(proyectoId, smId.toString())).thenReturn(Optional.of(sm));
+        when(memberRepo.findByProyectoIdAndUserId(proyectoId, memberId.toString())).thenReturn(Optional.of(target));
+
+        service.eliminarMiembro(proyectoId, smId.toString(), memberId.toString());
+
+        verify(memberRepo).delete(target);
+    }
+
+    @Test
+    @DisplayName("eliminarMiembro: un Product Owner no puede eliminar miembros (solo el Scrum Master)")
+    void eliminarMiembro_solicitanteProductOwner_lanzaSecurityException() {
+        ProjectMember solicitantePO = new ProjectMember();
+        solicitantePO.setProyectoId(proyectoId); solicitantePO.setUserId(memberId.toString()); solicitantePO.setRol("product_owner");
+
+        when(memberRepo.findByProyectoIdAndUserId(proyectoId, memberId.toString())).thenReturn(Optional.of(solicitantePO));
+
+        assertThatThrownBy(() -> service.eliminarMiembro(proyectoId, memberId.toString(), smId.toString()))
+                .isInstanceOf(SecurityException.class)
+                .hasMessageContaining("Solo el Scrum Master");
+        verify(memberRepo, never()).delete(any());
+    }
+
+    @Test
+    @DisplayName("eliminarMiembro: un Scrum Member no puede eliminar miembros (solo el Scrum Master)")
+    void eliminarMiembro_solicitanteScrumMember_lanzaSecurityException() {
+        ProjectMember solicitanteMember = new ProjectMember();
+        solicitanteMember.setProyectoId(proyectoId); solicitanteMember.setUserId(memberId.toString()); solicitanteMember.setRol("scrum_member");
+
+        when(memberRepo.findByProyectoIdAndUserId(proyectoId, memberId.toString())).thenReturn(Optional.of(solicitanteMember));
+
+        assertThatThrownBy(() -> service.eliminarMiembro(proyectoId, memberId.toString(), smId.toString()))
+                .isInstanceOf(SecurityException.class)
+                .hasMessageContaining("Solo el Scrum Master");
+        verify(memberRepo, never()).delete(any());
+    }
+
+    @Test
+    @DisplayName("eliminarMiembro: un usuario externo al proyecto (no miembro) recibe SecurityException — cubre también 'proyecto inexistente' (mismo camino: no hay membresía)")
+    void eliminarMiembro_solicitanteExterno_lanzaSecurityException() {
+        String externoId = UUID.randomUUID().toString();
+        when(memberRepo.findByProyectoIdAndUserId(proyectoId, externoId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.eliminarMiembro(proyectoId, externoId, memberId.toString()))
+                .isInstanceOf(SecurityException.class)
+                .hasMessageContaining("No tienes acceso a este proyecto");
+        verify(memberRepo, never()).delete(any());
+    }
+
+    @Test
+    @DisplayName("eliminarMiembro: no se puede eliminar al Scrum Master del proyecto")
+    void eliminarMiembro_targetEsElScrumMaster_lanzaIllegalArgumentException() {
+        ProjectMember sm = new ProjectMember();
+        sm.setProyectoId(proyectoId); sm.setUserId(smId.toString()); sm.setRol("scrum_master");
+
+        when(memberRepo.findByProyectoIdAndUserId(proyectoId, smId.toString())).thenReturn(Optional.of(sm));
+
+        assertThatThrownBy(() -> service.eliminarMiembro(proyectoId, smId.toString(), smId.toString()))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("No se puede eliminar al Scrum Master");
+        verify(memberRepo, never()).delete(any());
+    }
+
+    @Test
+    @DisplayName("eliminarMiembro: el Scrum Master no puede eliminarse a sí mismo (corolario directo de no poder eliminar al SM, sin caso especial)")
+    void eliminarMiembro_scrumMasterIntentaEliminarseASiMismo_lanzaIllegalArgumentException() {
+        ProjectMember sm = new ProjectMember();
+        sm.setProyectoId(proyectoId); sm.setUserId(smId.toString()); sm.setRol("scrum_master");
+
+        when(memberRepo.findByProyectoIdAndUserId(proyectoId, smId.toString())).thenReturn(Optional.of(sm));
+
+        // El solicitante ES el target (mismo userId) — el mismo objeto sm se
+        // devuelve tanto para "solicitante" como para "target lookup".
+        assertThatThrownBy(() -> service.eliminarMiembro(proyectoId, smId.toString(), smId.toString()))
+                .isInstanceOf(IllegalArgumentException.class);
+        verify(memberRepo, never()).delete(any());
+    }
+
+    @Test
+    @DisplayName("eliminarMiembro: miembro objetivo inexistente en el proyecto lanza IllegalArgumentException")
+    void eliminarMiembro_targetInexistente_lanzaIllegalArgumentException() {
+        ProjectMember sm = new ProjectMember();
+        sm.setProyectoId(proyectoId); sm.setUserId(smId.toString()); sm.setRol("scrum_master");
+        String inexistenteId = UUID.randomUUID().toString();
+
+        when(memberRepo.findByProyectoIdAndUserId(proyectoId, smId.toString())).thenReturn(Optional.of(sm));
+        when(memberRepo.findByProyectoIdAndUserId(proyectoId, inexistenteId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.eliminarMiembro(proyectoId, smId.toString(), inexistenteId))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("no es miembro de este proyecto");
+        verify(memberRepo, never()).delete(any());
+    }
+
+    @Test
+    @DisplayName("eliminarMiembro: el usuario objetivo debe ser miembro de ESTE proyecto — un miembro de otro proyecto no puede eliminarse usando este proyectoId (BOLA/IDOR)")
+    void eliminarMiembro_targetNoEsMiembroDeEsteProyecto_lanzaIllegalArgumentException() {
+        ProjectMember sm = new ProjectMember();
+        sm.setProyectoId(proyectoId); sm.setUserId(smId.toString()); sm.setRol("scrum_master");
+        String targetDeOtroProyecto = UUID.randomUUID().toString();
+
+        when(memberRepo.findByProyectoIdAndUserId(proyectoId, smId.toString())).thenReturn(Optional.of(sm));
+        when(memberRepo.findByProyectoIdAndUserId(proyectoId, targetDeOtroProyecto)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.eliminarMiembro(proyectoId, smId.toString(), targetDeOtroProyecto))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("no es miembro de este proyecto");
+        verify(memberRepo, never()).delete(any());
+    }
+
     // ── V40: a lo sumo un Product Owner activo por proyecto ────────────────
 
     @Test

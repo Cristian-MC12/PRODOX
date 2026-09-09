@@ -35,6 +35,14 @@ export class ProjectMemberService {
     return this.http.patch<ProjectMemberDto>(`${this.base}/${proyectoId}/${userId}/rol`, { rol });
   }
 
+  /**
+   * F2 — Elimina a un miembro del proyecto (solo Scrum Master del proyecto,
+   * y nunca al propio Scrum Master — validado en el backend).
+   */
+  eliminar(proyectoId: string, userId: string): Observable<void> {
+    return this.http.delete<void>(`${this.base}/${proyectoId}/${userId}`);
+  }
+
   /** Estado público de una invitación (sin requerir sesión) — usado por /invitacion. */
   consultarInvitacion(codigo: string): Observable<{ proyectoId: string | null; proyectoNombre: string | null; estado: string }> {
     return this.http.get<{ proyectoId: string | null; proyectoNombre: string | null; estado: string }>(`${this.base}/invitacion/${codigo}`);
