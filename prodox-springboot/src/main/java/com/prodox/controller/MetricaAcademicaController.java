@@ -4,11 +4,14 @@ package com.prodox.controller;
 
 import com.prodox.dto.*;
 import com.prodox.entity.MetricParametrizacion;
+import com.prodox.ratelimit.RateLimitException;
+import com.prodox.ratelimit.RateLimitService;
 import com.prodox.service.MetricaAcademicaService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -32,16 +35,29 @@ import java.util.UUID;
 public class MetricaAcademicaController {
     
     private final MetricaAcademicaService service;
-    
+    private final RateLimitService rateLimitService;
+
     /**
      * Genera propuesta de parametrización para métrica académica.
      * Gemini asiste en estructurar la parametrización basándose en la fuente académica.
+     *
+     * Bloque 10B-2: fuenteAcademica/definicion (hasta 4000 caracteres de
+     * texto libre) viajan directo al prompt de Gemini — sin protección
+     * previa. Se reutiliza el mismo RateLimitService que ya protege
+     * /api/ai/copilot/chat, /api/ai/reports/* y /api/ai/retrospectives/*.
      */
     @PostMapping("/propuesta")
     @PreAuthorize("hasRole('USER')")
     public ResponseEntity<PropuestaParametrizacionDto> generarPropuesta(
-            @Valid @RequestBody MetricaAcademicaRequest request) {
-        
+            @Valid @RequestBody MetricaAcademicaRequest request,
+            Authentication auth) {
+
+        if (!rateLimitService.allowRequest(auth.getName())) {
+            throw new RateLimitException(
+                "Has alcanzado temporalmente el límite de consultas de IA. " +
+                "Intenta nuevamente en unos minutos.");
+        }
+
         PropuestaParametrizacionDto propuesta = service.generarPropuestaAcademica(request);
         return ResponseEntity.ok(propuesta);
     }
@@ -133,12 +149,22 @@ public class MetricaAcademicaController {
     /**
      * Solicita interpretación IA de un resultado ya calculado.
      * Gemini NO calcula, solo interpreta resultados existentes.
+     *
+     * Bloque 10B-2: sin límite previamente — cada llamada dispara una
+     * invocación a Gemini. Mismo RateLimitService reutilizado arriba.
      */
     @PostMapping("/resultados/{resultadoId}/interpretar")
     @PreAuthorize("hasRole('USER')")
     public ResponseEntity<InterpretacionIADto> interpretar(
-            @PathVariable UUID resultadoId) {
-        
+            @PathVariable UUID resultadoId,
+            Authentication auth) {
+
+        if (!rateLimitService.allowRequest(auth.getName())) {
+            throw new RateLimitException(
+                "Has alcanzado temporalmente el límite de consultas de IA. " +
+                "Intenta nuevamente en unos minutos.");
+        }
+
         InterpretacionIADto interpretacion = service.solicitarInterpretacionIA(resultadoId);
         return ResponseEntity.ok(interpretacion);
     }

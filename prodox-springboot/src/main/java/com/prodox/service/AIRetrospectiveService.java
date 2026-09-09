@@ -79,7 +79,11 @@ public class AIRetrospectiveService {
         try {
             geminiResponse = geminiService.generate(buildRetrospectivePrompt(context));
         } catch (Exception e) {
-            log.error("Gemini falló generando retrospectiva para sprint {}: {}", sprintId, e.getMessage(), e);
+            // Bloque de seguridad Logging/Exposición (H2, Bloque 8A): nunca
+            // registrar e.getMessage() ni el throwable completo acá — mismo
+            // principio ya aplicado en MetricaIAService/MetricaAcademicaService.
+            log.error("Gemini falló generando retrospectiva para sprint {} (tipo de error: {})",
+                    sprintId, e.getClass().getSimpleName());
             throw new RetrospectivaIANoDisponibleException(
                     "No se pudo generar la retrospectiva: el servicio de IA no respondió correctamente. Intenta nuevamente en unos segundos.",
                     e);
@@ -167,8 +171,12 @@ public class AIRetrospectiveService {
         }
         
         // Datos del sprint actual
+        // Bloque 10B-3: mismo caso que AIReportService — sprintGoal libre,
+        // fijado y leído solo por el Scrum Master (impacto auto-acotado),
+        // delimitado igual por consistencia/defensa en profundidad.
         context.append("SPRINT ACTUAL: ").append(sprint.getNumero()).append("\n");
-        context.append("GOAL: ").append(sprint.getSprintGoal() != null ? sprint.getSprintGoal() : "No definido").append("\n");
+        context.append("GOAL: ").append(PromptDataDelimiter.delimitar("SPRINT_GOAL",
+                sprint.getSprintGoal() != null ? sprint.getSprintGoal() : "No definido")).append("\n");
         context.append("DURACIÓN: ").append(duracionDias != null ? duracionDias + " días" : "No definida").append("\n");
         
         context.append("\nMÉTRICAS ACTUALES:\n");
@@ -217,9 +225,9 @@ public class AIRetrospectiveService {
     }
     
     private String buildRetrospectivePrompt(String context) {
-        return """
+        return PromptDataDelimiter.NOTA_DATOS_EXTERNOS + """
                 Eres un facilitador experto de retrospectivas Agile. Genera observaciones y preguntas para la retrospectiva.
-                
+
                 DATOS DEL SPRINT:
                 %s
                 

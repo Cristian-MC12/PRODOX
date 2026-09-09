@@ -188,7 +188,11 @@ public class AICopilotService {
             guardarMensaje(userId, request.proyectoId(), request.sprintId(),
                           "user", request.message());
 
-            throw new RuntimeException("Error al procesar mensaje con IA. Intentá nuevamente en unos segundos.");
+            // Bloque 9A (H9-4): excepción dedicada (en vez de RuntimeException
+            // genérico) para que GlobalExceptionHandler la traduzca a 503,
+            // igual que PropuestaIA/ReporteIA/RetrospectivaIANoDisponibleException.
+            throw new CopilotIANoDisponibleException(
+                    "Error al procesar mensaje con IA. Intentá nuevamente en unos segundos.", e);
         }
 
         // 12. GUARDAR MENSAJES EN BASE DE DATOS
@@ -742,19 +746,27 @@ public class AICopilotService {
         sb.append("- Posibles causas (márcalas como hipótesis)\n");
         sb.append("- Riesgos detectados\n");
         sb.append("- Recomendaciones\n\n");
-        
+
+        // Bloque 10B-3: nombre de proyecto y objetivo de sprint son texto
+        // libre editable (solo por el Scrum Master, pero leído por TODOS los
+        // miembros del proyecto en cada chat) que hasta ahora se interpolaba
+        // sin delimitar dentro del systemInstruction — el canal de mayor
+        // autoridad de la API de Gemini. Se delimitan explícitamente como
+        // DATO, nunca como instrucción (ver PromptDataDelimiter).
+        sb.append(PromptDataDelimiter.NOTA_DATOS_EXTERNOS);
+
         // Contexto del usuario
         sb.append("=== CONTEXTO ACTUAL ===\n");
-        sb.append("Proyecto: ").append(proyecto.getNombre()).append("\n");
+        sb.append("Proyecto: ").append(PromptDataDelimiter.delimitar("PROJECT_NAME", proyecto.getNombre())).append("\n");
         sb.append("Método: ").append(proyecto.getMetodo().toUpperCase()).append("\n");
         sb.append("Time Box: ").append(proyecto.getTimeBoxSemanas()).append(" semana(s)\n");
-        
+
         if (sprint != null) {
             sb.append("Sprint actual: Sprint ").append(sprint.getNumero())
-              .append(" - ").append(sprint.getSprintGoal()).append("\n");
+              .append(" - ").append(PromptDataDelimiter.delimitar("SPRINT_GOAL", sprint.getSprintGoal())).append("\n");
             sb.append("Estado: ").append(sprint.getEstado()).append("\n");
         }
-        
+
         return sb.toString();
     }
 

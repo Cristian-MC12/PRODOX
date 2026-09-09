@@ -65,7 +65,7 @@ export class AIReportComponent implements OnInit {
     this.sprintService.listar(this.proyecto.id)
       .pipe(
         catchError(err => {
-          console.error('Error cargando sprints:', err);
+          console.error('Error cargando sprints:', err?.status, err?.error?.error ?? err?.message);
           this.showAlert('Error al cargar los sprints', 'alert-danger');
           return of([]);
         })
@@ -96,7 +96,7 @@ export class AIReportComponent implements OnInit {
     this.reportService.generateSprintReport(this.selectedSprintId)
       .pipe(
         catchError(err => {
-          console.error('Error generando reporte:', err);
+          console.error('Error generando reporte:', err?.status, err?.error?.error ?? err?.message);
           hadError = true;
           this.generationStep.set('');
           

@@ -750,8 +750,6 @@ export class ParametrizacionComponent implements OnInit {
    * cancele — exactamente el caso que no debe incrementar usos.
    */
   usarDelTop(t: TopParametrizacion): void {
-    console.log('🔍 Datos de TopParametrizacion:', t);
-
     this.form = {
       objetivo:          t.objetivo || '',
       procedimiento:     t.procedimiento || '',
@@ -776,8 +774,6 @@ export class ParametrizacionComponent implements OnInit {
       // por completo y lo dejan sin definir.
       usadaDesdeRankingId: t.id
     };
-    
-    console.log('🔍 Formulario después de copiar:', this.form);
     
     this.errorEscala = '';
     this.propuestaElegida = null;

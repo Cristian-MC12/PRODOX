@@ -82,7 +82,7 @@ export class AICopilotComponent implements OnInit, AfterViewChecked {
         localStorage.removeItem('mpdia_sprint_activo');
       }
     } catch (e) {
-      console.error('Error al cargar contexto:', e);
+      console.error('Error al cargar contexto:', e?.status, e?.error?.error ?? e?.message);
       // Limpiar localStorage corrupto
       localStorage.removeItem('mpdia_proyecto_activo');
       localStorage.removeItem('mpdia_sprint_activo');

@@ -5,6 +5,7 @@ package com.prodox.controller;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.prodox.dto.*;
 import com.prodox.entity.MetricParametrizacion;
+import com.prodox.ratelimit.RateLimitService;
 import com.prodox.service.MetricaAcademicaService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -25,8 +26,10 @@ import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -53,18 +56,25 @@ class MetricaAcademicaControllerTest {
     
     @MockBean
     private MetricaAcademicaService service;
-    
+
+    @Autowired
+    private RateLimitService rateLimitService;
+
     private UUID metricaId;
     private UUID proyectoId;
     private UUID sprintId;
     private UUID resultadoId;
-    
+
     @BeforeEach
     void setUp() {
         metricaId = UUID.randomUUID();
         proyectoId = UUID.randomUUID();
         sprintId = UUID.randomUUID();
         resultadoId = UUID.randomUUID();
+        // Bloque 10B-2: bean real compartido entre todos los tests de esta
+        // clase (mismo contexto Spring) — se limpia para que ningún test
+        // arrastre el contador de otro.
+        rateLimitService.resetAll();
     }
     
     // ========================================
@@ -452,7 +462,110 @@ class MetricaAcademicaControllerTest {
                 .with(csrf()))
             .andExpect(status().isUnauthorized());
     }
-    
+
+    // ========================================
+    // Bloque 10B-2: Rate limiting (endpoints que llaman a Gemini)
+    // ========================================
+
+    @Test
+    @WithMockUser(username = "rl-interpretar")
+    @org.junit.jupiter.api.DisplayName("interpretar: request número 11 en la ventana recibe 429 y NO llama a Gemini")
+    void interpretar_excedeLimite_retorna429SinLlamarAGemini() throws Exception {
+        InterpretacionIADto interpretacion = new InterpretacionIADto(
+            resultadoId, "Métrica", new BigDecimal("7"), "problemas", "Interpretación", Instant.now());
+        when(service.solicitarInterpretacionIA(resultadoId)).thenReturn(interpretacion);
+
+        for (int i = 0; i < 10; i++) {
+            mockMvc.perform(post("/api/metricas-academicas/resultados/{resultadoId}/interpretar", resultadoId)
+                    .with(csrf()))
+                .andExpect(status().isOk());
+        }
+
+        org.mockito.Mockito.clearInvocations(service);
+
+        mockMvc.perform(post("/api/metricas-academicas/resultados/{resultadoId}/interpretar", resultadoId)
+                .with(csrf()))
+            .andExpect(status().isTooManyRequests())
+            .andExpect(jsonPath("$.error").exists());
+
+        verifyNoInteractions(service);
+    }
+
+    @Test
+    @WithMockUser(username = "rl-propuesta")
+    @org.junit.jupiter.api.DisplayName("propuesta: request número 11 en la ventana recibe 429 y NO llama a Gemini")
+    void propuesta_excedeLimite_retorna429SinLlamarAGemini() throws Exception {
+        MetricaAcademicaRequest request = new MetricaAcademicaRequest(
+            proyectoId, metricaId, "SIG-SC-02", "Problemas", "Definición", "Fuente",
+            "Σ x", "SUMA", "problemas", "por_sprint");
+
+        PropuestaParametrizacionDto propuesta = new PropuestaParametrizacionDto(
+            "T", "Objetivo", "Procedimiento", "Indicador", "Escala", "por_sprint",
+            "Fuente", "Σ x", "SUMA", "unidad", "Justificación", "indicador"
+        , null, null, null, null, null, null);
+
+        when(service.generarPropuestaAcademica(any(MetricaAcademicaRequest.class))).thenReturn(propuesta);
+
+        for (int i = 0; i < 10; i++) {
+            mockMvc.perform(post("/api/metricas-academicas/propuesta")
+                    .with(csrf())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk());
+        }
+
+        org.mockito.Mockito.clearInvocations(service);
+
+        mockMvc.perform(post("/api/metricas-academicas/propuesta")
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+            .andExpect(status().isTooManyRequests());
+
+        verifyNoInteractions(service);
+    }
+
+    @Test
+    @org.junit.jupiter.api.DisplayName("interpretar y propuesta comparten el mismo contador por usuario (RateLimitService único, sin distinción por endpoint)")
+    void interpretarYPropuesta_mismoUsuario_comparteContador() throws Exception {
+        // Bloque 10B-2 reutiliza deliberadamente el mismo RateLimitService
+        // (una sola cuota de IA por usuario) en vez de crear un segundo
+        // mecanismo — este test documenta y verifica ese comportamiento.
+        MetricaAcademicaRequest request = new MetricaAcademicaRequest(
+            proyectoId, metricaId, "SIG-SC-02", "Problemas", "Definición", "Fuente",
+            "Σ x", "SUMA", "problemas", "por_sprint");
+        PropuestaParametrizacionDto propuesta = new PropuestaParametrizacionDto(
+            "T", "Objetivo", "Procedimiento", "Indicador", "Escala", "por_sprint",
+            "Fuente", "Σ x", "SUMA", "unidad", "Justificación", "indicador"
+        , null, null, null, null, null, null);
+        when(service.generarPropuestaAcademica(any(MetricaAcademicaRequest.class))).thenReturn(propuesta);
+
+        InterpretacionIADto interpretacion = new InterpretacionIADto(
+            resultadoId, "Métrica", new BigDecimal("7"), "problemas", "Interpretación", Instant.now());
+        when(service.solicitarInterpretacionIA(resultadoId)).thenReturn(interpretacion);
+
+        for (int i = 0; i < 5; i++) {
+            mockMvc.perform(post("/api/metricas-academicas/propuesta")
+                    .with(csrf()).with(user("mismo-usuario"))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk());
+        }
+        for (int i = 0; i < 5; i++) {
+            mockMvc.perform(post("/api/metricas-academicas/resultados/{resultadoId}/interpretar", resultadoId)
+                    .with(csrf()).with(user("mismo-usuario")))
+                .andExpect(status().isOk());
+        }
+
+        // El contador ya llegó a 10 combinando ambos endpoints — el
+        // siguiente request a CUALQUIERA de los dos debe quedar bloqueado.
+        mockMvc.perform(post("/api/metricas-academicas/propuesta")
+                .with(csrf()).with(user("mismo-usuario"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+            .andExpect(status().isTooManyRequests());
+    }
+
     // ========================================
     // Métodos Auxiliares
     // ========================================

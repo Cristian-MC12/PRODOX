@@ -58,7 +58,10 @@ public class PasswordResetService {
                     .build()
                     .toUriString();
 
-            log.info("Solicitud de recuperación de contraseña para email: {}", email);
+            // Bloque de seguridad Logging/Exposición (H3, Bloque 8A): se
+            // registra userId (ya disponible en este scope) en lugar del
+            // email en texto plano, consistente con el log de la línea 97.
+            log.info("Solicitud de recuperación de contraseña para userId: {}", user.getId());
             emailService.enviar(user.getEmail(), "Recuperación de contraseña — PRODOX",
                     "Hola,\n\n" +
                     "Solicitaste recuperar tu contraseña en el sistema PRODOX.\n\n" +

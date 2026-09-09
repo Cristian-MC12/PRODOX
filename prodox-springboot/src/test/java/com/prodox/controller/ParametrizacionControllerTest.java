@@ -9,9 +9,11 @@ import com.prodox.dto.GuardarPropuestaRequest;
 import com.prodox.dto.ParametrizacionRequest;
 import com.prodox.dto.PropuestaParametrizacionDto;
 import com.prodox.entity.MetricParametrizacion;
+import com.prodox.ratelimit.RateLimitService;
 import com.prodox.repository.MetricParametrizacionRepository;
 import com.prodox.repository.ProjectMemberRepository;
 import com.prodox.service.ParametrizacionService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -26,7 +28,9 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -51,6 +55,21 @@ class ParametrizacionControllerTest {
 
     @MockBean
     private ProjectMemberRepository projectMemberRepository;
+
+    @Autowired
+    private RateLimitService rateLimitService;
+
+    /**
+     * Bloque 10B-2: RateLimitService es un bean real (no mockeado) —
+     * mismo patrón que AICopilotControllerTest. Se limpia antes de cada
+     * test para que el contador de un test no contamine el siguiente
+     * (el contexto Spring, y por tanto el singleton, se comparte entre
+     * todos los tests de esta clase).
+     */
+    @BeforeEach
+    void resetRateLimit() {
+        rateLimitService.resetAll();
+    }
 
     @Test
     @WithMockUser(roles = "USER")
@@ -125,6 +144,33 @@ class ParametrizacionControllerTest {
                         .param("metricaId", metricaId.toString())
                         .param("proyectoId", proyectoId.toString()))
                 .andExpect(status().isForbidden());
+
+        verifyNoInteractions(parametrizacionRepository);
+    }
+
+    // ========================================
+    // Bloque 12B (P0-4): SQL injection — parámetro tipado como UUID
+    // ========================================
+
+    @Test
+    @WithMockUser(roles = "USER")
+    @org.junit.jupiter.api.DisplayName("SQLi: un payload SQL en un parámetro UUID nunca llega a la query — rechazado 400 por conversión de tipo")
+    void obtenerUltimaAprobada_metricaIdConPayloadSQLi_rechazado400SinLlegarALaQuery() throws Exception {
+        String payloadSQLi = "'; DROP TABLE metric_parametrizaciones; --";
+
+        String body = mockMvc.perform(get("/api/parametrizacion/ultima-aprobada")
+                        .param("metricaId", payloadSQLi)
+                        .param("proyectoId", UUID.randomUUID().toString()))
+                .andExpect(status().isBadRequest())
+                .andReturn().getResponse().getContentAsString();
+
+        // Spring MVC rechaza la conversión String -> UUID antes de que el
+        // controller/service/repositorio vean el valor: la query nunca se
+        // construye con el payload. Se verifica además que el 400 no
+        // filtra información interna.
+        assertThat(body).doesNotContainIgnoringCase("Exception")
+                .doesNotContainIgnoringCase("stacktrace")
+                .doesNotContainIgnoringCase("SELECT ");
 
         verifyNoInteractions(parametrizacionRepository);
     }
@@ -358,7 +404,96 @@ class ParametrizacionControllerTest {
 
         verifyNoInteractions(parametrizacionService);
     }
-    
+
+    // ========================================
+    // Bloque 12B (P0-2): BOLA cross-tenant en aprobación
+    // ========================================
+
+    @Test
+    @WithMockUser(roles = "USER", username = "sm-proyecto-a")
+    @org.junit.jupiter.api.DisplayName("BOLA cross-tenant: Scrum Master del proyecto A no puede aprobar una parametrización del proyecto B, aunque sea SM en A")
+    void aprobarParametrizacion_scrumMasterDeOtroProyecto_denegadoSinFiltrarDatosAjenos() throws Exception {
+        UUID proyectoA = UUID.randomUUID();
+        UUID proyectoB = UUID.randomUUID();
+        UUID parametrizacionId = UUID.randomUUID();
+
+        AprobarParametrizacionRequest request = new AprobarParametrizacionRequest(
+                "Objetivo", "Procedimiento", "Indicador", "Escala", "por_sprint",
+                "Fuente", "Formula", "SUMA", "unidad", "indicador_test"
+        , null, null, null, null, null, null);
+
+        MetricParametrizacion parametrizacionDeB = new MetricParametrizacion();
+        parametrizacionDeB.setId(parametrizacionId);
+        parametrizacionDeB.setProyectoId(proyectoB);
+        parametrizacionDeB.setStatus("propuesta");
+        parametrizacionDeB.setObjetivo("DATO CONFIDENCIAL DEL PROYECTO B");
+        when(parametrizacionRepository.findById(parametrizacionId)).thenReturn(Optional.of(parametrizacionDeB));
+
+        // sm-proyecto-a ES scrum_master real, pero del proyecto A — sin membresía en B.
+        com.prodox.entity.ProjectMember smDeA = new com.prodox.entity.ProjectMember();
+        smDeA.setProyectoId(proyectoA);
+        smDeA.setUserId("sm-proyecto-a");
+        smDeA.setRol("scrum_master");
+        when(projectMemberRepository.findByProyectoIdAndUserId(proyectoA, "sm-proyecto-a"))
+                .thenReturn(Optional.of(smDeA));
+        when(projectMemberRepository.findByProyectoIdAndUserId(proyectoB, "sm-proyecto-a"))
+                .thenReturn(Optional.empty());
+
+        String body = mockMvc.perform(post("/api/parametrizacion/" + parametrizacionId + "/aprobar")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isForbidden())
+                .andReturn().getResponse().getContentAsString();
+
+        // La respuesta 403 no filtra el contenido del recurso ajeno.
+        assertThat(body).doesNotContain("DATO CONFIDENCIAL DEL PROYECTO B");
+
+        // El rechazo ocurre en el controller (chequeo contra existente.getProyectoId(),
+        // nunca contra un proyectoId provisto por el cliente) — el service de negocio
+        // nunca llega a invocarse.
+        verifyNoInteractions(parametrizacionService);
+    }
+
+    @Test
+    @WithMockUser(roles = "USER", username = "sm-proyecto-b")
+    @org.junit.jupiter.api.DisplayName("BOLA cross-tenant: el Scrum Master REAL del proyecto B sí puede aprobar su propia parametrización")
+    void aprobarParametrizacion_scrumMasterDelProyectoCorrecto_permitido() throws Exception {
+        UUID proyectoB = UUID.randomUUID();
+        UUID parametrizacionId = UUID.randomUUID();
+
+        AprobarParametrizacionRequest request = new AprobarParametrizacionRequest(
+                "Objetivo", "Procedimiento", "Indicador", "Escala", "por_sprint",
+                "Fuente", "Formula", "SUMA", "unidad", "indicador_test"
+        , null, null, null, null, null, null);
+
+        MetricParametrizacion parametrizacionDeB = new MetricParametrizacion();
+        parametrizacionDeB.setId(parametrizacionId);
+        parametrizacionDeB.setProyectoId(proyectoB);
+        parametrizacionDeB.setStatus("propuesta");
+        when(parametrizacionRepository.findById(parametrizacionId)).thenReturn(Optional.of(parametrizacionDeB));
+
+        com.prodox.entity.ProjectMember smDeB = new com.prodox.entity.ProjectMember();
+        smDeB.setProyectoId(proyectoB);
+        smDeB.setUserId("sm-proyecto-b");
+        smDeB.setRol("scrum_master");
+        when(projectMemberRepository.findByProyectoIdAndUserId(proyectoB, "sm-proyecto-b"))
+                .thenReturn(Optional.of(smDeB));
+
+        MetricParametrizacion aprobada = new MetricParametrizacion();
+        aprobada.setId(parametrizacionId);
+        aprobada.setStatus("aprobada");
+        aprobada.setVersion(1);
+        aprobada.setObjetivo("Objetivo");
+        when(parametrizacionService.aprobarParametrizacion(eq(parametrizacionId), any(AprobarParametrizacionRequest.class)))
+                .thenReturn(aprobada);
+
+        mockMvc.perform(post("/api/parametrizacion/" + parametrizacionId + "/aprobar")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("aprobada"));
+    }
+
     @Test
     @WithMockUser(roles = "USER")
     void aprobarParametrizacion_noEncontrada_retorna404() throws Exception {
@@ -440,5 +575,108 @@ class ParametrizacionControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isUnauthorized());
+    }
+
+    // ========================================
+    // Bloque 10B-2: Rate limiting en /propuestas (llama a Gemini)
+    // ========================================
+
+    private ParametrizacionRequest requestPropuestaValido() {
+        return new ParametrizacionRequest(
+                "Factor Test",
+                "Significado",
+                "Métrica Test",
+                "Descripción de la métrica"
+        );
+    }
+
+    private PropuestaParametrizacionDto propuestaMock() {
+        return new PropuestaParametrizacionDto(
+                "Parametrización Test",
+                "Objetivo de la métrica",
+                "Procedimiento de medición",
+                "Indicador principal",
+                "Escala 0-100",
+                "por_sprint",
+                "Fuente académica",
+                "Σ x",
+                "SUMA",
+                "unidad",
+                "Justificación de la propuesta",
+                "indicador_principal"
+        , null, null, null, null, null, null);
+    }
+
+    @Test
+    @WithMockUser(roles = "USER", username = "user-rl")
+    void generarPropuestas_dentroDelLimite_retorna200() throws Exception {
+        when(parametrizacionService.generarPropuestas(any(ParametrizacionRequest.class)))
+                .thenReturn(List.of(propuestaMock()));
+
+        // Límite default en test = 10 (prodox.ai.rate-limit.requests-per-minute)
+        for (int i = 0; i < 10; i++) {
+            mockMvc.perform(post("/api/parametrizacion/propuestas")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(requestPropuestaValido())))
+                    .andExpect(status().isOk());
+        }
+    }
+
+    @Test
+    @WithMockUser(roles = "USER", username = "user-rl")
+    @org.junit.jupiter.api.DisplayName("generarPropuestas: request número 11 en la ventana recibe 429 y NO llama a Gemini")
+    void generarPropuestas_excedeLimite_retorna429SinLlamarAGemini() throws Exception {
+        when(parametrizacionService.generarPropuestas(any(ParametrizacionRequest.class)))
+                .thenReturn(List.of(propuestaMock()));
+
+        for (int i = 0; i < 10; i++) {
+            mockMvc.perform(post("/api/parametrizacion/propuestas")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(requestPropuestaValido())))
+                    .andExpect(status().isOk());
+        }
+
+        // Reiniciar el mock para poder verificar de forma limpia que la
+        // request 11 (bloqueada) nunca llega al service.
+        org.mockito.Mockito.clearInvocations(parametrizacionService);
+
+        mockMvc.perform(post("/api/parametrizacion/propuestas")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(requestPropuestaValido())))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(jsonPath("$.error").exists())
+                // El body de 429 no debe filtrar detalles internos (stack, excepción, prompts).
+                .andExpect(jsonPath("$.error", org.hamcrest.Matchers.not(
+                        org.hamcrest.Matchers.containsString("Exception"))));
+
+        verifyNoInteractions(parametrizacionService);
+    }
+
+    @Test
+    @org.junit.jupiter.api.DisplayName("generarPropuestas: el límite de un usuario no afecta a otro usuario distinto")
+    void generarPropuestas_usuariosDistintos_noComparteContador() throws Exception {
+        when(parametrizacionService.generarPropuestas(any(ParametrizacionRequest.class)))
+                .thenReturn(List.of(propuestaMock()));
+
+        // Agotar el límite del usuario A
+        for (int i = 0; i < 10; i++) {
+            mockMvc.perform(post("/api/parametrizacion/propuestas")
+                            .with(org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user("usuario-a").roles("USER"))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(requestPropuestaValido())))
+                    .andExpect(status().isOk());
+        }
+        mockMvc.perform(post("/api/parametrizacion/propuestas")
+                        .with(org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user("usuario-a").roles("USER"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(requestPropuestaValido())))
+                .andExpect(status().isTooManyRequests());
+
+        // El usuario B, con su propio contador en 0, todavía puede hacer requests.
+        mockMvc.perform(post("/api/parametrizacion/propuestas")
+                        .with(org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user("usuario-b").roles("USER"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(requestPropuestaValido())))
+                .andExpect(status().isOk());
     }
 }

@@ -35,7 +35,7 @@ export class ActivityFeedComponent implements OnInit {
         this.loading = false;
       },
       error: (err) => {
-        console.error('Error cargando actividades:', err);
+        console.error('Error cargando actividades:', err?.status, err?.error?.error ?? err?.message);
         this.activities = [];
         this.loading = false;
         this.error = true;

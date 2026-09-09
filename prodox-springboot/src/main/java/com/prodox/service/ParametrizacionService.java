@@ -316,25 +316,34 @@ public class ParametrizacionService {
     }
 
     private String buildPrompt(ParametrizacionRequest r) {
-        // Construcción segura del prompt sin usar .formatted() 
+        // Construcción segura del prompt sin usar .formatted()
         // para evitar conflictos con caracteres % en el contenido
-        String factorNombre = r.factorNombre();
-        String factorCategoria = r.factorCategoria();
-        String metricaNombre = r.metricaNombre();
-        String metricaDescripcion = r.metricaDescripcion();
-        
-        return """
+        //
+        // Bloque 10B-3: los 4 campos vienen de ParametrizacionRequest, texto
+        // libre editable por el usuario (hasta 4000 caracteres en
+        // metricaDescripcion) — se delimitan explícitamente como DATO. La
+        // salida sigue igual de validada que antes: tipoOperacion/
+        // nombreVariable/escala se re-verifican contra allowlist/regex antes
+        // de persistir (validarTipoOperacion/validarNombreVariable/
+        // validarEscalaEstructurada), y nada se aprueba sin acción explícita
+        // del Scrum Master.
+        String factorNombre = PromptDataDelimiter.delimitar("FACTOR_NAME", r.factorNombre());
+        String factorCategoria = PromptDataDelimiter.delimitar("FACTOR_CATEGORY", r.factorCategoria());
+        String metricaNombre = PromptDataDelimiter.delimitar("METRIC_NAME", r.metricaNombre());
+        String metricaDescripcion = PromptDataDelimiter.delimitar("METRIC_DESCRIPTION", r.metricaDescripcion());
+
+        return PromptDataDelimiter.NOTA_DATOS_EXTERNOS + """
             Eres un asistente experto en métricas de productividad para equipos Scrum y metodologías ágiles.
-            
+
             Tu objetivo es AYUDAR al equipo a parametrizar la siguiente métrica:
-            
+
             Factor:      """ + factorNombre + " (Categoría: " + factorCategoria + ")" + """
-            
+
             Métrica:     """ + metricaNombre + """
-            
+
             Descripción: """ + metricaDescripcion + """
-            
-            
+
+
             Genera UNA propuesta estructurada de parametrización basándote en:
             - La definición de la métrica
             - Buenas prácticas de Scrum/Agile

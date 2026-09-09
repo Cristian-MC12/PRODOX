@@ -73,26 +73,33 @@ public class MetricaAcademicaService {
     }
     
     private String buildPromptAcademico(MetricaAcademicaRequest r) {
-        return """
+        // Bloque 10B-3: codigoMetrica/nombreMetrica/definicion/fuenteAcademica/
+        // formulaAcademica vienen de MetricaAcademicaRequest — texto libre
+        // editable (hasta 4000 caracteres en definicion/fuenteAcademica) — se
+        // delimitan explícitamente como DATO. tipoOperacion/unidadResultado
+        // no se delimitan (valores cortos tipo código, ya re-validados contra
+        // allowlist antes de persistir vía ParametrizacionService.
+        // validarTipoOperacion, reutilizado más abajo en guardarPropuestaAcademica).
+        return PromptDataDelimiter.NOTA_DATOS_EXTERNOS + """
             Eres un asistente experto en métricas de productividad Scrum con conocimiento académico.
-            
+
             MÉTRICA ACADÉMICA:
             Código:      %s
             Nombre:      %s
             Definición:  %s
-            
+
             FUENTE ACADÉMICA:
             %s
-            
+
             FÓRMULA ACADÉMICA:
             %s
-            
+
             TIPO DE OPERACIÓN:
             %s
-            
+
             UNIDAD DE RESULTADO:
             %s
-            
+
             REGLAS CRÍTICAS:
             1. Esta métrica está respaldada por una fuente académica
             2. La fórmula es FIJA y no debe modificarse
@@ -131,11 +138,12 @@ public class MetricaAcademicaService {
 
             IMPORTANTE: El procedimiento debe respetar la fórmula académica exacta.
             """.formatted(
-                r.codigoMetrica(),
-                r.nombreMetrica(),
-                r.definicion() != null ? r.definicion() : "Métrica académica",
-                r.fuenteAcademica(),
-                r.formulaAcademica(),
+                PromptDataDelimiter.delimitar("METRIC_CODE", r.codigoMetrica()),
+                PromptDataDelimiter.delimitar("METRIC_NAME", r.nombreMetrica()),
+                PromptDataDelimiter.delimitar("METRIC_DEFINITION",
+                        r.definicion() != null ? r.definicion() : "Métrica académica"),
+                PromptDataDelimiter.delimitar("ACADEMIC_SOURCE", r.fuenteAcademica()),
+                PromptDataDelimiter.delimitar("ACADEMIC_FORMULA", r.formulaAcademica()),
                 r.tipoOperacion(),
                 r.unidadResultado()
             );
@@ -510,17 +518,22 @@ public class MetricaAcademicaService {
             List<ResultadoMetrica> historico,
             MetricParametrizacion parametrizacion) {
         
+        // Bloque 10B-3: nombre de métrica (catálogo, editable por Scrum
+        // Master) y fuenteAcademica/formulaAcademica (texto libre, pudo
+        // haber sido sugerido por una propuesta de IA previa y luego
+        // aprobado por un humano) se delimitan explícitamente como DATO.
         StringBuilder sb = new StringBuilder();
         sb.append("Eres un asistente experto en métricas de productividad Scrum.\n\n");
-        
-        sb.append("MÉTRICA: ").append(resultado.getMetrica().getNombre()).append("\n");
-        
+        sb.append(PromptDataDelimiter.NOTA_DATOS_EXTERNOS);
+
+        sb.append("MÉTRICA: ").append(PromptDataDelimiter.delimitar("METRIC_NAME", resultado.getMetrica().getNombre())).append("\n");
+
         if (parametrizacion != null) {
             if (parametrizacion.getFuenteAcademica() != null) {
-                sb.append("FUENTE ACADÉMICA: ").append(parametrizacion.getFuenteAcademica()).append("\n");
+                sb.append("FUENTE ACADÉMICA: ").append(PromptDataDelimiter.delimitar("ACADEMIC_SOURCE", parametrizacion.getFuenteAcademica())).append("\n");
             }
             if (parametrizacion.getFormulaAcademica() != null) {
-                sb.append("FÓRMULA: ").append(parametrizacion.getFormulaAcademica()).append("\n");
+                sb.append("FÓRMULA: ").append(PromptDataDelimiter.delimitar("ACADEMIC_FORMULA", parametrizacion.getFormulaAcademica())).append("\n");
             }
         }
         

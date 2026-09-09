@@ -3,8 +3,10 @@ package com.prodox.service;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.prodox.dto.ai.gemini.*;
+import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
@@ -15,7 +17,7 @@ import java.util.Map;
 
 /**
  * Servicio que llama a la API de Google Gemini.
- * 
+ *
  * VERSIÓN EXTENDIDA (Fase 3.1):
  * - Mantiene método generate(String) para compatibilidad con código existente
  * - Agrega soporte para function calling / tool use
@@ -32,8 +34,49 @@ public class GeminiService {
     @Value("${prodox.gemini.api-url}")
     private String apiUrl;
 
-    private final RestClient restClient = RestClient.create();
+    // Bloque de resiliencia (Bloque 9A, H9-1): sin timeout explícito, una
+    // llamada colgada a Gemini bloquearía el hilo de Tomcat indefinidamente.
+    // Connect timeout (establecer la conexión TCP) y read timeout (esperar
+    // la respuesta una vez conectado) se configuran por separado porque son
+    // riesgos distintos: una red inalcanzable falla rápido con el primero,
+    // mientras que una API que acepta la conexión pero tarda en generar la
+    // respuesta requiere el segundo, más permisivo. Valores conservadores
+    // por defecto (también como default de campo, no solo de @Value, para
+    // que un GeminiService construido fuera de Spring — ej. "new
+    // GeminiService()" en tests — nunca use 0, que en
+    // SimpleClientHttpRequestFactory significa "sin timeout"),
+    // sobrescribibles por variable de entorno en producción.
+    @Value("${prodox.gemini.connect-timeout-ms:5000}")
+    private int connectTimeoutMs = 5000;
+
+    @Value("${prodox.gemini.read-timeout-ms:30000}")
+    private int readTimeoutMs = 30000;
+
+    private RestClient restClient;
     private final ObjectMapper mapper = new ObjectMapper();
+
+    @PostConstruct
+    private void initRestClient() {
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(connectTimeoutMs);
+        factory.setReadTimeout(readTimeoutMs);
+        this.restClient = RestClient.builder().requestFactory(factory).build();
+    }
+
+    /**
+     * Acceso perezoso y defensivo: @PostConstruct solo se ejecuta cuando
+     * Spring gestiona el bean. Un GeminiService construido directamente
+     * (ej. "new GeminiService()" + ReflectionTestUtils, como hace
+     * GeminiServiceSecurityTest) nunca dispara @PostConstruct — sin este
+     * método, restClient quedaría null y cualquier llamada real fallaría
+     * con NullPointerException en vez de con el comportamiento esperado.
+     */
+    private RestClient restClient() {
+        if (restClient == null) {
+            initRestClient();
+        }
+        return restClient;
+    }
 
     /**
      * Bloque de seguridad Secretos/Config: excepción interna exclusiva para
@@ -74,7 +117,7 @@ public class GeminiService {
 
         String response;
         try {
-            response = restClient.post()
+            response = restClient().post()
                     .uri(url)
                     .header("Content-Type", "application/json")
                     .body(body)
@@ -159,7 +202,7 @@ public class GeminiService {
 
         String responseJson;
         try {
-            responseJson = restClient.post()
+            responseJson = restClient().post()
                     .uri(url)
                     .header("Content-Type", "application/json")
                     .body(body)

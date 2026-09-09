@@ -38,6 +38,10 @@ prodox.cors.allowed-origins=http://localhost:4200
 # Obtén tu API key en: https://aistudio.google.com/app/apikey
 prodox.gemini.api-key=
 prodox.gemini.api-url=https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent
+# Bloque 9A (H9-1): timeout explícito de las llamadas HTTP a Gemini, en
+# milisegundos. Opcional — si se omiten, GeminiService usa 5000/30000.
+prodox.gemini.connect-timeout-ms=5000
+prodox.gemini.read-timeout-ms=30000
 
 # Google OAuth 2.0 — login "Continuar con Google"
 # 1. Ve a https://console.cloud.google.com/apis/credentials

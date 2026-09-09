@@ -3,6 +3,7 @@ package com.prodox.controller;
 
 import com.prodox.dto.ai.AIInsightDto;
 import com.prodox.dto.ai.GenerateInsightsResultDto;
+import com.prodox.ratelimit.RateLimitService;
 import com.prodox.security.JwtUtil;
 import com.prodox.service.AIInsightsService;
 import org.junit.jupiter.api.BeforeEach;
@@ -35,6 +36,15 @@ class AIInsightsControllerTest {
     @MockBean
     AIInsightsService insightsService;
 
+    // Bloque 10B-2: AIInsightsController ahora depende de RateLimitService.
+    // @WebMvcTest solo carga el slice web, así que necesita @MockBean como
+    // JwtUtil arriba. Se stubea "true" por defecto en setUp() para que los
+    // tests ya existentes (que no prueban rate limiting) sigan pasando sin
+    // cambios — el mock de un boolean sin stub devuelve false y bloquearía
+    // TODAS las requests con 429 en vez de 200.
+    @MockBean
+    RateLimitService rateLimitService;
+
     // FASE 16: @WebMvcTest solo carga el slice web — SecurityConfig (sí incluida
     // por defecto) intenta construir el bean jwtAuthFilter, cuyo constructor
     // requiere JwtUtil (un @Component fuera del slice web). Sin este mock, el
@@ -54,6 +64,7 @@ class AIInsightsControllerTest {
         proyectoId = UUID.randomUUID();
         insightId = UUID.randomUUID();
         userId = "test-user-123";
+        when(rateLimitService.allowRequest(anyString())).thenReturn(true);
 
         insightDto = new AIInsightDto(
                 insightId,
@@ -204,6 +215,41 @@ class AIInsightsControllerTest {
                 .andExpect(status().isForbidden());
 
         verify(insightsService).generateInsights(proyectoId, userId);
+    }
+
+    // ── Bloque 10B-2: rate limiting (hasta 4 llamadas a Gemini por request) ─
+
+    @Test
+    @DisplayName("POST generate: rate limit excedido retorna 429 y NO llama a Gemini/insightsService")
+    @WithMockUser(username = "test-user-123")
+    void generateInsights_rateLimitExcedido_retorna429SinLlamarAGemini() throws Exception {
+        when(rateLimitService.allowRequest("test-user-123")).thenReturn(false);
+
+        mockMvc.perform(post("/api/ai/insights/generate/{proyectoId}", proyectoId)
+                        .with(csrf()))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(jsonPath("$.error").exists())
+                .andExpect(jsonPath("$.error", org.hamcrest.Matchers.not(
+                        org.hamcrest.Matchers.containsString("Exception"))));
+
+        // La aserción central de este bloque: bloqueado por rate limit,
+        // insightsService.generateInsights() (y por tanto Gemini) nunca se invoca.
+        verifyNoInteractions(insightsService);
+    }
+
+    @Test
+    @DisplayName("POST generate: la clave de rate limit es el userId autenticado (allowRequest se llama con ese userId)")
+    @WithMockUser(username = "test-user-123")
+    void generateInsights_verificaRateLimitConUserIdCorrecto() throws Exception {
+        GenerateInsightsResultDto resultado = new GenerateInsightsResultDto(
+                List.of(insightDto), "COMPLETE", 1, 1, 0, List.of());
+        when(insightsService.generateInsights(proyectoId, userId)).thenReturn(resultado);
+
+        mockMvc.perform(post("/api/ai/insights/generate/{proyectoId}", proyectoId)
+                        .with(csrf()))
+                .andExpect(status().isOk());
+
+        verify(rateLimitService).allowRequest("test-user-123");
     }
 
     // ── POST /api/ai/insights/{insightId}/dismiss ─────────────────────────

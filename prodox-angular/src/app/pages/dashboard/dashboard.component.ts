@@ -205,13 +205,13 @@ export class DashboardComponent implements OnInit, AfterViewChecked, OnDestroy {
     const requests = {
       overview: this.analyticsService.getProjectOverview(proyectoId).pipe(
         catchError(err => {
-          console.error('Error cargando overview:', err);
+          console.error('Error cargando overview:', err?.status, err?.error?.error ?? err?.message);
           return of(null);
         })
       ),
       risks: this.analyticsService.identifyRisks(proyectoId).pipe(
         catchError(err => {
-          console.error('Error cargando risks:', err);
+          console.error('Error cargando risks:', err?.status, err?.error?.error ?? err?.message);
           return of([]);
         })
       ),
@@ -220,19 +220,19 @@ export class DashboardComponent implements OnInit, AfterViewChecked, OnDestroy {
       ),
       sprints: this.sprintService.listar(proyectoId).pipe(
         catchError(err => {
-          console.error('Error cargando sprints:', err);
+          console.error('Error cargando sprints:', err?.status, err?.error?.error ?? err?.message);
           return of([]);
         })
       ),
       miembros: this.memberService.listar(proyectoId).pipe(
         catchError(err => {
-          console.error('Error cargando miembros:', err);
+          console.error('Error cargando miembros:', err?.status, err?.error?.error ?? err?.message);
           return of([]);
         })
       ),
       metricas: this.planeacionService.listarMetricas(proyectoId).pipe(
         catchError(err => {
-          console.error('Error cargando métricas:', err);
+          console.error('Error cargando métricas:', err?.status, err?.error?.error ?? err?.message);
           return of([]);
         })
       ),
@@ -242,7 +242,7 @@ export class DashboardComponent implements OnInit, AfterViewChecked, OnDestroy {
       // exportarReporteGeneral()).
       metricasDetalle: this.evaluacionService.detalle(proyectoId).pipe(
         catchError(err => {
-          console.error('Error cargando detalle de métricas:', err);
+          console.error('Error cargando detalle de métricas:', err?.status, err?.error?.error ?? err?.message);
           return of([]);
         })
       )
@@ -270,7 +270,7 @@ export class DashboardComponent implements OnInit, AfterViewChecked, OnDestroy {
         this.processResults();
       },
       error: (err) => {
-        console.error('Error en forkJoin:', err);
+        console.error('Error en forkJoin:', err?.status, err?.error?.error ?? err?.message);
         this.handleError('Error cargando datos del dashboard');
       }
     });
@@ -282,7 +282,7 @@ export class DashboardComponent implements OnInit, AfterViewChecked, OnDestroy {
     if (sprintsFinalizados >= 2) {
       this.analyticsService.getSprintTrends(proyectoId, null, 6).pipe(
         catchError(err => {
-          console.error('Error cargando trends:', err);
+          console.error('Error cargando trends:', err?.status, err?.error?.error ?? err?.message);
           return of([]);
         })
       ).subscribe(trends => {
@@ -362,7 +362,7 @@ export class DashboardComponent implements OnInit, AfterViewChecked, OnDestroy {
 
     this.analyticsService.identifyRisks(proyectoId, variableId).pipe(
       catchError(err => {
-        console.error('Error cargando riesgos de la métrica:', err);
+        console.error('Error cargando riesgos de la métrica:', err?.status, err?.error?.error ?? err?.message);
         return of([]);
       })
     ).subscribe(risks => {

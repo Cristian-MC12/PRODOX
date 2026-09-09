@@ -989,7 +989,7 @@ export class AuthComponent implements OnInit {
       } else if (error) {
         // Error en OAuth2
         this.errorMsg = 'Error al autenticar con Google. Por favor, intenta nuevamente.';
-        console.error('Error OAuth:', error);
+        console.error('Error OAuth:', error?.status, error?.error?.error ?? error?.message);
       }
     });
   }

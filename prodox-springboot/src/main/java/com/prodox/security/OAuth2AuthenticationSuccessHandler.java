@@ -53,11 +53,14 @@ public class OAuth2AuthenticationSuccessHandler extends SimpleUrlAuthenticationS
             String name = oAuth2User.getAttribute("name");
             String picture = oAuth2User.getAttribute("picture");
 
-            log.info("OAuth2 login exitoso para email: {}", email);
-
             // Buscar o crear usuario
             AppUser user = appUserRepository.findByEmail(email)
                     .orElseGet(() -> createNewOAuth2User(email, name, picture));
+
+            // Bloque de seguridad Logging/Exposición (H3, Bloque 8A): se
+            // registra userId (ya resuelto arriba) en lugar del email en
+            // texto plano.
+            log.info("OAuth2 login exitoso para userId: {}", user.getId());
 
             // Generar JWT real (nunca se loguea, nunca viaja en esta URL) y
             // emitir en su lugar un código opaco de un solo uso para el redirect.
@@ -86,8 +89,6 @@ public class OAuth2AuthenticationSuccessHandler extends SimpleUrlAuthenticationS
     }
 
     private AppUser createNewOAuth2User(String email, String name, String picture) {
-        log.info("Creando nuevo usuario desde OAuth2: {}", email);
-
         AppUser newUser = new AppUser();
         newUser.setEmail(email);
         newUser.setPasswordHash(""); // No password for OAuth users
@@ -97,6 +98,11 @@ public class OAuth2AuthenticationSuccessHandler extends SimpleUrlAuthenticationS
         newUser.setRole("scrum_member");
         newUser.setNombre(name);
 
-        return appUserRepository.save(newUser);
+        AppUser saved = appUserRepository.save(newUser);
+        // Bloque de seguridad Logging/Exposición (H3, Bloque 8A): se registra
+        // el userId recién asignado (GenerationType.UUID lo asigna antes del
+        // INSERT, disponible ya en este punto) en lugar del email.
+        log.info("Creando nuevo usuario desde OAuth2 con userId: {}", saved.getId());
+        return saved;
     }
 }

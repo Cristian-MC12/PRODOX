@@ -6,6 +6,9 @@ import com.sendgrid.helpers.mail.Mail;
 import com.sendgrid.helpers.mail.objects.Content;
 import com.sendgrid.helpers.mail.objects.Email;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.http.client.config.RequestConfig;
+import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.impl.client.HttpClients;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.SimpleMailMessage;
@@ -46,6 +49,17 @@ public class EmailService {
     @Value("${prodox.sendgrid.from-name:PRODOX}")
     private String sendgridFromName;
 
+    // Bloque de resiliencia (Bloque 9A, H9-2): el cliente SendGrid por
+    // defecto (com.sendgrid.Client()) no tiene timeout configurado. Se
+    // construye un CloseableHttpClient propio (Apache HttpClient, ya
+    // presente como dependencia transitiva de sendgrid-java — sin agregar
+    // ninguna dependencia nueva) con connect/socket timeout explícitos.
+    @Value("${prodox.sendgrid.connect-timeout-ms:5000}")
+    private int sendgridConnectTimeoutMs;
+
+    @Value("${prodox.sendgrid.read-timeout-ms:10000}")
+    private int sendgridReadTimeoutMs;
+
     /** Envía un correo de texto plano. Devuelve true solo si se envió realmente. */
     public boolean enviar(String to, String subject, String text) {
         // Intentar primero con SendGrid Web API (evita bloqueos de puerto)
@@ -63,25 +77,33 @@ public class EmailService {
     }
 
     private boolean enviarConSendGrid(String to, String subject, String text) {
-        try {
+        RequestConfig requestConfig = RequestConfig.custom()
+                .setConnectTimeout(sendgridConnectTimeoutMs)
+                .setSocketTimeout(sendgridReadTimeoutMs)
+                .build();
+
+        try (CloseableHttpClient httpClient = HttpClients.custom()
+                .setDefaultRequestConfig(requestConfig)
+                .build()) {
+
             Email from = new Email(sendgridFromEmail, sendgridFromName);
             Email toEmail = new Email(to);
             Content content = new Content("text/plain", text);
             Mail mail = new Mail(from, subject, toEmail, content);
 
-            SendGrid sg = new SendGrid(sendgridApiKey);
+            SendGrid sg = new SendGrid(sendgridApiKey, new Client(httpClient));
             Request request = new Request();
             request.setMethod(Method.POST);
             request.setEndpoint("mail/send");
             request.setBody(mail.build());
 
             Response response = sg.api(request);
-            
+
             if (response.getStatusCode() >= 200 && response.getStatusCode() < 300) {
                 log.info("EmailService: correo enviado exitosamente vía SendGrid API (asunto: {}, destinatario: {})", subject, to);
                 return true;
             } else {
-                log.error("EmailService: SendGrid API retornó código {}: {} (asunto: {})", 
+                log.error("EmailService: SendGrid API retornó código {}: {} (asunto: {})",
                     response.getStatusCode(), response.getBody(), subject);
                 return false;
             }

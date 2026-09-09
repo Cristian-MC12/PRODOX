@@ -4,6 +4,7 @@ import com.prodox.dto.ai.ChatRequest;
 import com.prodox.dto.ai.ChatResponse;
 import com.prodox.ratelimit.RateLimitService;
 import com.prodox.service.AICopilotService;
+import com.prodox.service.CopilotIANoDisponibleException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -186,6 +187,50 @@ class AICopilotControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isBadRequest());
+    }
+
+    /**
+     * Bloque 9A (H9-4): cuando Gemini falla durante el AI Copilot,
+     * AICopilotService lanza CopilotIANoDisponibleException (en vez del
+     * RuntimeException genérico anterior) — verifica que el endpoint
+     * responde 503 con un mensaje seguro y genérico, sin stack trace, sin
+     * ninguna referencia a la API key de Gemini ni a su URL.
+     */
+    @Test
+    @WithMockUser(username = "user123")
+    void chat_geminiFalla_retorna503SinFiltrarSecretos() throws Exception {
+        // Given
+        UUID proyectoId = UUID.randomUUID();
+        ChatRequest request = new ChatRequest(
+                "¿Cuáles son las métricas del sprint activo?",
+                proyectoId,
+                null
+        );
+
+        when(copilotService.chat(any(ChatRequest.class), eq("user123")))
+                .thenThrow(new CopilotIANoDisponibleException(
+                        "Error al procesar mensaje con IA. Intentá nuevamente en unos segundos.",
+                        new RuntimeException("Error al llamar a Gemini. Intentá nuevamente en unos segundos.")));
+
+        // When & Then
+        String body = mockMvc.perform(post("/api/ai/copilot/chat")
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.error").value(
+                        "Error al procesar mensaje con IA. Intentá nuevamente en unos segundos."))
+                .andReturn().getResponse().getContentAsString();
+
+        // Sin stack trace ni detalle interno expuesto al cliente.
+        org.assertj.core.api.Assertions.assertThat(body).doesNotContain("Exception");
+        org.assertj.core.api.Assertions.assertThat(body).doesNotContain("com.prodox");
+        org.assertj.core.api.Assertions.assertThat(body).doesNotContain("\tat ");
+        // Sin API key ni URL de Gemini (aunque esta prueba no las usa
+        // realmente, confirma que el contrato de la respuesta nunca las
+        // incluiría si estuvieran presentes en la causa interna).
+        org.assertj.core.api.Assertions.assertThat(body).doesNotContain("generativelanguage.googleapis.com");
+        org.assertj.core.api.Assertions.assertThat(body).doesNotContain("?key=");
     }
 
     @Test

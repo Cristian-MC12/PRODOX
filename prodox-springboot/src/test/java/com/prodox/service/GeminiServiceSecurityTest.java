@@ -193,4 +193,73 @@ class GeminiServiceSecurityTest {
                 .hasMessageContaining("API key not valid")
                 .satisfies(e -> assertThat(e.getMessage()).doesNotContain(SECRET_TEST_VALUE));
     }
+
+    // ─────────────────────────────────────────────────────────────────
+    // Bloque 9A (H9-1): timeout explícito configurado, parametrizable, y
+    // que un timeout real no filtre la API key ni tarde más de lo
+    // configurado (se usa un timeout muy pequeño para no alargar el test).
+    // ─────────────────────────────────────────────────────────────────
+
+    private String iniciarServidorLento(long delayMs) throws IOException {
+        server = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
+        server.createContext("/v1beta/models/gemini", exchange -> {
+            try {
+                Thread.sleep(delayMs);
+            } catch (InterruptedException ignored) {
+                Thread.currentThread().interrupt();
+            }
+            String json = """
+                {"candidates":[{"content":{"parts":[{"text":"tarde"}]}}]}
+                """;
+            byte[] bytes = json.getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().add("Content-Type", "application/json");
+            exchange.sendResponseHeaders(200, bytes.length);
+            exchange.getResponseBody().write(bytes);
+            exchange.close();
+        });
+        server.start();
+        return "http://localhost:" + server.getAddress().getPort() + "/v1beta/models/gemini";
+    }
+
+    @Test
+    @DisplayName("GeminiService tiene connect-timeout-ms/read-timeout-ms configurables (aceptan override, con default seguro)")
+    void geminiService_timeoutsSonConfigurablesConDefaultSeguro() {
+        // Default de campo (mismo valor que el default de @Value): nunca 0
+        // ("sin timeout" en SimpleClientHttpRequestFactory) para un
+        // GeminiService construido fuera de Spring.
+        assertThat((int) ReflectionTestUtils.getField(geminiService, "connectTimeoutMs")).isEqualTo(5000);
+        assertThat((int) ReflectionTestUtils.getField(geminiService, "readTimeoutMs")).isEqualTo(30000);
+
+        // Override (equivalente a lo que Spring haría vía @Value con una
+        // property/variable de entorno distinta en producción).
+        ReflectionTestUtils.setField(geminiService, "connectTimeoutMs", 123);
+        ReflectionTestUtils.setField(geminiService, "readTimeoutMs", 456);
+        assertThat((int) ReflectionTestUtils.getField(geminiService, "connectTimeoutMs")).isEqualTo(123);
+        assertThat((int) ReflectionTestUtils.getField(geminiService, "readTimeoutMs")).isEqualTo(456);
+    }
+
+    @Test
+    @DisplayName("generate(): read-timeout real (servidor lento) falla rápido — nunca espera indefinidamente — sin filtrar la API key")
+    void generate_readTimeout_fallaRapidoSinFiltrarLaApiKey() throws IOException {
+        // Servidor que tarda 2s en responder, con un read-timeout de 200ms:
+        // debe fallar por timeout mucho antes de los 2s, no colgarse.
+        String url = iniciarServidorLento(2000);
+        ReflectionTestUtils.setField(geminiService, "apiUrl", url);
+        ReflectionTestUtils.setField(geminiService, "connectTimeoutMs", 5000);
+        ReflectionTestUtils.setField(geminiService, "readTimeoutMs", 200);
+
+        long inicio = System.currentTimeMillis();
+        assertThatThrownBy(() -> geminiService.generate("prompt"))
+                .isInstanceOf(RuntimeException.class)
+                .satisfies(e -> assertThat(e.getMessage()).doesNotContain(SECRET_TEST_VALUE));
+        long transcurrido = System.currentTimeMillis() - inicio;
+
+        // Con margen generoso: debe fallar muchísimo antes de los 2000ms
+        // reales del servidor — confirma que el timeout se aplicó de verdad.
+        assertThat(transcurrido).isLessThan(1900);
+
+        for (ILoggingEvent event : logAppender.list) {
+            assertThat(event.getFormattedMessage()).doesNotContain(SECRET_TEST_VALUE);
+        }
+    }
 }

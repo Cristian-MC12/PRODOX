@@ -211,13 +211,18 @@ public class MetricaIAService {
     }
 
     private String buildPrompt(String necesidad) {
-        return """
+        // Bloque 10B-3: "necesidad" es texto libre del usuario (hasta 4000
+        // caracteres) que antes se interpolaba directo, entre comillas, sin
+        // delimitación real — se delimita explícitamente como DATO (ver
+        // PromptDataDelimiter). La salida sigue validándose exactamente
+        // igual (parsePropuesta/JSON defensivo) y nunca persiste sin
+        // confirmación explícita del Scrum Master.
+        return PromptDataDelimiter.NOTA_DATOS_EXTERNOS + """
             Eres un asistente experto en métricas ágiles/Scrum que ayuda a un Scrum Master a
             estructurar una NUEVA métrica que todavía no existe en el catálogo de su equipo.
 
             El Scrum Master describió esta necesidad, en sus propias palabras:
-            \"""" + necesidad + """
-            \"
+            """ + PromptDataDelimiter.delimitar("USER_INPUT", necesidad) + """
 
             Tu tarea es proponer una estructura inicial para esta métrica. Esto es SOLO una
             propuesta: el Scrum Master la revisará, podrá modificar cualquier campo, y solo

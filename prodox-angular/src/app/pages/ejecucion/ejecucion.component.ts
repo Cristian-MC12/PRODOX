@@ -200,29 +200,18 @@ export class EjecucionComponent implements OnInit {
    */
   private get indiceSprintActual(): number {
     if (!this.sprintActual) {
-      console.log('⚠️ sprintActual es null');
       return -1;
     }
-    const index = this.sprints.findIndex(s => s.id === this.sprintActual!.id);
-    console.log(`📍 Índice sprint actual: ${index}, Total sprints: ${this.sprints.length}`, {
-      sprintActualId: this.sprintActual.id,
-      sprintActualNumero: this.sprintActual.numero,
-      sprints: this.sprints.map(s => ({ id: s.id, numero: s.numero, estado: s.estado }))
-    });
-    return index;
+    return this.sprints.findIndex(s => s.id === this.sprintActual!.id);
   }
 
   get haySprintAnterior(): boolean {
-    const hay = this.indiceSprintActual > 0;
-    console.log(`⬅️ Hay sprint anterior: ${hay}`);
-    return hay;
+    return this.indiceSprintActual > 0;
   }
 
   get haySprintSiguiente(): boolean {
     const i = this.indiceSprintActual;
-    const hay = i >= 0 && i < this.sprints.length - 1;
-    console.log(`➡️ Hay sprint siguiente: ${hay} (índice: ${i}, total: ${this.sprints.length})`);
-    return hay;
+    return i >= 0 && i < this.sprints.length - 1;
   }
 
   irASprintAnterior(): void {

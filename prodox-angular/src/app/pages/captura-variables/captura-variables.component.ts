@@ -85,7 +85,7 @@ export class CapturaVariablesComponent implements OnInit {
         }
       },
       error: (error) => {
-        console.error('Error cargando variables:', error);
+        console.error('Error cargando variables:', error?.status, error?.error?.error ?? error?.message);
         
         if (error.status === 404 || error.error?.message?.includes('No existe parametrización aprobada')) {
           this.estado = 'sin-parametrizacion';
@@ -164,7 +164,7 @@ export class CapturaVariablesComponent implements OnInit {
         }, 3000);
       },
       error: (error) => {
-        console.error('Error guardando valores:', error);
+        console.error('Error guardando valores:', error?.status, error?.error?.error ?? error?.message);
         this.estado = 'error';
         
         if (error.status === 400) {
@@ -204,7 +204,7 @@ export class CapturaVariablesComponent implements OnInit {
         this.estado = 'calculado';
       },
       error: (error) => {
-        console.error('Error calculando métrica:', error);
+        console.error('Error calculando métrica:', error?.status, error?.error?.error ?? error?.message);
         this.estado = 'error';
         
         if (error.error?.error === 'DATOS_INVALIDOS') {

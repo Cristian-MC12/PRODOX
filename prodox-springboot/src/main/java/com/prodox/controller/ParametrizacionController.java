@@ -9,6 +9,8 @@ import com.prodox.dto.ParametrizacionRequest;
 import com.prodox.dto.PropuestaParametrizacionDto;
 import com.prodox.entity.MetricParametrizacion;
 import com.prodox.entity.ProjectMember;
+import com.prodox.ratelimit.RateLimitException;
+import com.prodox.ratelimit.RateLimitService;
 import com.prodox.repository.MetricParametrizacionRepository;
 import com.prodox.repository.ProjectMemberRepository;
 import com.prodox.service.NombreVariableInvalidoException;
@@ -47,6 +49,7 @@ public class ParametrizacionController {
     private final MetricParametrizacionRepository parametrizacionRepository;
     private final ParametrizacionService parametrizacionService;
     private final ProjectMemberRepository projectMemberRepository;
+    private final RateLimitService rateLimitService;
     
     /**
      * Obtiene la última versión aprobada de una parametrización.
@@ -91,8 +94,21 @@ public class ParametrizacionController {
     @PostMapping("/propuestas")
     @PreAuthorize("hasRole('USER')")
     public ResponseEntity<List<PropuestaParametrizacionDto>> generarPropuestas(
-            @RequestBody @Valid ParametrizacionRequest request) {
-        
+            @RequestBody @Valid ParametrizacionRequest request,
+            Authentication auth) {
+
+        // Bloque 10B-2: recibe hasta 4000 caracteres de texto libre
+        // (metricaDescripcion) directo al prompt de Gemini y no tenía ninguna
+        // protección — se verifica ANTES del try/catch de abajo: si quedara
+        // dentro, el catch (Exception e) genérico atraparía la
+        // RateLimitException y la convertiría en un 500 en vez de un 429.
+        String userId = auth.getName();
+        if (!rateLimitService.allowRequest(userId)) {
+            throw new RateLimitException(
+                "Has alcanzado temporalmente el límite de consultas de IA. " +
+                "Intenta nuevamente en unos minutos.");
+        }
+
         try {
             log.info("Generando propuesta con Gemini para métrica: {}", request.metricaNombre());
             List<PropuestaParametrizacionDto> propuestas = parametrizacionService.generarPropuestas(request);

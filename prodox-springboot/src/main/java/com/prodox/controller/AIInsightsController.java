@@ -4,6 +4,8 @@ package com.prodox.controller;
 import com.prodox.dto.ai.AIInsightDto;
 import com.prodox.dto.ai.GenerateInsightsResultDto;
 import com.prodox.dto.ai.UpdateInsightDto;
+import com.prodox.ratelimit.RateLimitException;
+import com.prodox.ratelimit.RateLimitService;
 import com.prodox.service.AIInsightsService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -33,6 +35,7 @@ import java.util.UUID;
 public class AIInsightsController {
 
     private final AIInsightsService insightsService;
+    private final RateLimitService rateLimitService;
 
     /**
      * GET /api/ai/insights/{proyectoId}
@@ -73,6 +76,7 @@ public class AIInsightsController {
      *         sin forma de distinguir una generación completa de una parcial.
      * @throws SecurityException si el usuario no tiene acceso al proyecto (403)
      * @throws IllegalArgumentException si el proyecto no existe (400)
+     * @throws RateLimitException si se excede el límite de consultas de IA (429)
      */
     @PostMapping("/generate/{proyectoId}")
     public ResponseEntity<GenerateInsightsResultDto> generateInsights(
@@ -81,6 +85,17 @@ public class AIInsightsController {
 
         String userId = auth.getName();
         log.info("POST generate insights para proyecto={} usuario={}", proyectoId, userId);
+
+        // Bloque 10B-2: sin límite previamente — una sola llamada a este
+        // endpoint puede disparar hasta 4 llamadas internas a Gemini
+        // (AIInsightsService.generateInsights(), una por tipo de insight).
+        // Se verifica una vez por request, igual que en el resto de
+        // endpoints GenAI ya protegidos — mismo RateLimitService.
+        if (!rateLimitService.allowRequest(userId)) {
+            throw new RateLimitException(
+                "Has alcanzado temporalmente el límite de consultas de IA. " +
+                "Intenta nuevamente en unos minutos.");
+        }
 
         GenerateInsightsResultDto result = insightsService.generateInsights(proyectoId, userId);
 

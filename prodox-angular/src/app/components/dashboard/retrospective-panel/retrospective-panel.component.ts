@@ -64,7 +64,7 @@ export class RetrospectivePanelComponent implements OnInit {
     this.sprintService.listar(this.proyecto.id)
       .pipe(
         catchError(err => {
-          console.error('Error cargando sprints:', err);
+          console.error('Error cargando sprints:', err?.status, err?.error?.error ?? err?.message);
           return of([]);
         })
       )
@@ -86,7 +86,7 @@ export class RetrospectivePanelComponent implements OnInit {
     this.reportService.generateRetrospective(this.selectedSprintId)
       .pipe(
         catchError(err => {
-          console.error('Error generando retrospectiva:', err);
+          console.error('Error generando retrospectiva:', err?.status, err?.error?.error ?? err?.message);
           hadError = true;
 
           if (err.status === 400) {

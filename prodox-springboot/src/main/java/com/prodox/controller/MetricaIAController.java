@@ -5,6 +5,8 @@ import com.prodox.dto.CrearMetricaIARequest;
 import com.prodox.dto.MetricaIACreadaDto;
 import com.prodox.dto.MetricaIAPropuestaDto;
 import com.prodox.dto.MetricaIAPropuestaRequest;
+import com.prodox.ratelimit.RateLimitException;
+import com.prodox.ratelimit.RateLimitService;
 import com.prodox.service.MetricaDuplicadaEnCatalogoException;
 import com.prodox.service.MetricaIAService;
 import com.prodox.service.MetricaPosibleDuplicadaException;
@@ -14,6 +16,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.LinkedHashMap;
@@ -33,11 +36,27 @@ import java.util.Map;
 public class MetricaIAController {
 
     private final MetricaIAService metricaIAService;
+    private final RateLimitService rateLimitService;
 
+    /**
+     * Bloque 10B-2: este endpoint envía texto libre del usuario (necesidad,
+     * hasta 4000 caracteres) directo al prompt de Gemini y no tenía ninguna
+     * protección contra abuso — a diferencia de /api/ai/copilot/chat,
+     * /api/ai/reports/*, /api/ai/retrospectives/*, que ya reutilizan este
+     * mismo RateLimitService. Se verifica ANTES de invocar al service: si se
+     * excede el límite, nunca se llama a Gemini.
+     */
     @PostMapping("/propuesta")
     @PreAuthorize("hasRole('USER')")
     public ResponseEntity<MetricaIAPropuestaDto> generarPropuesta(
-            @RequestBody @Valid MetricaIAPropuestaRequest request) {
+            @RequestBody @Valid MetricaIAPropuestaRequest request,
+            Authentication auth) {
+        String userId = auth.getName();
+        if (!rateLimitService.allowRequest(userId)) {
+            throw new RateLimitException(
+                "Has alcanzado temporalmente el límite de consultas de IA. " +
+                "Intenta nuevamente en unos minutos.");
+        }
         log.info("Generando propuesta de métrica con IA");
         MetricaIAPropuestaDto propuesta = metricaIAService.generarPropuesta(request.necesidad());
         return ResponseEntity.ok(propuesta);

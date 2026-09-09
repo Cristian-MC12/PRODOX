@@ -69,6 +69,21 @@ public class GlobalExceptionHandler {
         return buildResponse(HttpStatus.SERVICE_UNAVAILABLE, ex.getMessage());
     }
 
+    /**
+     * Bloque 9A (H9-4): el AI Copilot no pudo completar una respuesta porque
+     * Gemini falló. Mismo criterio que Propuesta/Reporte/RetrospectivaIA
+     * NoDisponibleException — 503, mensaje fijo y seguro (ex.getMessage() es
+     * siempre el literal fijado en AICopilotService, nunca contenido
+     * dinámico de Gemini ni la excepción original, que solo viaja como
+     * causa interna para diagnóstico, no se serializa en la respuesta).
+     */
+    @ExceptionHandler(com.prodox.service.CopilotIANoDisponibleException.class)
+    public ResponseEntity<Map<String, Object>> handleCopilotIANoDisponible(
+            com.prodox.service.CopilotIANoDisponibleException ex) {
+        log.warn("AI Copilot no disponible: {}", ex.getMessage());
+        return buildResponse(HttpStatus.SERVICE_UNAVAILABLE, ex.getMessage());
+    }
+
     /** Conflictos de estado (IllegalStateException) */
     @ExceptionHandler(IllegalStateException.class)
     public ResponseEntity<Map<String, Object>> handleConflict(IllegalStateException ex) {

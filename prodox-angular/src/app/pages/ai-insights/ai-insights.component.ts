@@ -115,7 +115,7 @@ export class AIInsightsComponent implements OnInit {
     this.insightsService.getProjectInsights(this.proyecto.id)
       .pipe(
         catchError(err => {
-          console.error('Error cargando insights:', err);
+          console.error('Error cargando insights:', err?.status, err?.error?.error ?? err?.message);
           this.showAlert('Error al cargar insights', 'alert-danger');
           return of([]);
         })
@@ -145,7 +145,7 @@ export class AIInsightsComponent implements OnInit {
     this.insightsService.generateInsights(this.proyecto.id)
       .pipe(
         catchError(err => {
-          console.error('Error generando insights:', err);
+          console.error('Error generando insights:', err?.status, err?.error?.error ?? err?.message);
           hadError = true;
           this.generationStep.set('');
 
@@ -227,7 +227,7 @@ export class AIInsightsComponent implements OnInit {
     this.insightsService.dismissInsight(insight.id)
       .pipe(
         catchError(err => {
-          console.error('Error descartando insight:', err);
+          console.error('Error descartando insight:', err?.status, err?.error?.error ?? err?.message);
           hadError = true;
           this.showAlert('Error al descartar el insight', 'alert-danger');
           return of(null);
@@ -410,7 +410,7 @@ export class AIInsightsComponent implements OnInit {
     this.insightsService.updateInsight(insight.id, updateData)
       .pipe(
         catchError(err => {
-          console.error('Error actualizando insight:', err);
+          console.error('Error actualizando insight:', err?.status, err?.error?.error ?? err?.message);
           this.showAlert('Error al guardar los cambios', 'alert-danger');
           return of(null);
         })
@@ -449,7 +449,9 @@ export class AIInsightsComponent implements OnInit {
       // Si llegamos aquí, las librerías están disponibles
       await this.generarDocumentoWord(docx, fileSaver);
     } catch (error: any) {
-      console.error('Error al cargar librerías de exportación:', error);
+      // No es un error HTTP (falla de import() dinámico de una librería) —
+      // se registra el mensaje si existe, sin asumir forma de HttpErrorResponse.
+      console.error('Error al cargar librerías de exportación:', error?.message ?? error);
       
       // Si falla la importación, ofrecer alternativa
       this.showAlert('La exportación a Word no está disponible en este momento. Por favor, copia el contenido manualmente.', 'alert-warning');
@@ -591,7 +593,9 @@ export class AIInsightsComponent implements OnInit {
 
       this.showAlert('Documento Word exportado correctamente', 'alert-success');
     } catch (error) {
-      console.error('Error generando documento Word:', error);
+      // No es un error HTTP (Packer.toBlob es generación local del .docx) —
+      // se registra el mensaje si existe, sin asumir forma de HttpErrorResponse.
+      console.error('Error generando documento Word:', (error as Error)?.message ?? error);
       this.showAlert('Error al generar el documento Word.', 'alert-danger');
     }
   }

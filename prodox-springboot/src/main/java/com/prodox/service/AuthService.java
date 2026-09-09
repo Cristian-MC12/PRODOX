@@ -8,12 +8,14 @@ import com.prodox.repository.AppUserRepository;
 import com.prodox.security.JwtUtil;
 import com.prodox.util.PasswordPolicy;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class AuthService {
@@ -50,9 +52,19 @@ public class AuthService {
 
     public AuthResponse login(AuthRequest request) {
         AppUser user = userRepository.findByEmail(request.email())
-                .orElseThrow(() -> new IllegalArgumentException("Credenciales inválidas."));
+                .orElseThrow(() -> {
+                    // Bloque de seguridad Logging/Exposición (H4, Bloque 8A):
+                    // no existe userId (el usuario no fue encontrado) y no se
+                    // registra el email — solo el evento, sin PII.
+                    log.warn("Intento de login fallido: usuario no encontrado");
+                    return new IllegalArgumentException("Credenciales inválidas.");
+                });
 
         if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
+            // Bloque de seguridad Logging/Exposición (H4, Bloque 8A): nunca
+            // se registra la contraseña; se usa userId (pseudónimo, ya
+            // disponible en este punto) en lugar del email.
+            log.warn("Intento de login fallido: contraseña incorrecta para userId={}", user.getId());
             throw new IllegalArgumentException("Credenciales inválidas.");
         }
 

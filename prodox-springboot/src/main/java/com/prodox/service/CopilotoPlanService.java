@@ -6,6 +6,7 @@ import com.prodox.dto.MetricaSugeridaDto;
 import com.prodox.entity.Factor;
 import com.prodox.repository.FactorRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -16,6 +17,7 @@ import java.util.UUID;
  * Usa Gemini para generar métricas de productividad ágil
  * basadas en el factor seleccionado por el equipo Scrum.
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class CopilotoPlanService {
@@ -35,7 +37,9 @@ public class CopilotoPlanService {
 
         String prompt = buildPrompt(factor);
         String rawResponse = geminiService.generate(prompt);
-        return parseMetricas(rawResponse, factor);
+        List<MetricaSugeridaDto> metricas = parseMetricas(rawResponse, factor);
+        log.debug("Métricas sugeridas generadas para factorId={}: {} sugerencia(s)", factorId, metricas.size());
+        return metricas;
     }
 
     private String buildPrompt(Factor factor) {
@@ -71,11 +75,6 @@ public class CopilotoPlanService {
 
     private List<MetricaSugeridaDto> parseMetricas(String rawResponse, Factor factor) {
         try {
-            // Log para debug
-            System.out.println("=== GEMINI RAW RESPONSE ===");
-            System.out.println(rawResponse);
-            System.out.println("===========================");
-
             // Limpiar el response por si Gemini agrega markdown
             String cleaned = rawResponse
                     .replaceAll("```json", "")
@@ -89,15 +88,17 @@ public class CopilotoPlanService {
                 cleaned = cleaned.substring(start, end);
             }
 
-            System.out.println("=== CLEANED JSON ===");
-            System.out.println(cleaned);
-            System.out.println("====================");
-
             return objectMapper.readValue(cleaned,
                     new TypeReference<List<MetricaSugeridaDto>>() {});
 
         } catch (Exception e) {
-            System.out.println("=== PARSE ERROR: " + e.getMessage() + " ===");
+            // Bloque de seguridad Logging/Exposición (H1, Bloque 8A): nunca
+            // registrar rawResponse/cleaned (contenido generado por Gemini a
+            // partir de datos del Factor) ni e.getMessage() (puede incluir
+            // fragmentos del JSON no parseable) — solo el tipo de excepción,
+            // mismo patrón que MetricaIAService/MetricaAcademicaService.
+            log.warn("No se pudo parsear la respuesta de Gemini para factorId={} (tipo de error: {})",
+                    factor.getId(), e.getClass().getSimpleName());
             return List.of(new MetricaSugeridaDto(
                 "Métrica de " + factor.getName(),
                 rawResponse.length() > 300 ? rawResponse.substring(0, 300) + "..." : rawResponse,
