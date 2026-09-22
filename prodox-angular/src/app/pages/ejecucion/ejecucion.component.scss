@@ -53,6 +53,51 @@
   letter-spacing: 0.5px;
 }
 
+// Diferenciación visual Métrica (tarjeta) vs. Variable (bloque dentro de la tarjeta).
+.etiqueta-tipo {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+.etiqueta-metrica {
+  background: #ede9fe;
+  color: #5b21b6;
+  margin-bottom: 4px;
+}
+
+.etiqueta-variable {
+  background: #e0f2fe;
+  color: #075985;
+}
+
+.metrica-variables-count {
+  display: block;
+  font-size: 12px;
+  color: #6b7280;
+  margin-bottom: 8px;
+}
+
+.variable-encabezado {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding-left: 10px;
+  border-left: 3px solid #7dd3fc;
+}
+
+.variable-nombre {
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+  margin: 0;
+}
+
 .metrica-details {
   display: flex;
   flex-direction: column;

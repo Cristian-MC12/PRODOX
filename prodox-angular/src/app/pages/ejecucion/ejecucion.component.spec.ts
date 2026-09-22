@@ -173,6 +173,28 @@ describe('EjecucionComponent (FASE 16 — métricas dinámicas)', () => {
     expect(component.metricas.some(m => m.metricaId === METRICA_IA)).toBe(false);
   });
 
+  // 2b. Protección adicional en cargarMetricasAprobadas() (la causa raíz del bug
+  // "2 métricas planeadas -> 4 en Ejecución" se cubre en el bloque "Regresión" al
+  // final): si la respuesta del backend llegara a incluir el mismo metricaId más
+  // de una vez, Ejecución nunca debe renderizar esa métrica más de una vez. El
+  // identificador real es metricaId, nunca el nombre.
+  it('2b. una métrica con el mismo metricaId repetido en la respuesta del backend aparece UNA sola vez', () => {
+    planeacionService.listarMetricas.and.returnValue(of([
+      metrica(METRICA_DEFECTOS, 'Métrica 1', true),
+      metrica(METRICA_IA, 'Métrica 2', true, 'IA-001'),
+      metrica(METRICA_IA, 'Métrica 2', true, 'IA-001'),
+      metrica(METRICA_IA, 'Métrica 2', true, 'IA-001')
+    ]));
+    variableService.obtenerVariables.and.callFake((metricaId: string) =>
+      of(variables(metricaId, ['defectos_totales'])));
+
+    component.ngOnInit();
+
+    expect(component.metricas.length).toBe(2);
+    expect(component.metricas.filter(m => m.metricaId === METRICA_IA).length).toBe(1);
+    expect(variableService.obtenerVariables).toHaveBeenCalledTimes(2);
+  });
+
   // 3. Una métrica creada con IA, una vez aprobada, aparece exactamente igual
   // que cualquier otra — sin ninguna condición especial por código/UUID.
   it('una métrica creada con IA y aprobada aparece igual que cualquier otra métrica aprobada', () => {
@@ -1129,6 +1151,181 @@ describe('EjecucionComponent (FASE 16 — métricas dinámicas)', () => {
       });
 
       expect(component.esScrumMaster).toBe(true);
+    });
+  });
+
+  // ══════════════════════════════════════════════════════════════════════
+  // Regresión del bug reportado: "2 métricas planeadas -> 4 en Ejecución".
+  //
+  // Causa raíz: el backend devuelve correctamente 2 métricas (una tarjeta por
+  // metricaId), pero la métrica sociohumana nueva tiene 3 variables (indicador
+  // "var_a, var_b, var_c"). El resumen de Ejecución ("de N métricas", "Total
+  // métricas") contaba VARIABLES en lugar de métricas (1 + 3 = 4), y cada
+  // bloque de variable se renderizaba sin su nombre y con la misma descripción
+  // (VariableDinamicaService usa el procedimiento de la parametrización como
+  // descripción de todas), así que la métrica 2 se veía repetida 3 veces.
+  // ══════════════════════════════════════════════════════════════════════
+  describe('Regresión: métricas planeadas = métricas en Ejecución', () => {
+    const METRICA_SOCIO = '7c1d2e3f-0000-4000-8000-000000000005';
+
+    /** Variables como las materializa VariableDinamicaService: misma descripción (procedimiento) para todas. */
+    function variablesMismoProcedimiento(metricaId: string, nombres: string[]): VariablesMetricaResponse {
+      return {
+        parametrizacionId: 'param-' + metricaId, version: 1, status: 'aprobada',
+        variables: nombres.map((n, i) => ({
+          id: 'v-' + metricaId + '-' + i, nombre: n, descripcion: 'Encuesta al final del sprint',
+          tipoDato: 'numerico', obligatorio: true, unidad: undefined, frecuenciaCaptura: 'por_sprint'
+        }))
+      };
+    }
+
+    function cargar(aprobadas: ProyectoMetricaDto[], variablesPorMetrica: Record<string, string[]>) {
+      planeacionService.listarMetricas.and.returnValue(of(aprobadas));
+      variableService.obtenerVariables.and.callFake((metricaId: string) =>
+        of(variablesMismoProcedimiento(metricaId, variablesPorMetrica[metricaId] ?? ['valor'])));
+      component.ngOnInit();
+      fixture.detectChanges();
+    }
+
+    function tarjetas(): HTMLElement[] {
+      return Array.from(fixture.nativeElement.querySelectorAll('.metrica-card'));
+    }
+
+    it('CASO reportado: 2 métricas planeadas (la sociohumana con 3 variables) -> Ejecución muestra y resume 2, no 4', () => {
+      cargar(
+        [metrica(METRICA_DEFECTOS, 'Métrica 1', true), metrica(METRICA_SOCIO, 'Métrica 2', true, 'FSH-01')],
+        { [METRICA_DEFECTOS]: ['defectos_totales'], [METRICA_SOCIO]: ['clima_equipo', 'comunicacion_equipo', 'motivacion_equipo'] }
+      );
+
+      expect(component.metricas.length).toBe(2);
+      expect(tarjetas().length).toBe(2);
+      expect(fixture.nativeElement.querySelectorAll('.metrica-title').length).toBe(2);
+      expect(component.obtenerTotalMetricas()).toBe(2);
+      expect(component.obtenerMetricasCapturadas() + component.obtenerMetricasPendientes()
+        + component.obtenerMetricasSinRegistros()).toBe(2);
+      const estado = fixture.nativeElement.querySelector('.estado-lista')?.textContent ?? '';
+      expect(estado.replace(/\s+/g, '')).toContain('Totalmétricas2');
+    });
+
+    it('CASO 8: las 3 variables de la métrica sociohumana se muestran dentro de UNA tarjeta, cada una identificada por su nombre', () => {
+      cargar([metrica(METRICA_SOCIO, 'Métrica 2', true)],
+        { [METRICA_SOCIO]: ['clima_equipo', 'comunicacion_equipo', 'motivacion_equipo'] });
+
+      expect(tarjetas().length).toBe(1);
+      const bloques = tarjetas()[0].querySelectorAll('.metrica-content');
+      expect(bloques.length).toBe(3);
+      const nombres = Array.from(tarjetas()[0].querySelectorAll('.variable-nombre')).map(e => e.textContent!.trim());
+      expect(nombres).toEqual(['Clima equipo', 'Comunicacion equipo', 'Motivacion equipo']);
+      expect(component.obtenerTotalMetricas()).toBe(1);
+    });
+
+    it('una métrica con una sola variable también se rotula como Métrica, con su única Variable identificada', () => {
+      cargar([metrica(METRICA_DEFECTOS, 'Métrica 1', true)], { [METRICA_DEFECTOS]: ['defectos_totales'] });
+      expect(fixture.nativeElement.querySelectorAll('.etiqueta-metrica').length).toBe(1);
+      expect(fixture.nativeElement.querySelectorAll('.etiqueta-variable').length).toBe(1);
+      expect(fixture.nativeElement.querySelector('.metrica-variables-count').textContent.trim()).toBe('1 variable asociada');
+    });
+
+    it('2 métricas + 4 variables (sociohumana con 3) -> el resumen dice "2 métricas" y, aparte, "4 variables"', () => {
+      cargar(
+        [metrica(METRICA_DEFECTOS, 'Métrica 1', true), metrica(METRICA_SOCIO, 'Métrica 2', true, 'FSH-01')],
+        { [METRICA_DEFECTOS]: ['defectos_totales'], [METRICA_SOCIO]: ['clima_equipo', 'comunicacion_equipo', 'motivacion_equipo'] }
+      );
+
+      expect(component.obtenerTotalMetricas()).toBe(2);
+      expect(component.obtenerTotalVariables()).toBe(4);
+      const el: HTMLElement = fixture.nativeElement;
+      const estado = (el.querySelector('.estado-lista')?.textContent ?? '').replace(/\s+/g, '');
+      expect(estado).toContain('Totalmétricas2');
+      expect(estado).toContain('Variablesasociadas4');
+      expect(estado).not.toContain('Totalmétricas4');
+      expect(el.querySelector('.grafica-texto')?.textContent?.trim()).toBe('de 2');
+      // Diferenciación visual: 2 tarjetas "Métrica", 4 bloques "Variable".
+      expect(el.querySelectorAll('.etiqueta-metrica').length).toBe(2);
+      expect(el.querySelectorAll('.etiqueta-variable').length).toBe(4);
+      const conteos = Array.from(el.querySelectorAll('.metrica-variables-count')).map(e => e.textContent!.trim());
+      expect(conteos).toEqual(['1 variable asociada', '3 variables asociadas']);
+    });
+
+    it('el total de métricas se calcula por metricaId único, nunca por número de variables ni filas', () => {
+      const base = { nombre: 'Métrica 2', cargando: false, sinParametrizacion: false };
+      const bloque = (id: string) => ({ variableId: id, capturas: [], frecuenciaCaptura: 'por_sprint' } as any);
+      component.metricas = [
+        { ...base, metricaId: METRICA_SOCIO, variables: [bloque('a'), bloque('b'), bloque('c')] },
+        { ...base, metricaId: METRICA_SOCIO, variables: [bloque('a')] }
+      ];
+      expect(component.obtenerTotalMetricas()).toBe(1);
+      expect(component.obtenerTotalVariables()).toBe(4);
+    });
+
+    it('captura en la métrica sociohumana: registrar una de sus 3 variables envía SOLO esa variable, igual que antes', () => {
+      cargar([metrica(METRICA_DEFECTOS, 'Métrica 1', true), metrica(METRICA_SOCIO, 'Métrica 2', true)],
+        { [METRICA_SOCIO]: ['clima_equipo', 'comunicacion_equipo', 'motivacion_equipo'] });
+      variableService.guardarValores.and.returnValue(of(undefined));
+
+      const m = component.metricas.find(x => x.metricaId === METRICA_SOCIO)!;
+      const v = m.variables[1];
+      v.fecha = '2026-08-22';
+      v.valorNum = 4;
+      component.registrarValor(m, v);
+
+      expect(variableService.guardarValores).toHaveBeenCalledTimes(1);
+      expect(variableService.guardarValores).toHaveBeenCalledWith(METRICA_SOCIO, jasmine.objectContaining({
+        proyectoId: 'proj-1',
+        sprintId: 'sprint-1',
+        valores: [jasmine.objectContaining({ variableId: 'v-' + METRICA_SOCIO + '-1', valorNum: 4, fechaCaptura: '2026-08-22T00:00:00Z' })]
+      }));
+      expect(component.obtenerTotalMetricas()).toBe(2);
+    });
+
+    [1, 2, 3].forEach(n => {
+      it(`CASOS 1-3: ${n} métrica(s) aprobada(s) -> ${n} en Ejecución (con variables múltiples incluidas)`, () => {
+        const ids = ['m-a', 'm-b', 'm-c'].slice(0, n);
+        cargar(ids.map((id, i) => metrica(id, 'Métrica ' + (i + 1), true)),
+          Object.fromEntries(ids.map((id, i) => [id, i === n - 1 ? ['var_uno', 'var_dos', 'var_tres'] : ['valor']])));
+
+        expect(component.metricas.length).toBe(n);
+        expect(tarjetas().length).toBe(n);
+        expect(component.obtenerTotalMetricas()).toBe(n);
+      });
+    });
+
+    it('CASO 7: solo las aprobadas cuentan — una seleccionada sin aprobar no entra en Ejecución ni en el total', () => {
+      cargar([metrica('m-a', 'Aprobada', true), metrica('m-b', 'Rechazada/pendiente', false)],
+        { 'm-a': ['var_uno', 'var_dos'] });
+
+      expect(component.metricas.map(m => m.metricaId)).toEqual(['m-a']);
+      expect(component.obtenerTotalMetricas()).toBe(1);
+    });
+
+    it('CASOS 5/6: recargar las métricas (volver a la pantalla, recargar, cambiar de sprint) no acumula duplicados', () => {
+      cargar([metrica(METRICA_DEFECTOS, 'Métrica 1', true), metrica(METRICA_SOCIO, 'Métrica 2', true)],
+        { [METRICA_SOCIO]: ['clima_equipo', 'comunicacion_equipo', 'motivacion_equipo'] });
+
+      component.ngOnInit();
+      component.onSprintChange();
+      component.onSprintChange();
+      fixture.detectChanges();
+
+      expect(component.metricas.length).toBe(2);
+      expect(tarjetas().length).toBe(2);
+      expect(component.obtenerTotalMetricas()).toBe(2);
+    });
+
+    it('una métrica cuenta como capturada solo cuando TODAS sus variables están capturadas', () => {
+      cargar([metrica(METRICA_SOCIO, 'Métrica 2', true)],
+        { [METRICA_SOCIO]: ['clima_equipo', 'comunicacion_equipo'] });
+      const [v1, v2] = component.metricas[0].variables;
+      const captura = { id: 'r1', valor: 3, registradoAt: '2026-08-22T10:00:00Z', sprintNumero: 1, userId: 'u1' } as any;
+
+      v1.capturas = [captura];
+      expect(component.obtenerMetricasCapturadas()).toBe(0);
+      expect(component.obtenerMetricasPendientes()).toBe(1);
+
+      v2.capturas = [{ ...captura, id: 'r2' }];
+      expect(component.obtenerMetricasCapturadas()).toBe(1);
+      expect(component.obtenerMetricasPendientes()).toBe(0);
+      expect(component.calcularPorcentajeProgreso()).toBe(100);
     });
   });
 });

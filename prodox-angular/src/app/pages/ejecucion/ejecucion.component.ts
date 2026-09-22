@@ -18,6 +18,7 @@ import { VariableDinamicaService, VariableConValor } from '../../services/variab
 import { EvaluacionService } from '../../services/evaluacion.service';
 import { MiniChartComponent, PuntoMiniChart } from '../../shared/mini-chart/mini-chart.component';
 import { ProyectoDto } from '../../models/proyecto.model';
+import { ProyectoMetricaDto } from '../../models/planeacion.model';
 import { SprintDto } from '../../models/sprint.model';
 import { MetricaEvaluacionDetalleDto, RegistroPuntoDto } from '../../models/evaluacion-detalle.model';
 import { ToastService } from '../../shared/toast/toast.service';
@@ -245,7 +246,7 @@ export class EjecucionComponent implements OnInit {
     this.planeacionService.listarMetricas(this.proyecto.id).pipe(
       catchError(() => of([]))
     ).subscribe(todas => {
-      const aprobadas = todas.filter(m => m.aprobada);
+      const aprobadas = this.unicasPorMetricaId(todas.filter(m => m.aprobada));
       this.metricas = aprobadas.map(m => ({
         metricaId: m.metricaId,
         nombre: m.nombre,
@@ -255,6 +256,22 @@ export class EjecucionComponent implements OnInit {
       }));
       this.cargandoMetricas = false;
       for (const m of this.metricas) this.cargarVariablesDeMetrica(m);
+    });
+  }
+
+  /**
+   * Protección adicional (defensa en profundidad, no la corrección de fondo): el
+   * identificador real de una métrica es metricaId, nunca su nombre — si por
+   * cualquier motivo la respuesta del backend llegara a incluir el mismo metricaId
+   * más de una vez, Ejecución nunca debe renderizar esa métrica más de una vez.
+   * Conserva el primer resultado con cada metricaId, en el mismo orden ya recibido.
+   */
+  private unicasPorMetricaId(metricas: ProyectoMetricaDto[]): ProyectoMetricaDto[] {
+    const vistos = new Set<string>();
+    return metricas.filter(m => {
+      if (vistos.has(m.metricaId)) return false;
+      vistos.add(m.metricaId);
+      return true;
     });
   }
 
@@ -568,30 +585,44 @@ export class EjecucionComponent implements OnInit {
   }
 
   // Métodos para el resumen del sprint
+  //
+  // Corrección del bug "2 métricas planeadas -> 4 en Ejecución": el resumen se
+  // rotula "métricas" pero contaba VARIABLES (Σ m.variables.length), así que una
+  // métrica con 3 variables (ej. una sociohumana con indicador "a, b, c") sumaba
+  // 3. Ahora la unidad es la métrica (una por metricaId, igual que Planeación) y
+  // sus variables solo deciden su estado:
+  //  - capturada: tiene variables y TODAS están capturadas;
+  //  - pendiente: no capturada y le falta alguna variable 'por_sprint';
+  //  - sin registros: el resto (incluye las que aún cargan o no tienen variables),
+  // de modo que capturadas + pendientes + sin registros = total.
   obtenerTotalMetricas(): number {
+    return new Set(this.metricas.map(m => m.metricaId)).size;
+  }
+
+  /** Variables asociadas a las métricas del sprint — dato aparte, nunca se suma al total de métricas. */
+  obtenerTotalVariables(): number {
     return this.metricas.reduce((total, m) => total + m.variables.length, 0);
   }
 
   obtenerMetricasCapturadas(): number {
-    return this.metricas.reduce((total, m) => {
-      return total + m.variables.filter(v => this.estaCapturadaParaMi(v)).length;
-    }, 0);
+    return this.metricas.filter(m => this.metricaCapturada(m)).length;
   }
 
   obtenerMetricasPendientes(): number {
-    return this.metricas.reduce((total, m) => {
-      return total + m.variables.filter(v =>
-        !this.estaCapturadaParaMi(v) && v.frecuenciaCaptura === 'por_sprint'
-      ).length;
-    }, 0);
+    return this.metricas.filter(m => this.metricaPendiente(m)).length;
   }
 
   obtenerMetricasSinRegistros(): number {
-    return this.metricas.reduce((total, m) => {
-      return total + m.variables.filter(v =>
-        !this.estaCapturadaParaMi(v) && v.frecuenciaCaptura !== 'por_sprint'
-      ).length;
-    }, 0);
+    return this.metricas.filter(m => !this.metricaCapturada(m) && !this.metricaPendiente(m)).length;
+  }
+
+  private metricaCapturada(m: MetricaEjecucion): boolean {
+    return m.variables.length > 0 && m.variables.every(v => this.estaCapturadaParaMi(v));
+  }
+
+  private metricaPendiente(m: MetricaEjecucion): boolean {
+    return !this.metricaCapturada(m)
+      && m.variables.some(v => !this.estaCapturadaParaMi(v) && v.frecuenciaCaptura === 'por_sprint');
   }
 
   calcularPorcentajeProgreso(): number {

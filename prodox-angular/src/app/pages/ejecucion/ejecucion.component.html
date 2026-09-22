@@ -124,7 +124,12 @@
                     <i class="bi" [ngClass]="obtenerIcono(m.nombre)"></i>
                   </div>
                   <div class="metrica-info">
+                    <span class="etiqueta-tipo etiqueta-metrica">Métrica</span>
                     <h3 class="metrica-title">{{ m.nombre.toUpperCase() }}</h3>
+                    <span class="metrica-variables-count">
+                      <i class="bi bi-diagram-3"></i>
+                      {{ m.variables.length }} variable{{ m.variables.length !== 1 ? 's' : '' }} asociada{{ m.variables.length !== 1 ? 's' : '' }}
+                    </span>
                     @if (sprintActual) {
                       <div class="metrica-details">
                         <div class="detail-item">
@@ -147,6 +152,15 @@
                         <span>{{ v.mostrarHistorial ? 'Ocultar' : 'Ver historial' }}</span>
                       </button>
                     }
+
+                    <!-- Cada bloque es una VARIABLE de la métrica, no otra métrica: una
+                         métrica con varias variables (ej. sociohumana "a, b, c") comparte
+                         descripción (procedimiento) entre todas, y sin esta etiqueta sus
+                         bloques se veían como la misma métrica repetida. -->
+                    <div class="variable-encabezado">
+                      <span class="etiqueta-tipo etiqueta-variable">Variable</span>
+                      <h4 class="variable-nombre">{{ v.nombre }}</h4>
+                    </div>
 
                     <!-- Información específica de esta variable -->
                     <div class="variable-info mb-3">
@@ -427,6 +441,10 @@
                   <div class="estado-item">
                     <span class="estado-label">Total métricas</span>
                     <span class="estado-valor">{{ obtenerTotalMetricas() }}</span>
+                  </div>
+                  <div class="estado-item estado-item-variables">
+                    <span class="estado-label">Variables asociadas</span>
+                    <span class="estado-valor">{{ obtenerTotalVariables() }}</span>
                   </div>
                   <div class="estado-item">
                     <span class="estado-label">Capturadas</span>
