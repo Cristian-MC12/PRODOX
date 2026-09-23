@@ -309,18 +309,31 @@ public class MetricRankingService {
      * determinista (SHA-256 del candidato completo) — dos textos distintos casi
      * nunca terminan en el mismo identificador, y el mismo texto siempre genera el
      * mismo identificador.
+     *
+     * Corrección (variables fantasma en Ejecución, caso ICPE): la coma solo separa
+     * variables cuando el texto YA es una lista de identificadores técnicos
+     * ("acat, acr" — métricas FORMULA de varias variables). En texto libre la coma es
+     * puntuación: antes, un indicadorVariable en prosa como "Respuesta a la pregunta
+     * ... (1=totalmente en desacuerdo, 5=totalmente de acuerdo)" se partía por esa
+     * coma y generaba DOS variables, la segunda "v5totalmente_de_<hash>" — un trozo de
+     * la descripción de la escala Likert, no una variable real. Ahora el texto libre
+     * genera siempre UN solo identificador.
      */
     private String generarNombreVariableSeguro(String texto) {
         String base = (texto != null && !texto.isBlank()) ? texto : "variable";
-        String[] derivados = ParametrizacionService.extraerNombresVariables(base);
+        if (esNombreVariableValido(base)) {
+            // Lista legítima de identificadores (o uno solo): se respeta tal cual,
+            // normalizando solo los espacios alrededor de cada coma.
+            return java.util.Arrays.stream(base.split(","))
+                    .map(String::trim)
+                    .collect(java.util.stream.Collectors.joining(","));
+        }
+        String[] derivados = ParametrizacionService.extraerNombresVariables(base.replace(',', ' '));
         if (derivados.length == 0) {
             return acortarConHashDeterminista(base);
         }
-        List<String> resultado = new java.util.ArrayList<>();
-        for (String candidato : derivados) {
-            resultado.add(esNombreVariableValido(candidato) ? candidato : acortarConHashDeterminista(candidato));
-        }
-        return String.join(",", resultado);
+        String candidato = derivados[0];
+        return esNombreVariableValido(candidato) ? candidato : acortarConHashDeterminista(candidato);
     }
 
     /**

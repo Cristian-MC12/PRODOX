@@ -1253,6 +1253,77 @@ class MetricRankingServiceTest {
         assertThat(leerNombreVariableDeSnapshot(pA)).isNotEqualTo(leerNombreVariableDeSnapshot(pB));
     }
 
+    // ══════════════════════════════════════════════════════════════════════
+    // Regresión caso ICPE ("Índice de Colaboración Percibida del Equipo"): su
+    // indicadorVariable es prosa con una coma dentro de la descripción de la escala
+    // Likert. generarNombreVariableSeguro() la partía por esa coma y la aprobación
+    // generaba 2 variables — la segunda "v5totalmente_de_0157ed9da0", donde
+    // 0157ed9da0 = sha256("5totalmente_de_acuerdo")[0..10] — cuando la métrica tiene
+    // una sola variable.
+    // ══════════════════════════════════════════════════════════════════════
+
+    private static final String INDICADOR_ICPE =
+            "Respuesta a la pregunta ¿Qué tan de acuerdo estás con que existe un alto nivel de "
+            + "colaboración y apoyo mutuo en el equipo? (1=totalmente en desacuerdo, 5=totalmente de acuerdo)";
+
+    private String aprobarSinNombreVariableGuardado(String indicador) {
+        MetricParametrizacion p = pendienteEditable();
+        p.setIndicadorVariable(indicador);
+        when(parametrizacionRepo.findById(p.getId())).thenReturn(Optional.of(p));
+        when(parametrizacionRepo.findUltimaVersionAprobada(metricaId, proyectoId))
+                .thenReturn(Optional.empty());
+        when(planeacionService.listarSeleccionadas(proyectoId)).thenReturn(List.of());
+
+        MetricParametrizacionDto dto = service.verificar(
+                new VerificarParametrizacionRequest(p.getId(), "aprobar", null), smUserId, "sm@example.com");
+
+        assertThat(dto.status()).isEqualTo("aprobada");
+        assertThat(p.getIndicadorVariable()).isEqualTo(indicador); // nunca se modifica
+        return leerNombreVariableDeSnapshot(p);
+    }
+
+    @Test
+    @DisplayName("ICPE: indicador en prosa con coma en la escala Likert genera UNA sola variable, no dos")
+    void aprobar_indicadorEnProsaConComa_generaUnSoloIdentificador() {
+        String guardado = aprobarSinNombreVariableGuardado(INDICADOR_ICPE);
+
+        assertThat(guardado.split(",")).hasSize(1);
+        assertThat(guardado).matches("^[a-z][a-z0-9_]{0,119}$");
+        assertThat(guardado).doesNotContain("v5totalmente").doesNotContain("0157ed9da0");
+    }
+
+    @Test
+    @DisplayName("actualizar: indicador en prosa con comas y sin nombreVariable genera UN solo identificador")
+    void actualizar_indicadorEnProsaConComa_generaUnSoloIdentificador() {
+        MetricParametrizacion p = pendienteEditable();
+        when(parametrizacionRepo.findById(p.getId())).thenReturn(Optional.of(p));
+
+        service.actualizar(p.getId(), actualizarRequest(INDICADOR_ICPE, null), smUserId);
+
+        assertThat(leerNombreVariableDeSnapshot(p).split(",")).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("Métrica con varias variables legítimas (lista de identificadores 'acat, acr') conserva sus 2 variables")
+    void aprobar_listaLegitimaDeIdentificadores_conservaTodasLasVariables() {
+        String guardado = aprobarSinNombreVariableGuardado("acat, acr");
+
+        assertThat(guardado).isEqualTo("acat,acr");
+    }
+
+    @Test
+    @DisplayName("actualizar: nombreVariable explícito con 3 identificadores se respeta tal cual (3 variables)")
+    void actualizar_nombreVariableExplicitoConTresIdentificadores_seRespeta() {
+        MetricParametrizacion p = pendienteEditable();
+        when(parametrizacionRepo.findById(p.getId())).thenReturn(Optional.of(p));
+
+        service.actualizar(p.getId(),
+                actualizarRequest(INDICADOR_ICPE, "apoyo_recibido, apoyo_brindado, participacion_activa"), smUserId);
+
+        assertThat(leerNombreVariableDeSnapshot(p))
+                .isEqualTo("apoyo_recibido, apoyo_brindado, participacion_activa");
+    }
+
     private String leerNombreVariableDeSnapshot(MetricParametrizacion p) {
         try {
             return new ObjectMapper().readTree(p.getConfiguracionAprobadaJson())
