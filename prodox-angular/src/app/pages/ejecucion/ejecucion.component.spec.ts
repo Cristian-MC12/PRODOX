@@ -1254,6 +1254,105 @@ describe('EjecucionComponent (FASE 16 — métricas dinámicas)', () => {
       expect(tarjetas()[0].querySelector('.metrica-variables-count')!.textContent!.trim()).toBe('1 variable asociada');
     });
 
+    // ── Etiqueta visible = indicadorVariable de la Parametrización ─────────────
+    // Variable.nombre sigue siendo el identificador técnico (backend, fórmulas);
+    // Ejecución solo cambia el TEXTO que muestra tras "VARIABLE".
+
+    const INDICADOR_REFINAMIENTO =
+      "Estado de refinamiento de cada ítem del Product Backlog (ej. 'Listo', 'En refinamiento', 'Pendiente').";
+    const INDICADOR_ICPE =
+      'Respuesta a la pregunta ¿Qué tan de acuerdo estás con que existe un alto nivel de colaboración ' +
+      'y apoyo mutuo en el equipo? (1=totalmente en desacuerdo, 5=totalmente de acuerdo)';
+
+    function conIndicadores(indicadores: Record<string, string | null>) {
+      metricaAcademicaService.obtenerParametrizacionAprobada.and.callFake((id: string) =>
+        of({ ...param(id), indicadorVariable: indicadores[id] ?? '' } as any));
+    }
+
+    function nombresVisibles(): string[] {
+      return Array.from(tarjetas()[0].querySelectorAll('.variable-nombre')).map(e => e.textContent!.trim());
+    }
+
+    it('A. 1 variable con indicador en prosa -> la tarjeta muestra el indicador de la Parametrización', () => {
+      conIndicadores({ [METRICA_SOCIO]: INDICADOR_REFINAMIENTO });
+      cargar([metrica(METRICA_SOCIO, 'Control de inventario de items listos', true)],
+        { [METRICA_SOCIO]: ['control_inventario_items'] });
+
+      expect(nombresVisibles()).toEqual([INDICADOR_REFINAMIENTO]);
+      expect(fixture.nativeElement.textContent).not.toContain('Control inventario items');
+      // El identificador técnico no cambia: la captura sigue usando el id de la variable.
+      expect(component.metricas[0].variables[0].variableId).toBe('v-' + METRICA_SOCIO + '-0');
+    });
+
+    it('B. indicador técnico en lista -> no se muestra como una frase literal; cada variable con su nombre', () => {
+      conIndicadores({ [METRICA_SOCIO]: 'deuda_gestionada, deuda_identificada' });
+      cargar([metrica(METRICA_SOCIO, 'Deuda técnica', true)],
+        { [METRICA_SOCIO]: ['deuda_gestionada', 'deuda_identificada'] });
+
+      expect(nombresVisibles()).toEqual(['Deuda gestionada', 'Deuda identificada']);
+      expect(fixture.nativeElement.textContent).not.toContain('deuda_gestionada, deuda_identificada');
+    });
+
+    it('B2. indicador técnico de una sola variable -> se humaniza el identificador, no se muestra en snake_case', () => {
+      conIndicadores({ [METRICA_SOCIO]: 'errores_reportados' });
+      cargar([metrica(METRICA_SOCIO, 'Errores por sprint', true)], { [METRICA_SOCIO]: ['errores_reportados'] });
+
+      expect(nombresVisibles()).toEqual(['Errores reportados']);
+    });
+
+    it('C. varias variables con un indicador en prosa general -> no se inventa una etiqueta por variable', () => {
+      conIndicadores({ [METRICA_SOCIO]: 'Apoyo recibido, apoyo brindado y participación activa de cada integrante' });
+      cargar([metrica(METRICA_SOCIO, 'Colaboración compuesta', true)],
+        { [METRICA_SOCIO]: ['apoyo_recibido', 'apoyo_brindado', 'participacion_activa'] });
+
+      expect(nombresVisibles()).toEqual(['Apoyo recibido', 'Apoyo brindado', 'Participacion activa']);
+    });
+
+    it('D. indicadorVariable vacío o null -> fallback a humanizar Variable.nombre', () => {
+      conIndicadores({ [METRICA_SOCIO]: null, [METRICA_DEFECTOS]: '   ' });
+      cargar([metrica(METRICA_SOCIO, 'Índice de Colaboración Percibida del Equipo (ICPE)', true),
+              metrica(METRICA_DEFECTOS, 'Defectos', true)],
+        { [METRICA_SOCIO]: ['colaboracion_percibida_equipo'], [METRICA_DEFECTOS]: ['defectos_totales'] });
+
+      const visibles = tarjetas().map(t => t.querySelector('.variable-nombre')!.textContent!.trim());
+      expect(visibles).toEqual(['Colaboracion percibida equipo', 'Defectos totales']);
+    });
+
+    it('D2. sin parametrización aprobada (null) -> fallback a humanizar Variable.nombre', () => {
+      metricaAcademicaService.obtenerParametrizacionAprobada.and.returnValue(of(null));
+      cargar([metrica(METRICA_SOCIO, 'Control de inventario de items listos', true)],
+        { [METRICA_SOCIO]: ['control_inventario_items'] });
+
+      expect(component.metricas[0].variables.map(v => v.nombre)).toEqual(['Control inventario items']);
+    });
+
+    it('E. ICPE -> muestra la pregunta definida en la Parametrización, no "Colaboracion percibida equipo"', () => {
+      conIndicadores({ [METRICA_SOCIO]: INDICADOR_ICPE });
+      cargar([metrica(METRICA_SOCIO, 'Índice de Colaboración Percibida del Equipo (ICPE)', true)],
+        { [METRICA_SOCIO]: ['colaboracion_percibida_equipo'] });
+
+      expect(nombresVisibles()).toEqual([INDICADOR_ICPE]);
+      expect(fixture.nativeElement.textContent).not.toContain('Colaboracion percibida equipo');
+      expect(tarjetas()[0].querySelector('.metrica-variables-count')!.textContent!.trim()).toBe('1 variable asociada');
+    });
+
+    it('la etiqueta visible no altera la captura: registrarValor envía el id de la variable, no el texto', () => {
+      conIndicadores({ [METRICA_SOCIO]: INDICADOR_REFINAMIENTO });
+      cargar([metrica(METRICA_SOCIO, 'Control de inventario de items listos', true)],
+        { [METRICA_SOCIO]: ['control_inventario_items'] });
+      variableService.guardarValores.and.returnValue(of(undefined));
+
+      const m = component.metricas[0];
+      const v = m.variables[0];
+      v.fecha = '2026-08-22';
+      v.valorNum = 3;
+      component.registrarValor(m, v);
+
+      expect(variableService.guardarValores).toHaveBeenCalledWith(METRICA_SOCIO, jasmine.objectContaining({
+        valores: [jasmine.objectContaining({ variableId: 'v-' + METRICA_SOCIO + '-0', valorNum: 3 })]
+      }));
+    });
+
     it('1 métrica con 3 variables legítimas -> UI muestra 1 métrica y exactamente esas 3 variables', () => {
       cargar([metrica(METRICA_SOCIO, 'Métrica compuesta', true)],
         { [METRICA_SOCIO]: ['apoyo_recibido', 'apoyo_brindado', 'participacion_activa'] });

@@ -81,6 +81,9 @@ interface MetricaEjecucion {
   variables: BloqueVariable[];
 }
 
+/** Identificador técnico, o lista de ellos separada por comas (misma regla que el backend). */
+const LISTA_IDENTIFICADORES = /^[a-z][a-z0-9_]{0,119}(\s*,\s*[a-z][a-z0-9_]{0,119})*$/;
+
 function hoyISO(): string {
   const d = new Date();
   const mes = String(d.getMonth() + 1).padStart(2, '0');
@@ -291,11 +294,28 @@ export class EjecucionComponent implements OnInit {
       m.sinParametrizacion = !parametrizacion;
       if (!variablesResp) { m.variables = []; return; }
 
-      m.variables = variablesResp.variables.map(v => this.construirBloque(v, detalle));
+      const etiqueta = this.etiquetaDesdeIndicador(parametrizacion?.indicadorVariable, variablesResp.variables.length);
+      m.variables = variablesResp.variables.map(v => this.construirBloque(v, detalle, etiqueta));
     });
   }
 
-  private construirBloque(v: VariableConValor, detalle: MetricaEvaluacionDetalleDto[]): BloqueVariable {
+  /**
+   * Texto visible de la variable: el "Indicador y Variables" que el usuario definió
+   * en la Parametrización, en lugar del identificador técnico humanizado
+   * (Variable.nombre, que se genera desde el nombre de la métrica y sigue siendo la
+   * referencia técnica en el backend). Mismo criterio que MetricaAcademicaComponent:
+   * indicadorVariable es UN texto por parametrización, así que solo se usa cuando hay
+   * exactamente 1 variable, y nunca cuando ya es un identificador técnico o una lista
+   * de ellos ("deuda_gestionada, deuda_identificada"). null = humanizar Variable.nombre.
+   */
+  private etiquetaDesdeIndicador(indicadorVariable: string | null | undefined, totalVariables: number): string | null {
+    const indicador = (indicadorVariable ?? '').trim();
+    if (totalVariables !== 1 || !indicador || LISTA_IDENTIFICADORES.test(indicador)) return null;
+    return indicador;
+  }
+
+  private construirBloque(v: VariableConValor, detalle: MetricaEvaluacionDetalleDto[],
+                          etiqueta: string | null = null): BloqueVariable {
     const detalleVariable = detalle.find(d => d.variableId === v.id);
     // Solo los registros del sprint actualmente seleccionado: la gráfica y el
     // estado de captura de Ejecución reflejan la evolución DENTRO de este
@@ -313,7 +333,7 @@ export class EjecucionComponent implements OnInit {
 
     return {
       variableId: v.id,
-      nombre: this.humanizarNombre(v.nombre),
+      nombre: etiqueta ?? this.humanizarNombre(v.nombre),
       descripcion: v.descripcion || '',
       tipoDato: v.tipoDato,
       frecuenciaCaptura,
