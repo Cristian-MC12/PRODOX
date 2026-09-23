@@ -8,6 +8,7 @@ import com.prodox.dto.MetricParametrizacionDto;
 import com.prodox.dto.RankingMetricaDto;
 import com.prodox.dto.TopParametrizacionDto;
 import com.prodox.entity.Factor;
+import com.prodox.entity.Metrica;
 import com.prodox.entity.MetricParametrizacion;
 import com.prodox.entity.MetricUsoRanking;
 import com.prodox.entity.ProjectMember;
@@ -224,47 +225,54 @@ public class MetricRankingService {
         return toDto(updated, updated.getFactor());
     }
 
-    /** Longitud máxima del Identificador técnico — regla existente, sin cambios. */
-    private static final int NOMBRE_VARIABLE_MAX = 120;
-    /** Longitud del sufijo hash usado para desambiguar identificadores generados. */
-    private static final int HASH_SUFFIX_LEN = 10;
-
     /**
      * Resuelve el Identificador técnico (nombreVariable) para una edición y lo persiste
      * en el snapshot.
      *
-     * Corrección solicitada: el usuario NO debe preocuparse por el límite de 120
-     * caracteres. Si informa un valor explícito y ya es válido (formato snake_case,
-     * máx. 120), se usa tal cual. Si no informa nada, o lo que informó no es válido
-     * (típicamente porque pegó una descripción larga), NUNCA se rechaza la edición:
-     * se genera automáticamente un identificador corto, determinista y válido a
-     * partir de ese mismo texto (o de indicadorVariable si no escribió nada) —
-     * ver generarNombreVariableSeguro(). indicadorVariable/objetivo/procedimiento
-     * nunca se truncan ni se modifican acá; el snapshot se guarda en la misma
-     * columna jsonb ya usada por el flujo académico (sin migraciones nuevas).
+     * El usuario NO necesita conocer los identificadores técnicos: el campo es opcional
+     * y nunca se rechaza la edición por su contenido. La decisión la toma la regla
+     * general de PRODOX (NombreVariableGenerador.resolver): identificador explícito
+     * válido -> se usa tal cual; texto no válido (ej. "Colaboración percibida") -> se
+     * normaliza; vacío -> se genera desde el indicador (si ya es una lista de
+     * identificadores) o, si es prosa, desde el NOMBRE de la métrica — nunca una frase
+     * gigante con hash. indicadorVariable/objetivo/procedimiento nunca se modifican.
      */
     private void resolverYGuardarNombreVariable(MetricParametrizacion p, String nombreVariableCrudo) {
         String explicito = nombreVariableCrudo != null ? nombreVariableCrudo.trim() : null;
-        String base = (explicito != null && !explicito.isBlank()) ? explicito : p.getIndicadorVariable();
-        String resuelto = esNombreVariableValido(base) ? base : generarNombreVariableSeguro(base);
-        guardarSnapshotConNombreVariable(p, resuelto);
+        guardarSnapshotConNombreVariable(p, generarNombreVariable(p, explicito));
     }
 
     /**
      * Garantiza que la parametrización tenga un Identificador técnico válido antes de
-     * aprobar, sin rechazar nunca la aprobación por este motivo (mismo criterio que
-     * resolverYGuardarNombreVariable). Cubre el caso de una parametrización que nunca
-     * pasó por "Editar": ahí se genera uno a partir de indicadorVariable en este mismo
-     * momento. Si ya tiene uno válido guardado, no hace nada (no lo regenera ni lo
-     * cambia — estabilidad para parametrizaciones ya editadas).
+     * aprobar, sin rechazar nunca la aprobación por este motivo. Cubre el caso de una
+     * parametrización que nunca pasó por "Editar": ahí se genera con la regla general.
+     * Si ya tiene uno válido guardado, no hace nada (no lo regenera ni lo cambia —
+     * estabilidad para parametrizaciones ya editadas).
      */
     private void asegurarNombreVariable(MetricParametrizacion p) {
         String actual = leerNombreVariableGuardado(p);
-        if (esNombreVariableValido(actual)) {
+        if (NombreVariableGenerador.esListaDeIdentificadores(actual)) {
             return;
         }
-        String base = (actual != null && !actual.isBlank()) ? actual : p.getIndicadorVariable();
-        guardarSnapshotConNombreVariable(p, generarNombreVariableSeguro(base));
+        guardarSnapshotConNombreVariable(p, generarNombreVariable(p, actual));
+    }
+
+    /**
+     * Aplica la regla general (NombreVariableGenerador) con la información estructurada
+     * de esta parametrización: identificador explícito, indicadorVariable y el nombre de
+     * su métrica. Devuelve el valor a guardar en el snapshot (lista separada por comas
+     * cuando la métrica tiene varias variables legítimas).
+     *
+     * Corrección (caso ICPE): antes el identificador se derivaba del indicadorVariable
+     * completo — partiéndolo por cualquier coma (una escala Likert "(1=..., 5=...)"
+     * creaba una segunda variable) y, en prosa larga, recortándolo con un sufijo hash
+     * visible ("respuesta_a_la_pregunta_..._a920fab3e6").
+     */
+    private String generarNombreVariable(MetricParametrizacion p, String explicito) {
+        String nombreMetrica = p.getMetricaId() == null ? null
+                : metricaRepo.findById(p.getMetricaId()).map(Metrica::getNombre).orElse(null);
+        return String.join(",",
+                NombreVariableGenerador.resolver(explicito, p.getIndicadorVariable(), nombreMetrica));
     }
 
     private void guardarSnapshotConNombreVariable(MetricParametrizacion p, String nombreVariable) {
@@ -278,102 +286,6 @@ public class MetricRankingService {
             p.setConfiguracionAprobadaJson(objectMapper.writeValueAsString(snapshot));
         } catch (JsonProcessingException e) {
             throw new IllegalStateException("Error construyendo snapshot de configuración", e);
-        }
-    }
-
-    /** true si candidato ya cumple, tal cual, la regla existente (ParametrizacionService). */
-    private boolean esNombreVariableValido(String candidato) {
-        if (candidato == null || candidato.isBlank()) {
-            return false;
-        }
-        try {
-            ParametrizacionService.validarNombreVariable(candidato);
-            return true;
-        } catch (NombreVariableInvalidoException e) {
-            return false;
-        }
-    }
-
-    /**
-     * Genera un Identificador técnico corto, determinista y válido (máx. 120
-     * caracteres) a partir de un texto libre (indicadorVariable, o lo que el usuario
-     * haya escrito en el campo). Reutiliza la extracción/normalización a snake_case
-     * ya existente (ParametrizacionService.extraerNombresVariables — soporta listas
-     * separadas por coma para métricas FORMULA de más de una variable, igual que el
-     * resto del sistema; no se duplica ese algoritmo). El único caso nuevo es cuando
-     * el resultado de esa extracción sigue siendo inválido (típicamente >120
-     * caracteres, por una descripción larga): en vez de rechazar, o de recortar
-     * simplemente los primeros 120 caracteres (lo que podría hacer colisionar dos
-     * descripciones distintas que comparten el mismo prefijo), se recorta a un
-     * prefijo legible cortado en un límite de palabra y se le agrega un sufijo hash
-     * determinista (SHA-256 del candidato completo) — dos textos distintos casi
-     * nunca terminan en el mismo identificador, y el mismo texto siempre genera el
-     * mismo identificador.
-     *
-     * Corrección (variables fantasma en Ejecución, caso ICPE): la coma solo separa
-     * variables cuando el texto YA es una lista de identificadores técnicos
-     * ("acat, acr" — métricas FORMULA de varias variables). En texto libre la coma es
-     * puntuación: antes, un indicadorVariable en prosa como "Respuesta a la pregunta
-     * ... (1=totalmente en desacuerdo, 5=totalmente de acuerdo)" se partía por esa
-     * coma y generaba DOS variables, la segunda "v5totalmente_de_<hash>" — un trozo de
-     * la descripción de la escala Likert, no una variable real. Ahora el texto libre
-     * genera siempre UN solo identificador.
-     */
-    private String generarNombreVariableSeguro(String texto) {
-        String base = (texto != null && !texto.isBlank()) ? texto : "variable";
-        if (esNombreVariableValido(base)) {
-            // Lista legítima de identificadores (o uno solo): se respeta tal cual,
-            // normalizando solo los espacios alrededor de cada coma.
-            return java.util.Arrays.stream(base.split(","))
-                    .map(String::trim)
-                    .collect(java.util.stream.Collectors.joining(","));
-        }
-        String[] derivados = ParametrizacionService.extraerNombresVariables(base.replace(',', ' '));
-        if (derivados.length == 0) {
-            return acortarConHashDeterminista(base);
-        }
-        String candidato = derivados[0];
-        return esNombreVariableValido(candidato) ? candidato : acortarConHashDeterminista(candidato);
-    }
-
-    /**
-     * Recorta candidatoInvalido a un prefijo legible (cortado en el último "_" antes
-     * del límite, nunca a mitad de palabra) y le agrega un sufijo hash determinista
-     * de HASH_SUFFIX_LEN caracteres — nunca un substring(0,120) simple, precisamente
-     * para no colisionar cuando dos descripciones distintas comparten prefijo.
-     */
-    private String acortarConHashDeterminista(String candidatoInvalido) {
-        String hash = sha256Hex(candidatoInvalido).substring(0, HASH_SUFFIX_LEN);
-        int presupuestoPrefijo = NOMBRE_VARIABLE_MAX - HASH_SUFFIX_LEN - 1; // -1 por el "_"
-        String prefijo = candidatoInvalido.length() > presupuestoPrefijo
-                ? candidatoInvalido.substring(0, presupuestoPrefijo)
-                : candidatoInvalido;
-        int ultimoGuion = prefijo.lastIndexOf('_');
-        if (ultimoGuion > 0) {
-            prefijo = prefijo.substring(0, ultimoGuion);
-        }
-        // Defensa adicional por si candidatoInvalido era inválido por FORMATO (no solo
-        // longitud): quedarse solo con [a-z0-9_] y forzar que empiece con una letra,
-        // igual que exige la regla existente.
-        prefijo = prefijo.toLowerCase().replaceAll("[^a-z0-9_]", "");
-        if (prefijo.isEmpty() || !Character.isLetter(prefijo.charAt(0))) {
-            prefijo = "v" + prefijo;
-        }
-        String seguro = prefijo + "_" + hash;
-        return esNombreVariableValido(seguro) ? seguro : ("var_" + hash);
-    }
-
-    private static String sha256Hex(String texto) {
-        try {
-            java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-256");
-            byte[] bytes = digest.digest(texto.getBytes(java.nio.charset.StandardCharsets.UTF_8));
-            StringBuilder sb = new StringBuilder(bytes.length * 2);
-            for (byte b : bytes) {
-                sb.append(String.format("%02x", b));
-            }
-            return sb.toString();
-        } catch (java.security.NoSuchAlgorithmException e) {
-            throw new IllegalStateException("SHA-256 no disponible en esta JVM", e);
         }
     }
 

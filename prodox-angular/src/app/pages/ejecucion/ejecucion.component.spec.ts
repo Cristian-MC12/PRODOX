@@ -1226,6 +1226,45 @@ describe('EjecucionComponent (FASE 16 — métricas dinámicas)', () => {
       expect(fixture.nativeElement.querySelector('.metrica-variables-count').textContent.trim()).toBe('1 variable asociada');
     });
 
+    // Caso ICPE: la UI refleja 1:1 lo que devuelve el backend — ni inventa ni oculta
+    // variables. Las 2 variables vistas en producción venían del backend (ver
+    // MetricRankingServiceTest "ICPE"); con la corrección el backend devuelve 1.
+    it('ICPE: backend devuelve 1 métrica con 1 variable -> UI muestra 1 métrica y 1 variable', () => {
+      cargar([metrica(METRICA_SOCIO, 'Índice de Colaboración Percibida del Equipo (ICPE)', true)],
+        { [METRICA_SOCIO]: ['colaboracion_percibida'] });
+
+      expect(tarjetas().length).toBe(1);
+      expect(tarjetas()[0].querySelectorAll('.etiqueta-variable').length).toBe(1);
+      expect(tarjetas()[0].querySelector('.metrica-variables-count')!.textContent!.trim()).toBe('1 variable asociada');
+      expect(tarjetas()[0].querySelector('.variable-nombre')!.textContent!.trim()).toBe('Colaboracion percibida');
+    });
+
+    // Regresión del segundo problema: el backend generaba como identificador la frase
+    // completa del indicador con un hash ("respuesta_a_la_pregunta_..._a920fab3e6") y
+    // Ejecución lo mostraba tal cual. Con la regla general (NombreVariableGenerador) el
+    // identificador de ICPE es "colaboracion_percibida_equipo".
+    it('ICPE con el identificador de la regla general: la variable se ve legible, sin frase completa ni hash', () => {
+      cargar([metrica(METRICA_SOCIO, 'Índice de Colaboración Percibida del Equipo (ICPE)', true)],
+        { [METRICA_SOCIO]: ['colaboracion_percibida_equipo'] });
+
+      const nombre = tarjetas()[0].querySelector('.variable-nombre')!.textContent!.trim();
+      expect(nombre).toBe('Colaboracion percibida equipo');
+      expect(nombre).not.toMatch(/[0-9a-f]{10}$/);
+      expect(nombre.toLowerCase()).not.toContain('respuesta a la pregunta');
+      expect(tarjetas()[0].querySelector('.metrica-variables-count')!.textContent!.trim()).toBe('1 variable asociada');
+    });
+
+    it('1 métrica con 3 variables legítimas -> UI muestra 1 métrica y exactamente esas 3 variables', () => {
+      cargar([metrica(METRICA_SOCIO, 'Métrica compuesta', true)],
+        { [METRICA_SOCIO]: ['apoyo_recibido', 'apoyo_brindado', 'participacion_activa'] });
+
+      expect(tarjetas().length).toBe(1);
+      expect(component.obtenerTotalMetricas()).toBe(1);
+      const nombres = Array.from(tarjetas()[0].querySelectorAll('.variable-nombre')).map(e => e.textContent!.trim());
+      expect(nombres).toEqual(['Apoyo recibido', 'Apoyo brindado', 'Participacion activa']);
+      expect(tarjetas()[0].querySelector('.metrica-variables-count')!.textContent!.trim()).toBe('3 variables asociadas');
+    });
+
     it('2 métricas + 4 variables (sociohumana con 3) -> el resumen dice "2 métricas" y, aparte, "4 variables"', () => {
       cargar(
         [metrica(METRICA_DEFECTOS, 'Métrica 1', true), metrica(METRICA_SOCIO, 'Métrica 2', true, 'FSH-01')],

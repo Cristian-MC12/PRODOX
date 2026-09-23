@@ -166,24 +166,24 @@ public class VariableDinamicaService {
             // indicadorVariable — un texto humano libre, ej. "Número de defectos
             // únicos registrados durante el sprint" — directamente como nombre
             // técnico de la Variable, sin normalizarlo. Se reemplaza por
-            // ParametrizacionService.extraerNombresVariables(...), la misma
+            // una extracción/normalización a snake_case (hoy NombreVariableGenerador), la misma
             // extracción/normalización a snake_case ya usada y probada en el flujo
             // académico (ParametrizacionService.crearVariablesDesdeParametrizacion),
             // en vez de duplicar un segundo algoritmo. El nombre visible de la
             // métrica (indicadorVariable, procedimiento) nunca se modifica: solo
             // cambia cómo se deriva el identificador técnico interno.
-            String[] nombresVariables;
-            if (nombreVariableExplicito != null) {
-                nombresVariables = java.util.Arrays.stream(nombreVariableExplicito.split(",", -1))
-                    .map(String::trim)
-                    .filter(n -> !n.isBlank())
-                    .toArray(String[]::new);
-            } else {
-                nombresVariables = ParametrizacionService.extraerNombresVariables(indicadorVariable);
-            }
-            if (nombresVariables.length == 0) {
+            //
+            // Regla general de PRODOX (NombreVariableGenerador), la misma que usan
+            // Verificación y el flujo académico: nombreVariable del snapshot -> indicador
+            // que ya es una lista de identificadores -> identificadores snake_case escritos
+            // en el indicador -> nombre de la métrica. Antes, el indicador en prosa se
+            // partía por cualquier coma y cada trozo se convertía en una variable con la
+            // frase completa como nombre (ej. "donde_1_es_muy_bajo_y_5_es_muy_alto").
+            if (nombreVariableExplicito == null && (indicadorVariable == null || indicadorVariable.isBlank())) {
                 throw new IllegalStateException("indicadorVariable no está definido en la parametrización");
             }
+            List<String> nombresVariables = NombreVariableGenerador.resolver(
+                nombreVariableExplicito, indicadorVariable, metrica.getNombre());
 
             // FASE 17 (corrección del defecto documentado): valida cada nombre ANTES de
             // persistir, reutilizando el mismo tipo de excepción (NombreVariableInvalidoException)

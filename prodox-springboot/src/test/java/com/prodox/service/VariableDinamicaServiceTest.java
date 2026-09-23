@@ -371,8 +371,14 @@ class VariableDinamicaServiceTest {
         verify(variableRepo, times(1)).save(any(Variable.class));
     }
 
+    /**
+     * Regla general (NombreVariableGenerador): un indicador de 121 caracteres que no es un
+     * identificador válido ya NO bloquea la materialización con 400 (el usuario no tiene
+     * por qué conocer los identificadores técnicos) — se genera uno corto desde el nombre
+     * de la métrica.
+     */
     @Test
-    void debeRechazarIndicadorDe121CaracteresConMensajeClaro() {
+    void debeGenerarIdentificadorCortoCuandoElIndicadorExcede120Caracteres() {
         String indicador121 = "a".repeat(121);
         parametrizacion.setConfiguracionAprobadaJson("""
             {
@@ -391,16 +397,16 @@ class VariableDinamicaServiceTest {
         when(variableRepo.findByParametrizacionIdAndParametrizacionVersion(parametrizacionId, 1))
             .thenReturn(List.of());
         when(metricaRepo.findById(metricaId)).thenReturn(Optional.of(metrica));
+        when(variableRepo.save(any(Variable.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(registroRepo.findFirstBySprintIdAndVariable_IdAndUserIdOrderByRegistradoAtDesc(any(), any(), any()))
+            .thenReturn(Optional.empty());
 
-        assertThatThrownBy(() ->
-            service.obtenerVariables(metricaId, proyectoId, sprintId, "test@example.com"))
-            .isInstanceOf(NombreVariableInvalidoException.class)
-            // FASE 13: el mensaje ahora es el de ParametrizacionService.validarNombreVariableIndividual()
-            // (reutilizado, no duplicado) — ya no el texto propio "El campo \"Indicador y Variables\"...".
-            .hasMessageContaining("excede el máximo de 120 caracteres")
-            .hasMessageContaining("121");
+        VariablesMetricaResponse response =
+            service.obtenerVariables(metricaId, proyectoId, sprintId, "test@example.com");
 
-        verify(variableRepo, never()).save(any(Variable.class));
+        assertThat(response.variables()).hasSize(1);
+        assertThat(response.variables().get(0).nombre()).isEqualTo("velocidad");
+        verify(variableRepo, times(1)).save(any(Variable.class));
     }
 
     /**
@@ -512,7 +518,9 @@ class VariableDinamicaServiceTest {
 
         org.mockito.ArgumentCaptor<Variable> captor = org.mockito.ArgumentCaptor.forClass(Variable.class);
         verify(variableRepo, times(1)).save(captor.capture());
-        assertThat(captor.getValue().getNombre()).isEqualTo("problemas_reportados_en_el_sprint");
+        // Regla general (NombreVariableGenerador): un indicador en prosa ya no se
+        // convierte en el identificador — se usa el nombre de la métrica ("Velocidad").
+        assertThat(captor.getValue().getNombre()).isEqualTo("velocidad");
     }
 
     @Test
@@ -542,7 +550,9 @@ class VariableDinamicaServiceTest {
 
         org.mockito.ArgumentCaptor<Variable> captor = org.mockito.ArgumentCaptor.forClass(Variable.class);
         verify(variableRepo, times(1)).save(captor.capture());
-        assertThat(captor.getValue().getNombre()).isEqualTo("calidad_del_trabajo");
+        // Regla general (NombreVariableGenerador): un indicador en prosa ya no se
+        // convierte en el identificador — se usa el nombre de la métrica ("Velocidad").
+        assertThat(captor.getValue().getNombre()).isEqualTo("velocidad");
     }
 
     @Test
@@ -578,7 +588,9 @@ class VariableDinamicaServiceTest {
         verify(variableRepo, times(1)).save(captor.capture());
         String nombre = captor.getValue().getNombre();
         assertThat(nombre).matches("^[a-z][a-z0-9_]{0,119}$");
-        assertThat(nombre).isEqualTo("califica_nimo_de_cada_miembro_del_equipo_ej_escala_numrica_de_1_a_5");
+        // Regla general (NombreVariableGenerador): un indicador en prosa ya no se
+        // convierte en el identificador — se usa el nombre de la métrica ("Velocidad").
+        assertThat(nombre).isEqualTo("velocidad");
     }
 
     @Test
@@ -608,7 +620,11 @@ class VariableDinamicaServiceTest {
 
         org.mockito.ArgumentCaptor<Variable> captor = org.mockito.ArgumentCaptor.forClass(Variable.class);
         verify(variableRepo, times(1)).save(captor.capture());
-        assertThat(captor.getValue().getNombre()).isEqualTo("donde_1_es_muy_bajo_y_5_es_muy_alto");
+        // Antes este trozo de escala Likert se convertía en la variable
+        // "donde_1_es_muy_bajo_y_5_es_muy_alto" — el defecto de ICPE.
+        // Regla general (NombreVariableGenerador): un indicador en prosa ya no se
+        // convierte en el identificador — se usa el nombre de la métrica ("Velocidad").
+        assertThat(captor.getValue().getNombre()).isEqualTo("velocidad");
     }
 
     @Test

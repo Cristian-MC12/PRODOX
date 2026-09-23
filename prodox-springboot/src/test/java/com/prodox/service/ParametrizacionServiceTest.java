@@ -1711,17 +1711,21 @@ class ParametrizacionServiceTest {
         assertThat(variableCaptor.getValue().getNombre()).isEqualTo("problemas_reportados");
     }
 
-    // I) Fallback peligroso: sin nombreVariable y con el indicadorVariable largo real de
-    // SIG-VEL-02 (sin snake_case), debe rechazarse de forma CONTROLADA — nunca debe volver
-    // a producir un INSERT que falle con DataException/500 por overflow.
+    // I) Regla general (NombreVariableGenerador): sin nombreVariable y con el
+    // indicadorVariable largo real de SIG-VEL-02 (prosa, sin snake_case), ya NO se rechaza
+    // con 400 — antes el usuario tenía que conocer el identificador técnico para aprobar.
+    // Se genera uno corto desde el nombre de la métrica, nunca desde la frase completa, y
+    // nunca un INSERT con un nombre que desborde la columna.
     @Test
-    void aprobarParametrizacion_sinNombreVariable_indicadorLargoSinSnakeCase_esRechazadoControladamente() {
+    void aprobarParametrizacion_sinNombreVariable_indicadorLargoSinSnakeCase_generaIdentificadorDesdeLaMetrica() {
         mockAuthentication();
         UUID id = UUID.randomUUID();
         UUID proyectoId = UUID.randomUUID();
+        UUID metricaId = UUID.randomUUID();
         MetricParametrizacion parametrizacion = new MetricParametrizacion();
         parametrizacion.setId(id);
         parametrizacion.setProyectoId(proyectoId);
+        parametrizacion.setMetricaId(metricaId);
         parametrizacion.setStatus("propuesta");
         parametrizacion.setVersion(1);
 
@@ -1730,15 +1734,25 @@ class ParametrizacionServiceTest {
             "Fuente", "Formula", "SUMA", "unidad", null
         , null, null, null, null, null, null);
 
+        Metrica metrica = new Metrica();
+        metrica.setId(metricaId);
+        metrica.setNombre("Velocidad con valor");
+        MetricaCategoria categoria = new MetricaCategoria();
+        categoria.setNombre("Productividad");
+        metrica.setCategoria(categoria);
+
         when(parametrizacionRepository.findById(id)).thenReturn(Optional.of(parametrizacion));
         when(projectMemberRepository.existsByProyectoIdAndUserId(eq(proyectoId), anyString())).thenReturn(true);
         when(parametrizacionRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        when(metricaRepository.findById(metricaId)).thenReturn(Optional.of(metrica));
 
-        assertThatThrownBy(() -> parametrizacionService.aprobarParametrizacion(id, req))
-            .isInstanceOf(NombreVariableInvalidoException.class);
+        org.mockito.ArgumentCaptor<Variable> variableCaptor = org.mockito.ArgumentCaptor.forClass(Variable.class);
+        parametrizacionService.aprobarParametrizacion(id, req);
 
-        // Nunca debe intentar guardar la variable: se rechaza ANTES del INSERT.
-        verify(variableRepository, never()).save(any());
+        verify(variableRepository, times(1)).save(variableCaptor.capture());
+        // "con" es palabra vacía; "valor" no es prefijo, así que aporta significado
+        // y se conserva (distinto de la métrica "Velocidad").
+        assertThat(variableCaptor.getValue().getNombre()).isEqualTo("velocidad_valor");
     }
 
     // J) Regresión: el caso real de SIG-SC-02 (indicadorVariable con snake_case embebido,

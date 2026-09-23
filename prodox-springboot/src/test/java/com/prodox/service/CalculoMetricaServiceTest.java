@@ -422,6 +422,68 @@ class CalculoMetricaServiceTest {
         assertThat(dto.resultado()).isEqualByComparingTo("8.0000");
     }
 
+    // Regla general de identificadores (NombreVariableGenerador): los nombres que genera
+    // son los que después usa el cálculo. FORMULA es el único tipo que depende del
+    // nombre (sustitución en formulaAcademica), así que se prueba con nombres producidos
+    // por la regla, no escritos a mano.
+
+    @Test
+    @DisplayName("FORMULA con nombres de la regla general: 'deuda_gestionada, deuda_identificada' -> 2 variables -> (6/8)*100 = 75")
+    void calcularMetrica_formula_conNombresGeneradosPorLaReglaGeneral() {
+        List<String> nombres = NombreVariableGenerador.resolver(
+                null, "deuda_gestionada, deuda_identificada", "Deuda técnica");
+        assertThat(nombres).containsExactly("deuda_gestionada", "deuda_identificada");
+
+        UUID idGestionada = UUID.randomUUID();
+        UUID idIdentificada = UUID.randomUUID();
+        Variable gestionada = variable(idGestionada, "grupal", null, nombres.get(0));
+        Variable identificada = variable(idIdentificada, "grupal", null, nombres.get(1));
+        MetricParametrizacion param = parametrizacionFormula("(deuda_gestionada / deuda_identificada) * 100");
+
+        stubMiembroDelProyecto("juan");
+        when(parametrizacionRepo.findUltimaVersionAprobada(metricaId, proyectoId)).thenReturn(Optional.of(param));
+        when(variableRepo.findByParametrizacionIdAndParametrizacionVersion(param.getId(), 1))
+                .thenReturn(List.of(gestionada, identificada));
+        when(registroRepo.findBySprintIdAndVariable_IdOrderByRegistradoAtDesc(sprintId, idGestionada)).thenReturn(List.of(
+                registro(gestionada, new BigDecimal("6"), "juan", Instant.parse("2026-01-01T00:00:00Z"))));
+        when(registroRepo.findBySprintIdAndVariable_IdOrderByRegistradoAtDesc(sprintId, idIdentificada)).thenReturn(List.of(
+                registro(identificada, new BigDecimal("8"), "juan", Instant.parse("2026-01-01T00:00:00Z"))));
+        when(resultadoRepo.findByProyectoIdAndMetrica_IdAndSprintIdAndVigenteTrue(
+                proyectoId, metricaId, sprintId)).thenReturn(List.of());
+        when(resultadoRepo.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        var dto = service.calcularMetrica(metricaId, new CalcularMetricaRequest(proyectoId, sprintId), "juan");
+
+        assertThat(dto.resultado()).isEqualByComparingTo("75.0000");
+    }
+
+    @Test
+    @DisplayName("DIRECTO con el identificador generado para ICPE (1 variable Likert) -> devuelve el valor capturado")
+    void calcularMetrica_directo_icpeConIdentificadorGenerado() {
+        List<String> nombres = NombreVariableGenerador.resolver(null,
+                "Respuesta a la pregunta ¿Qué tan de acuerdo estás con que existe un alto nivel de colaboración "
+                        + "y apoyo mutuo en el equipo? (1=totalmente en desacuerdo, 5=totalmente de acuerdo)",
+                "Índice de Colaboración Percibida del Equipo (ICPE)");
+        assertThat(nombres).containsExactly("colaboracion_percibida_equipo");
+
+        UUID idVar = UUID.randomUUID();
+        Variable v = variable(idVar, "grupal", null, nombres.get(0));
+        MetricParametrizacion param = parametrizacionConTipoOperacion("DIRECTO");
+
+        stubMiembroDelProyecto("juan");
+        when(parametrizacionRepo.findUltimaVersionAprobada(metricaId, proyectoId)).thenReturn(Optional.of(param));
+        when(variableRepo.findByParametrizacionIdAndParametrizacionVersion(param.getId(), 1)).thenReturn(List.of(v));
+        when(registroRepo.findBySprintIdAndVariable_IdOrderByRegistradoAtDesc(sprintId, idVar)).thenReturn(List.of(
+                registro(v, new BigDecimal("4"), "juan", Instant.parse("2026-01-01T00:00:00Z"))));
+        when(resultadoRepo.findByProyectoIdAndMetrica_IdAndSprintIdAndVigenteTrue(
+                proyectoId, metricaId, sprintId)).thenReturn(List.of());
+        when(resultadoRepo.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        var dto = service.calcularMetrica(metricaId, new CalcularMetricaRequest(proyectoId, sprintId), "juan");
+
+        assertThat(dto.resultado()).isEqualByComparingTo("4.0000");
+    }
+
     @Test
     @DisplayName("CONTEO: tres registros individuales -> resultado 3")
     void calcularMetrica_directo_individualConAgregacionConteo() {

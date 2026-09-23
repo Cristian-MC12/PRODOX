@@ -858,43 +858,27 @@ public class ParametrizacionService {
             return;
         }
 
-        String[] nombresVariables;
-        if (nombreVariableExplicito != null && !nombreVariableExplicito.isBlank()) {
-            // Ya validado por validarNombreVariable() en aprobarParametrizacion()
-            // (admite lista separada por comas — ver validarNombreVariable()).
-            nombresVariables = java.util.Arrays.stream(nombreVariableExplicito.split(",", -1))
-                .map(String::trim)
-                .toArray(String[]::new);
-        } else {
-            // Compatibilidad: sin nombreVariable explícito, fallback sobre indicadorVariable.
-            String indicador = parametrizacion.getIndicadorVariable();
-            if (indicador == null || indicador.isBlank()) {
-                throw new IllegalStateException(
-                    "indicadorVariable no está definido en la parametrización");
-            }
-
-            // Parsear nombres de variables
-            // Formato esperado: "nombre_variable" o "var1, var2, var3"
-            nombresVariables = extraerNombresVariables(indicador);
-
-            if (nombresVariables.length == 0) {
-                throw new IllegalStateException(
-                    "No se pudieron extraer nombres de variables desde: " + indicador);
-            }
-
-            // FASE 16.10-E: el fallback puede producir nombres inválidos o
-            // demasiado largos (caso real SIG-VEL-02: indicadorVariable en
-            // prosa sin snake_case). Validar ANTES de intentar persistir,
-            // para rechazar con un error claro en vez de un DataException/500.
-            for (String nombreFallback : nombresVariables) {
-                validarNombreVariable(nombreFallback);
-            }
-        }
-
         // Obtener métrica
         Metrica metrica = metricaRepository.findById(parametrizacion.getMetricaId())
             .orElseThrow(() -> new IllegalArgumentException("Métrica no encontrada"));
-        
+
+        // Regla general de PRODOX (NombreVariableGenerador): nombreVariable explícito
+        // (ya validado por validarNombreVariable() en aprobarParametrizacion(); admite
+        // lista separada por comas) -> indicadorVariable que ya es una lista de
+        // identificadores -> identificadores snake_case escritos en el indicador -> nombre
+        // de la métrica. Antes, sin nombreVariable, el indicador en prosa se partía por
+        // cualquier coma (una escala Likert "(1=..., 5=...)" generaba una variable extra)
+        // y se rechazaba con 400 si el resultado no era un identificador válido — el
+        // usuario tenía que conocer los identificadores técnicos para poder aprobar.
+        String indicador = parametrizacion.getIndicadorVariable();
+        boolean hayExplicito = nombreVariableExplicito != null && !nombreVariableExplicito.isBlank();
+        if (!hayExplicito && (indicador == null || indicador.isBlank())) {
+            throw new IllegalStateException(
+                "indicadorVariable no está definido en la parametrización");
+        }
+        List<String> nombresVariables = NombreVariableGenerador.resolver(
+            hayExplicito ? nombreVariableExplicito : null, indicador, metrica.getNombre());
+
         // Crear una Variable por cada nombre extraído
         for (String nombreVar : nombresVariables) {
             Variable variable = new Variable();
@@ -930,70 +914,6 @@ public class ParametrizacionService {
 
             variableRepository.save(variable);
         }
-    }
-    
-    /**
-     * Extrae nombres de variables desde el campo indicadorVariable.
-     *
-     * Estrategia de extracción:
-     * 1. Buscar identificadores tipo snake_case (ej: problemas_reportados)
-     * 2. Si no encuentra, usar el primer token antes de espacios/paréntesis
-     * 3. Soportar múltiples variables separadas por coma
-     *
-     * Visibilidad de paquete (no ya `private`): reutilizada también por
-     * VariableDinamicaService.crearVariablesDesdeParametrizacion() para el
-     * flujo de "Enviar al Scrum Master" (MetricRankingService.verificar()),
-     * que nunca informa nombreVariable explícito y hasta ahora usaba
-     * indicadorVariable tal cual (texto humano) como nombre técnico de la
-     * Variable — provocando el mismo error de formato snake_case que este
-     * método ya resuelve aquí. Un solo algoritmo de normalización, sin
-     * duplicar el patrón (ver validarNombreVariableIndividual, FASE 13).
-     */
-    static String[] extraerNombresVariables(String indicador) {
-        // Limpiar y normalizar
-        String limpio = indicador.trim();
-
-        // Separar por coma si hay múltiples variables
-        String[] partes = limpio.split(",");
-
-        List<String> nombres = new ArrayList<>();
-
-        for (String parte : partes) {
-            String nombreExtraido = extraerNombreVariable(parte.trim());
-            if (nombreExtraido != null && !nombreExtraido.isBlank()) {
-                nombres.add(nombreExtraido);
-            }
-        }
-
-        return nombres.toArray(new String[0]);
-    }
-
-    /**
-     * Extrae un nombre de variable individual.
-     *
-     * Busca patrón snake_case (palabras unidas por _).
-     * Fallback: primera palabra en minúsculas.
-     */
-    private static String extraerNombreVariable(String texto) {
-        // Buscar patrón snake_case (ej: problemas_reportados)
-        java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("[a-z]+(_[a-z]+)+");
-        java.util.regex.Matcher matcher = pattern.matcher(texto);
-        
-        if (matcher.find()) {
-            return matcher.group();
-        }
-        
-        // Fallback: primera palabra en minúsculas, reemplazar espacios por _
-        String[] palabras = texto.toLowerCase()
-            .replaceAll("[^a-z0-9 ]", "")
-            .trim()
-            .split("\\s+");
-        
-        if (palabras.length > 0) {
-            return String.join("_", palabras);
-        }
-        
-        return null;
     }
     
     /**

@@ -131,6 +131,29 @@ class EvaluacionServiceTest {
     }
 
     @Test
+    @DisplayName("Regla general de identificadores: la variable de ICPE aparece UNA vez en Evaluación, con identificador corto y sin hash")
+    void evaluarDetalle_variableConIdentificadorDeLaReglaGeneral_unaSolaEntradaLegible() {
+        String nombre = NombreVariableGenerador.resolver(null,
+                "Respuesta a la pregunta ¿Qué tan de acuerdo estás con que existe un alto nivel de colaboración "
+                        + "y apoyo mutuo en el equipo? (1=totalmente en desacuerdo, 5=totalmente de acuerdo)",
+                "Índice de Colaboración Percibida del Equipo (ICPE)").get(0);
+        Variable variable = crearVariable(nombre, "Encuesta Likert al cierre del sprint");
+        Sprint sprint = crearSprint(1);
+        RegistroValor r1 = crearRegistro(variable, new BigDecimal("4"), Instant.now());
+
+        when(variableRepo.findByProyectoIdAndActivaTrue(proyectoId)).thenReturn(List.of(variable));
+        when(sprintRepo.findByProyectoIdOrderByNumeroDesc(proyectoId)).thenReturn(List.of(sprint));
+        when(registroRepo.findByVariable_IdOrderByRegistradoAtAsc(variable.getId())).thenReturn(List.of(r1));
+
+        List<MetricaEvaluacionDetalleDto> resultado = service.evaluarDetalle(proyectoId);
+
+        assertThat(resultado).hasSize(1);
+        assertThat(resultado.get(0).variableNombre()).isEqualTo("colaboracion_percibida_equipo");
+        assertThat(resultado.get(0).variableNombre()).doesNotMatch(".*_[0-9a-f]{10}$");
+        assertThat(resultado.get(0).registros()).hasSize(1);
+    }
+
+    @Test
     @DisplayName("evaluarDetalle: cuando Variable.descripcion es null, el DTO conserva variableNombre y variableDescripcion queda null (sin inventar texto)")
     void evaluarDetalle_variableSinDescripcion_conservaVariableNombreYNoInventaTexto() {
         Variable variable = crearVariable("tareas_retrabajadas", null);
