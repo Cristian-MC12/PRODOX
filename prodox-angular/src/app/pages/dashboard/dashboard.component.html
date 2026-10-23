@@ -207,7 +207,7 @@
             <div class="chart-content">
               @if (metricaActual; as ma) {
                 <app-metrics-evolution-chart
-                  [dataPoints]="getEvolutionDataParaMetrica(ma)"
+                  [dataPoints]="metricaActualEvolutionData"
                   [title]="''"
                 />
               } @else if (metricasDetalle.length > 0) {

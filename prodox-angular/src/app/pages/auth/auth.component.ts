@@ -459,6 +459,49 @@ import { environment } from '../../../environments/environment';
       color: #c4b5fd;
     }
 
+    .docs-nav {
+      position: absolute;
+      top: 1.75rem;
+      right: 2.25rem;
+      z-index: 100;
+    }
+
+    .docs-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.55rem 1.15rem;
+      background: rgba(20, 27, 50, 0.75);
+      border: 1px solid rgba(139, 92, 246, 0.4);
+      border-radius: 9999px;
+      color: #c4b5fd;
+      text-decoration: none;
+      font-size: 0.875rem;
+      font-weight: 500;
+      backdrop-filter: blur(16px);
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35), 0 0 15px rgba(99, 102, 241, 0.15);
+      transition: all 0.25s ease;
+    }
+
+    .docs-btn:hover {
+      background: rgba(99, 102, 241, 0.25);
+      border-color: rgba(167, 139, 250, 0.8);
+      color: #ffffff;
+      transform: translateY(-2px);
+      box-shadow: 0 6px 25px rgba(124, 58, 237, 0.4), 0 0 25px rgba(139, 92, 246, 0.4);
+    }
+
+    .docs-btn i {
+      font-size: 1rem;
+      color: #a78bfa;
+      transition: transform 0.25s ease;
+    }
+
+    .docs-btn:hover i {
+      transform: scale(1.1);
+      color: #ffffff;
+    }
+
     .error-alert {
       background: rgba(239, 68, 68, 0.15);
       border: 1px solid rgba(239, 68, 68, 0.35);
@@ -572,6 +615,16 @@ import { environment } from '../../../environments/environment';
 
       .footer {
         font-size: 0.875rem;
+      }
+
+      .docs-nav {
+        top: 1rem;
+        right: 1rem;
+      }
+
+      .docs-btn {
+        padding: 0.4rem 0.85rem;
+        font-size: 0.8125rem;
       }
 
       .floating-dot:nth-child(2),
@@ -708,6 +761,17 @@ import { environment } from '../../../environments/environment';
   `],
   template: `
     <div class="login-container">
+      <!-- Botón Documentación -->
+      <div class="docs-nav">
+        <a href="http://localhost:4173/" 
+           target="_blank" 
+           class="docs-btn"
+           title="Abrir manual de usuario PRODOX">
+          <i class="bi bi-book"></i>
+          <span>Documentación</span>
+        </a>
+      </div>
+
       <!-- Puntos flotantes animados -->
       <div class="floating-dot"></div>
       <div class="floating-dot"></div>

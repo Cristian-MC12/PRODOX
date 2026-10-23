@@ -2,9 +2,8 @@
 .chart-canvas-wrap {
   position: relative;
   width: 100%;
-  height: 100%;
-  min-height: 130px;
-  max-height: 150px;
+  height: 240px;
+  /* Altura fija para evitar ciclo de redimensionamiento con Chart.js */
 }
 
 .empty-chart {
@@ -22,8 +21,7 @@
 
 @media (max-width: 768px) {
   .chart-canvas-wrap {
-    min-height: 100px;
-    max-height: 120px;
+    height: 180px;
   }
   
   .empty-chart {

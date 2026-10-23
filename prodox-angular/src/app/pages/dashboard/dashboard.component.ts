@@ -86,6 +86,17 @@ export class DashboardComponent implements OnInit, AfterViewChecked, OnDestroy {
   // el propio tooltip que se intentaba mostrar con el mouse quieto.
   evolutionData: Array<{ label: string; value: number }> = [];
   distributionSegments: DistributionSegment[] = [];
+  
+  /**
+   * Cache de datos de evolución por métrica. Se calcula UNA VEZ cuando
+   * metricasDetalle cambia y se reutiliza en el template para evitar
+   * recrear arrays en cada detección de cambios (causa del titileo).
+   * Clave: variableId, Valor: array de puntos {label, value}
+   */
+  private evolutionDataCache = new Map<string, Array<{ label: string; value: number }>>();
+  
+  /** Datos de evolución para la métrica actualmente seleccionada, o vacío si no hay métrica seleccionada */
+  metricaActualEvolutionData: Array<{ label: string; value: number }> = [];
 
   // Estado y control
   state = signal<DashboardState>('loading');
@@ -195,6 +206,8 @@ export class DashboardComponent implements OnInit, AfterViewChecked, OnDestroy {
     this.evolutionData = [];
     this.distributionSegments = [];
     this.metricasDetalle = [];
+    this.evolutionDataCache.clear();
+    this.metricaActualEvolutionData = [];
     // Cambiar de proyecto nunca conserva la métrica seleccionada del proyecto
     // anterior (esa variableId podría ni siquiera existir en el nuevo proyecto).
     this.metricaSeleccionada.set(null);
@@ -261,6 +274,11 @@ export class DashboardComponent implements OnInit, AfterViewChecked, OnDestroy {
         this.totalMiembros = results.miembros.length;
         this.metricas = results.metricas;
         this.metricasDetalle = results.metricasDetalle;
+        
+        // Cachear datos de evolución para cada métrica (evita recrear arrays en cada detección de cambios)
+        this.cacheEvolutionData();
+        this.updateMetricaActualEvolutionData();
+        
         this.distributionSegments = this.getDistributionSegments();
         this.pendingSprintsChartRender = true;
 
@@ -352,6 +370,7 @@ export class DashboardComponent implements OnInit, AfterViewChecked, OnDestroy {
    */
   onMetricaChange(variableId: string): void {
     this.metricaSeleccionada.set(variableId === '' ? null : variableId);
+    this.updateMetricaActualEvolutionData();
     this.cargarRiesgosParaSeleccion();
   }
 
@@ -389,14 +408,12 @@ export class DashboardComponent implements OnInit, AfterViewChecked, OnDestroy {
    * resultadosCalculados (resultado real del equipo) sobre porSprint (promedio
    * de registros individuales crudos), mismo criterio que ya usa la página
    * Evaluación (evaluacion.component.ts:registrosParaVista).
+   * 
+   * NOTA: Este método ahora solo retorna datos CACHEADOS para evitar recrear
+   * arrays en cada ciclo de detección de cambios (causa del titileo).
    */
   getEvolutionDataParaMetrica(m: MetricaEvaluacionDetalleDto): Array<{ label: string; value: number }> {
-    if (m.resultadosCalculados && m.resultadosCalculados.length > 0) {
-      return m.resultadosCalculados
-        .filter(r => r.sprintNumero !== null)
-        .map(r => ({ label: `S${r.sprintNumero}`, value: r.resultado }));
-    }
-    return m.porSprint.map(s => ({ label: `S${s.sprintNumero}`, value: s.promedio }));
+    return this.evolutionDataCache.get(m.variableId) || [];
   }
 
   /**
@@ -866,5 +883,44 @@ export class DashboardComponent implements OnInit, AfterViewChecked, OnDestroy {
         this.showAlert('La exportación a Word no está disponible en este momento.', 'alert-warning');
       }
     });
+  }
+
+  /**
+   * Cachea los datos de evolución de todas las métricas. Se ejecuta UNA VEZ
+   * cuando metricasDetalle cambia. Evita recrear arrays en cada ciclo de
+   * detección de cambios (causa del titileo del gráfico).
+   */
+  private cacheEvolutionData(): void {
+    this.evolutionDataCache.clear();
+    for (const metrica of this.metricasDetalle) {
+      const data = this.computeEvolutionDataForMetrica(metrica);
+      this.evolutionDataCache.set(metrica.variableId, data);
+    }
+  }
+
+  /**
+   * Calcula los datos de evolución para una métrica específica.
+   * Usa resultadosCalculados si está disponible, sino porSprint.
+   */
+  private computeEvolutionDataForMetrica(m: MetricaEvaluacionDetalleDto): Array<{ label: string; value: number }> {
+    if (m.resultadosCalculados && m.resultadosCalculados.length > 0) {
+      return m.resultadosCalculados
+        .filter(r => r.sprintNumero !== null)
+        .map(r => ({ label: `S${r.sprintNumero}`, value: r.resultado }));
+    }
+    return m.porSprint.map(s => ({ label: `S${s.sprintNumero}`, value: s.promedio }));
+  }
+
+  /**
+   * Actualiza metricaActualEvolutionData con los datos cacheados de la métrica
+   * seleccionada. Se ejecuta cuando cambia la selección de métrica.
+   */
+  private updateMetricaActualEvolutionData(): void {
+    const metrica = this.metricaActual;
+    if (metrica) {
+      this.metricaActualEvolutionData = this.evolutionDataCache.get(metrica.variableId) || [];
+    } else {
+      this.metricaActualEvolutionData = [];
+    }
   }
 }

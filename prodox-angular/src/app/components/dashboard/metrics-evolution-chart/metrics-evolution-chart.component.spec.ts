@@ -1,5 +1,6 @@
 // Autor: Cristian Santiago Martinez Cordoba — PRODOX
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { SimpleChange } from '@angular/core';
 import { MetricsEvolutionChartComponent } from './metrics-evolution-chart.component';
 
 describe('MetricsEvolutionChartComponent', () => {
@@ -29,11 +30,14 @@ describe('MetricsEvolutionChartComponent', () => {
   });
 
   it('should render chart when data is provided', () => {
-    component.dataPoints = [
+    const newData = [
       { label: 'Sprint 1', value: 7.5 },
       { label: 'Sprint 2', value: 8.0 }
     ];
-    component.ngOnChanges();
+    component.dataPoints = newData;
+    component.ngOnChanges({
+      dataPoints: new SimpleChange(null, newData, false)
+    });
     fixture.detectChanges();
 
     const compiled = fixture.nativeElement;

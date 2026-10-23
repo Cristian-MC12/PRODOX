@@ -1,5 +1,5 @@
 // Autor: Cristian Santiago Martinez Cordoba — PRODOX
-import { AfterViewChecked, Component, ElementRef, Input, OnChanges, OnDestroy, ViewChild } from '@angular/core';
+import { AfterViewInit, Component, ElementRef, Input, OnChanges, OnDestroy, SimpleChanges, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Chart, registerables, ChartConfiguration } from 'chart.js';
 
@@ -23,7 +23,7 @@ function cssVar(name: string, fallback: string): string {
   templateUrl: './metrics-evolution-chart.component.html',
   styleUrl: './metrics-evolution-chart.component.css'
 })
-export class MetricsEvolutionChartComponent implements OnChanges, AfterViewChecked, OnDestroy {
+export class MetricsEvolutionChartComponent implements OnChanges, AfterViewInit, OnDestroy {
   @Input() dataPoints: DataPoint[] = [];
   @Input() title: string = 'Evolución de métricas';
   @Input() subtitle?: string;
@@ -31,19 +31,16 @@ export class MetricsEvolutionChartComponent implements OnChanges, AfterViewCheck
   @ViewChild('canvasRef') canvasRef?: ElementRef<HTMLCanvasElement>;
 
   private chart?: Chart<'line'>;
-  // El @if del template puede mostrar/ocultar el <canvas> según dataPoints;
-  // @ViewChild solo queda actualizado DESPUÉS de que la vista se revisa, así
-  // que el render real se pospone a ngAfterViewChecked (nunca a ngOnChanges,
-  // donde el canvas todavía podría no existir en el DOM).
-  private pendingRender = false;
+  private viewInitialized = false;
 
-  ngOnChanges(): void {
-    this.pendingRender = true;
+  ngAfterViewInit(): void {
+    this.viewInitialized = true;
+    this.renderChart();
   }
 
-  ngAfterViewChecked(): void {
-    if (this.pendingRender) {
-      this.pendingRender = false;
+  ngOnChanges(changes: SimpleChanges): void {
+    // Solo re-renderizar si ya se inicializó la vista Y los datos cambiaron
+    if (this.viewInitialized && changes['dataPoints']) {
       this.renderChart();
     }
   }
@@ -88,15 +85,34 @@ export class MetricsEvolutionChartComponent implements OnChanges, AfterViewCheck
       options: {
         responsive: true,
         maintainAspectRatio: false,
+        animation: false, // Deshabilitado para evitar saltos visuales en updates
         interaction: { mode: 'nearest', intersect: false },
+        layout: {
+          padding: {
+            top: 10,
+            right: 10,
+            bottom: 10,
+            left: 10
+          }
+        },
         scales: {
           x: {
             grid: { display: false },
-            ticks: { color: textSecondary, font: { size: 11 } }
+            ticks: { 
+              color: textSecondary, 
+              font: { size: 11 },
+              maxRotation: 0,
+              autoSkip: true,
+              autoSkipPadding: 10
+            }
           },
           y: {
             grid: { color: border },
-            ticks: { color: textSecondary, font: { size: 11 } }
+            ticks: { 
+              color: textSecondary, 
+              font: { size: 11 },
+              padding: 5
+            }
           }
         },
         plugins: {

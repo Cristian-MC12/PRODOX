@@ -35,7 +35,16 @@ import { catchError, of } from 'rxjs';
             <h1>{{ title }}</h1>
           }
           <ng-content select="[slot='header']"></ng-content>
-          <app-notificaciones-bell class="ms-auto"></app-notificaciones-bell>
+          <div class="ms-auto d-flex align-items-center gap-2">
+            <a href="http://localhost:4173/" 
+               target="_blank" 
+               class="btn btn-outline-primary btn-sm d-flex align-items-center gap-2"
+               title="Abrir manual de usuario">
+              <i class="bi bi-book"></i>
+              <span class="d-none d-md-inline">Documentación</span>
+            </a>
+            <app-notificaciones-bell></app-notificaciones-bell>
+          </div>
         </header>
 
         <!-- Banner contextual: proyecto + sprint activo -->
