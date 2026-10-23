@@ -1,0 +1,63 @@
+/**
+ * Tema personalizado PRODOX V1
+ * Colores profesionales y sobrios
+ */
+
+:root {
+  /* Colores primarios PRODOX */
+  --vp-c-brand-1: #3b82f6;
+  --vp-c-brand-2: #2563eb;
+  --vp-c-brand-3: #1d4ed8;
+  
+  /* Colores de acento */
+  --vp-c-brand-soft: rgba(59, 130, 246, 0.14);
+  
+  /* Personalización del sidebar */
+  --vp-sidebar-width: 280px;
+}
+
+.dark {
+  --vp-c-brand-1: #60a5fa;
+  --vp-c-brand-2: #3b82f6;
+  --vp-c-brand-3: #2563eb;
+  --vp-c-brand-soft: rgba(96, 165, 250, 0.14);
+}
+
+/* Mejora de legibilidad */
+.vp-doc h1,
+.vp-doc h2,
+.vp-doc h3,
+.vp-doc h4 {
+  font-weight: 600;
+}
+
+/* Espaciado mejorado */
+.vp-doc p {
+  line-height: 1.7;
+}
+
+/* Estilo para listas */
+.vp-doc ul,
+.vp-doc ol {
+  line-height: 1.8;
+}
+
+/* Tablas más legibles */
+.vp-doc table {
+  margin: 1.5rem 0;
+}
+
+.vp-doc table th {
+  background-color: var(--vp-c-bg-soft);
+  font-weight: 600;
+}
+
+/* Mejora de code blocks */
+.vp-doc [class*='language-'] {
+  border-radius: 8px;
+}
+
+/* Footer personalizado */
+.VPFooter {
+  border-top: 1px solid var(--vp-c-divider);
+}

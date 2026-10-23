@@ -41,4 +41,6 @@ Thumbs.db
 logs/
 
 # ─── Documentación interna ──────────────────────────────────
-docs/
+/docs/
+!prodox-manual-vitepress/docs/
+!prodox-manual-vitepress/docs/**
