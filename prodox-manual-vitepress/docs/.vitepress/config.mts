@@ -105,7 +105,7 @@ export default defineConfig({
     ],
 
     socialLinks: [
-      { icon: 'github', link: 'https://github.com/Cristian-MC12/PRODOX-V1' }
+      { icon: 'github', link: 'https://github.com/Cristian-MC12/PRODOX' }
     ],
 
     search: {
@@ -131,11 +131,6 @@ export default defineConfig({
           }
         }
       }
-    },
-
-    editLink: {
-      pattern: 'https://github.com/Cristian-MC12/PRODOX-V1/edit/main/docs/:path',
-      text: 'Editar esta página en GitHub'
     },
 
     footer: {
