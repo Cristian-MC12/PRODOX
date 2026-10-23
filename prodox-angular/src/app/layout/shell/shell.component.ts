@@ -8,6 +8,7 @@ import { SprintService } from '../../services/sprint.service';
 import { ProyectoDto } from '../../models/proyecto.model';
 import { SprintDto } from '../../models/sprint.model';
 import { timeboxAbreviado } from '../../models/timebox.model';
+import { environment } from '../../../environments/environment';
 import { catchError, of } from 'rxjs';
 
 @Component({
@@ -36,7 +37,7 @@ import { catchError, of } from 'rxjs';
           }
           <ng-content select="[slot='header']"></ng-content>
           <div class="ms-auto d-flex align-items-center gap-2">
-            <a href="http://localhost:4173/" 
+            <a [href]="manualUrl" 
                target="_blank" 
                class="btn btn-outline-primary btn-sm d-flex align-items-center gap-2"
                title="Abrir manual de usuario">
@@ -107,6 +108,7 @@ export class ShellComponent implements OnInit {
 
   /** Expuesto al template para no repetir la lógica de unidades en cada vista. */
   readonly timeboxAbreviado = timeboxAbreviado;
+  readonly manualUrl = environment.manualUrl;
 
   constructor(private sprintService: SprintService) {}
 

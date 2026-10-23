@@ -763,7 +763,7 @@ import { environment } from '../../../environments/environment';
     <div class="login-container">
       <!-- Botón Documentación -->
       <div class="docs-nav">
-        <a href="http://localhost:4173/" 
+        <a [href]="manualUrl" 
            target="_blank" 
            class="docs-btn"
            title="Abrir manual de usuario PRODOX">
@@ -993,6 +993,7 @@ import { environment } from '../../../environments/environment';
   `
 })
 export class AuthComponent implements OnInit {
+  readonly manualUrl = environment.manualUrl;
   tab: 'login' | 'register' | 'forgot' = 'login';
   form: FormGroup;
   loading  = false;

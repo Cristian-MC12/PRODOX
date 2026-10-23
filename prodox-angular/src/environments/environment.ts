@@ -2,6 +2,7 @@ export const environment = {
   production: false,
   apiBaseUrl: 'http://localhost:8080/api',
   backendUrl: 'http://localhost:8080',
+  manualUrl: 'http://localhost:4173/',
   // UUIDs de métricas base para desarrollo local
   metricasBase: [
     'dde97e2b-1b25-493e-9273-a6b59564b053', // Impedimentos por sprint
