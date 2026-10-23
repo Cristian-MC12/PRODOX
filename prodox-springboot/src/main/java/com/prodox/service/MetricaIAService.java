@@ -181,7 +181,7 @@ public class MetricaIAService {
     }
 
     private MetricaDto toMetricaDto(Metrica m) {
-        return new MetricaDto(m.getId(), m.getCodigo(), m.getNombre(), m.getDescripcion(), m.getCategoria().getNombre());
+        return new MetricaDto(m.getId(), m.getCodigo(), m.getNombre(), m.getDescripcion(), m.getCategoria().getNombre(), m.getDireccionDeseable(), m.getValorObjetivo());
     }
 
     private String generarCodigoUnico() {

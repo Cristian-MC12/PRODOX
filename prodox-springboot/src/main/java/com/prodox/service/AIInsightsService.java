@@ -9,10 +9,13 @@ import com.prodox.dto.ai.InsightEvidenceDto;
 import com.prodox.dto.ai.UpdateInsightDto;
 import com.prodox.dto.analytics.*;
 import com.prodox.entity.AIInsight;
+import com.prodox.entity.DireccionDeseableMetrica;
+import com.prodox.entity.Metrica;
 import com.prodox.entity.ProjectMember;
 import com.prodox.entity.Proyecto;
 import com.prodox.entity.Sprint;
 import com.prodox.repository.AIInsightRepository;
+import com.prodox.repository.MetricaRepository;
 import com.prodox.repository.ProjectMemberRepository;
 import com.prodox.repository.ProyectoRepository;
 import com.prodox.repository.SprintRepository;
@@ -53,6 +56,7 @@ public class AIInsightsService {
     private final ProyectoRepository proyectoRepo;
     private final SprintRepository sprintRepo;
     private final ProjectMemberRepository projectMemberRepo;
+    private final MetricaRepository metricaRepo;
     private final ObjectMapper objectMapper;
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -257,7 +261,7 @@ public class AIInsightsService {
                 insight.setSeveridad(determineTrendSeverity(trend.variacionTotal()));
 
                 // Generar título y descripción con Gemini
-                String prompt = buildTrendPrompt(trend, evidence);
+                String prompt = buildTrendPrompt(trend, evidence, proyectoId);
                 String geminiResponse = geminiService.generate(prompt);
 
                 // Parsear respuesta (título|descripción|recomendación)
@@ -494,7 +498,7 @@ public class AIInsightsService {
                 insight.setSeveridad(determineTrendSeverity(cambio));
 
                 // Generar descripción con Gemini
-                String prompt = buildComparisonPrompt(categoria, comparison, ultimo.getNumero(), penultimo.getNumero());
+                String prompt = buildComparisonPrompt(categoria, comparison, ultimo.getNumero(), penultimo.getNumero(), ultimo.getId());
                 String geminiResponse = geminiService.generate(prompt);
 
                 parseComparisonResponse(geminiResponse, insight, categoria);
@@ -517,10 +521,98 @@ public class AIInsightsService {
     // HELPERS - PROMPTS PARA GEMINI
     // ═══════════════════════════════════════════════════════════════════════
 
-    private String buildTrendPrompt(TrendAnalysisDto trend, InsightEvidenceDto evidence) {
+    /**
+     * Construye contexto detallado de métricas individuales para una categoría en un sprint.
+     * 
+     * V50 Fase 5B: Integra detalleMetricas para precisión por métrica.
+     * 
+     * @param sprintId ID del sprint
+     * @param categoria Nombre de la categoría
+     * @return Sección de texto formateada con detalles por métrica, o vacío si no hay datos
+     */
+    private String buildMetricasDetalleContext(UUID sprintId, String categoria) {
+        try {
+            SprintMetricsSummaryDto summary = analyticsService.getSprintMetricsSummary(sprintId);
+            
+            if (summary == null || summary.detalleMetricas() == null || summary.detalleMetricas().isEmpty()) {
+                return "";
+            }
+            
+            List<MetricaDetalleDto> metricasCategoria = summary.detalleMetricas().stream()
+                    .filter(m -> categoria.equals(m.categoria()))
+                    .toList();
+            
+            if (metricasCategoria.isEmpty()) {
+                return "";
+            }
+            
+            StringBuilder sb = new StringBuilder();
+            sb.append("\nMÉTRICAS INDIVIDUALES DE LA CATEGORÍA:\n");
+            
+            for (MetricaDetalleDto detalle : metricasCategoria) {
+                sb.append(String.format("- %s: promedio %.2f", 
+                        detalle.metricaNombre(), detalle.promedio()));
+                
+                if (detalle.tieneDireccionDeseable()) {
+                    sb.append(" [");
+                    switch (detalle.direccionDeseable()) {
+                        case "MAYOR_MEJOR" -> sb.append("mayor es mejor");
+                        case "MENOR_MEJOR" -> sb.append("menor es mejor");
+                        case "OBJETIVO" -> {
+                            sb.append("objetivo: ");
+                            if (detalle.valorObjetivo() != null) {
+                                sb.append(String.format("%.2f", detalle.valorObjetivo()));
+                                BigDecimal cumplimiento = detalle.porcentajeCumplimientoObjetivo();
+                                if (cumplimiento != null) {
+                                    sb.append(String.format(", cumplimiento: %.1f%%", cumplimiento));
+                                }
+                            } else {
+                                sb.append("no configurado");
+                            }
+                        }
+                    }
+                    sb.append("]");
+                } else {
+                    sb.append(" [dirección no configurada]");
+                }
+                
+                sb.append(String.format(" (rango: %.2f - %.2f, %d registros)\n",
+                        detalle.min(), detalle.max(), detalle.totalRegistros()));
+            }
+            
+            return sb.toString();
+            
+        } catch (Exception e) {
+            log.warn("No se pudo obtener detalle de métricas para sprint {} categoría {}: {}",
+                    sprintId, categoria, e.getMessage());
+            return "";
+        }
+    }
+
+    private String buildTrendPrompt(TrendAnalysisDto trend, InsightEvidenceDto evidence, UUID proyectoId) {
+        DireccionInfo direccionInfo = obtenerDireccionDeseable(trend.categoria());
+        String instruccionDireccion = generarInstruccionDireccion(direccionInfo);
+        
+        // V50 Fase 5B: Obtener detalle de métricas individuales del sprint más reciente
+        String metricasDetalle = "";
+        try {
+            List<Sprint> finalizados = sprintRepo.findByProyectoIdOrderByNumeroDesc(proyectoId)
+                    .stream()
+                    .filter(s -> "finalizado".equals(s.getEstado()))
+                    .limit(1)
+                    .toList();
+            if (!finalizados.isEmpty()) {
+                metricasDetalle = buildMetricasDetalleContext(finalizados.get(0).getId(), trend.categoria());
+            }
+        } catch (Exception e) {
+            log.warn("No se pudo agregar detalle de métricas en trend prompt: {}", e.getMessage());
+        }
+        
         return String.format(
                 """
                 Eres un experto en métricas Agile. Analiza la siguiente tendencia y genera un insight conciso.
+                
+                %s
                 
                 DATOS OBJETIVOS:
                 - Métrica: %s
@@ -529,29 +621,35 @@ public class AIInsightsService {
                 - Promedio histórico: %.2f
                 - Desviación estándar: %.2f
                 - Sprints analizados: %d
-                
+                %s
                 INSTRUCCIONES:
                 1. NO inventes ni calcules números. Usa solo los datos provistos.
-                2. Explica qué significa esta tendencia en el contexto de metodologías ágiles.
-                3. Indica si es una señal positiva o negativa.
-                4. Sugiere posibles causas (usa "podría" para hipótesis).
-                5. Provee una recomendación accionable.
+                2. Considera el CONTEXTO DE LA MÉTRICA (arriba) al interpretar la tendencia.
+                3. Si hay métricas individuales listadas, úsalas para enriquecer tu análisis sin hacer comparaciones entre métricas de diferente tipo o unidad.
+                4. Explica qué significa esta tendencia en el contexto de metodologías ágiles.
+                5. Sugiere posibles causas (usa "podría" para hipótesis, NO afirmes certezas).
+                6. Provee una recomendación accionable basada en los datos y el contexto.
                 
                 FORMATO DE RESPUESTA:
                 TÍTULO: [Título breve, máximo 100 caracteres]
                 DESCRIPCIÓN: [Explicación clara de 2-3 oraciones]
                 RECOMENDACIÓN: [Acción sugerida de 1-2 oraciones]
                 """,
+                instruccionDireccion,
                 trend.categoria(),
                 trend.tendenciaGeneral().equals("UP") ? "Ascendente" : "Descendente",
                 trend.variacionTotal(),
                 trend.promedioGeneral(),
                 trend.desviacionEstandar(),
-                trend.numeroSprints()
+                trend.numeroSprints(),
+                metricasDetalle
         );
     }
 
     private String buildAnomalyPrompt(AnomalyDto anomaly, InsightEvidenceDto evidence) {
+        // V50 Fase 5B: Agregar detalle de métricas individuales
+        String metricasDetalle = buildMetricasDetalleContext(anomaly.sprintId(), anomaly.categoria());
+        
         return String.format(
                 """
                 Detectamos una anomalía estadística en las métricas del equipo. Explícala de forma clara y no alarmista.
@@ -562,12 +660,14 @@ public class AIInsightsService {
                 - Promedio histórico: %.2f
                 - Desviación: %.1f desviaciones estándar %s del promedio
                 - Sprint: %d
-                
+                %s
                 INSTRUCCIONES:
                 1. Explica que este valor es inusual comparado con el histórico.
                 2. NO asumas que es un problema grave (puede ser una mejora).
-                3. Sugiere revisar el contexto del sprint.
-                4. Provee preguntas que el equipo debería hacerse.
+                3. Si hay métricas individuales listadas, considera su dirección deseable antes de juzgar si la anomalía es positiva o negativa.
+                4. NO compares métricas de diferente tipo o unidad entre sí.
+                5. Sugiere revisar el contexto del sprint.
+                6. Provee preguntas que el equipo debería hacerse.
                 
                 FORMATO:
                 TÍTULO: [Título breve]
@@ -579,7 +679,8 @@ public class AIInsightsService {
                 anomaly.promedioHistorico(),
                 anomaly.numDesviaciones(),
                 anomaly.direccion().equals("ABOVE") ? "por encima" : "por debajo",
-                anomaly.sprintNumero()
+                anomaly.sprintNumero(),
+                metricasDetalle
         );
     }
 
@@ -604,10 +705,13 @@ public class AIInsightsService {
     }
 
     private String buildComparisonPrompt(String categoria, SprintComparisonDto comparison, 
-                                          int sprint1Num, int sprint2Num) {
+                                          int sprint1Num, int sprint2Num, UUID ultimoSprintId) {
         BigDecimal val1 = comparison.sprint1Metricas().get(categoria);
         BigDecimal val2 = comparison.sprint2Metricas().get(categoria);
         BigDecimal cambio = comparison.variacionPorcentual().get(categoria);
+        
+        // V50 Fase 5B: Agregar detalle de métricas individuales del sprint más reciente
+        String metricasDetalle = buildMetricasDetalleContext(ultimoSprintId, categoria);
         
         return String.format(
                 """
@@ -618,11 +722,13 @@ public class AIInsightsService {
                 - Sprint %d: %.2f
                 - Sprint %d: %.2f
                 - Cambio: %.1f%%
-                
+                %s
                 INSTRUCCIONES:
                 1. Describe el cambio observado.
-                2. Contextualiza si es significativo.
-                3. Sugiere si requiere atención o es esperado.
+                2. Si hay métricas individuales listadas, considera su dirección deseable (mayor es mejor / menor es mejor / objetivo) antes de juzgar si el cambio es positivo o negativo.
+                3. NO compares métricas de diferente tipo o unidad entre sí.
+                4. Contextualiza si el cambio es significativo.
+                5. Sugiere si requiere atención o es esperado.
                 
                 FORMATO:
                 TÍTULO: [Título comparativo]
@@ -632,7 +738,8 @@ public class AIInsightsService {
                 categoria,
                 sprint2Num, val1,
                 sprint1Num, val2,
-                cambio
+                cambio,
+                metricasDetalle
         );
     }
 
@@ -711,6 +818,127 @@ public class AIInsightsService {
                 .replaceAll("[\\s*]+$", "")
                 .replace("**", "")
                 .trim();
+    }
+
+    /**
+     * Obtiene la mejor dirección deseable para una categoría.
+     * Si hay múltiples métricas en la categoría con diferentes direcciones,
+     * devuelve null (interpretación neutral).
+     * 
+     * V44 — Fase: Calidad analítica de módulos de IA (Prioridad 1)
+     */
+    private DireccionInfo obtenerDireccionDeseable(String categoria) {
+        List<Metrica> metricas = metricaRepo.findByCategoriaNombre(categoria);
+        
+        if (metricas.isEmpty()) {
+            return new DireccionInfo(null, null, true);
+        }
+        
+        // Si hay una sola métrica, usar su dirección
+        if (metricas.size() == 1) {
+            Metrica metrica = metricas.get(0);
+            DireccionDeseableMetrica direccion = metrica.getDireccionDeseableEnum();
+            return new DireccionInfo(direccion, metrica.getValorObjetivo(), false);
+        }
+        
+        // Si hay múltiples métricas, verificar si todas tienen la misma dirección
+        Set<String> direcciones = new HashSet<>();
+        for (Metrica m : metricas) {
+            direcciones.add(m.getDireccionDeseable());
+        }
+        
+        // Si todas tienen la misma dirección (o todas son null), usar esa
+        if (direcciones.size() == 1) {
+            String direccionComun = direcciones.iterator().next();
+            DireccionDeseableMetrica direccion = DireccionDeseableMetrica.fromString(direccionComun);
+            
+            // Para OBJETIVO, solo retornar el valor si todas las métricas tienen el mismo
+            BigDecimal valorObjetivo = null;
+            if (direccion == DireccionDeseableMetrica.OBJETIVO) {
+                Set<BigDecimal> objetivos = new HashSet<>();
+                for (Metrica m : metricas) {
+                    if (m.getValorObjetivo() != null) {
+                        objetivos.add(m.getValorObjetivo());
+                    }
+                }
+                if (objetivos.size() == 1) {
+                    valorObjetivo = objetivos.iterator().next();
+                }
+            }
+            
+            return new DireccionInfo(direccion, valorObjetivo, false);
+        }
+        
+        // Direcciones mixtas: interpretación neutral obligatoria
+        return new DireccionInfo(null, null, true);
+    }
+    
+    /**
+     * Información sobre dirección deseable de una métrica/categoría.
+     * 
+     * @param direccion Dirección deseable o null
+     * @param valorObjetivo Valor objetivo (solo para OBJETIVO)
+     * @param esMixta true si la categoría tiene múltiples métricas con direcciones diferentes
+     */
+    private record DireccionInfo(
+        DireccionDeseableMetrica direccion,
+        BigDecimal valorObjetivo,
+        boolean esMixta
+    ) {}
+    
+    /**
+     * Genera instrucción contextual sobre la dirección deseable de una métrica.
+     * 
+     * V44 — Fase: Calidad analítica de módulos de IA (Prioridad 1)
+     */
+    private String generarInstruccionDireccion(DireccionInfo info) {
+        if (info.esMixta()) {
+            return """
+                IMPORTANTE - DIRECCIÓN MIXTA:
+                Esta categoría contiene múltiples métricas con direcciones deseables diferentes.
+                NO clasifiques el cambio como mejora o deterioro general.
+                Describe el cambio de manera NEUTRAL y enfócate en el contexto y las posibles causas.
+                """;
+        }
+        
+        if (info.direccion() == null) {
+            return """
+                IMPORTANTE - DIRECCIÓN NO CONFIGURADA:
+                La dirección deseable de esta métrica no está configurada en el sistema.
+                NO clasifiques el cambio como positivo o negativo.
+                Describe el cambio de manera NEUTRAL: reporta QUÉ cambió y en QUÉ magnitud, sin valorar si es mejor o peor.
+                Enfócate en observar el patrón y sugerir que el equipo evalúe si el cambio es favorable según sus objetivos.
+                """;
+        }
+        
+        return switch(info.direccion()) {
+            case MAYOR_MEJOR -> """
+                CONTEXTO DE LA MÉTRICA:
+                Para esta métrica, valores MAYORES pueden ser favorables en contextos típicos de metodologías ágiles.
+                Sin embargo, evalúa la magnitud del cambio y el contexto antes de clasificarlo como mejora.
+                Un aumento excesivo puede indicar anomalías o mediciones incorrectas.
+                """;
+            case MENOR_MEJOR -> """
+                CONTEXTO DE LA MÉTRICA:
+                Para esta métrica, valores MENORES pueden ser favorables en contextos típicos de metodologías ágiles.
+                Sin embargo, evalúa la magnitud del cambio y el contexto antes de clasificarlo como mejora.
+                Una reducción excesiva puede indicar falta de actividad o datos incompletos.
+                """;
+            case OBJETIVO -> 
+                info.valorObjetivo() != null
+                ? String.format("""
+                    CONTEXTO DE LA MÉTRICA:
+                    Esta métrica busca alcanzar un VALOR OBJETIVO de %.2f.
+                    Evalúa qué tan cerca está el valor actual del objetivo.
+                    NO evalúes solo si sube o baja, sino si se ACERCA o ALEJA del objetivo.
+                    Un aumento puede ser desfavorable si ya estaba por encima del objetivo.
+                    """, info.valorObjetivo())
+                : """
+                    CONTEXTO DE LA MÉTRICA:
+                    Esta métrica está configurada para alcanzar un valor objetivo, pero el valor objetivo específico no está disponible.
+                    Evalúa el cambio de manera neutral hasta que se configure el valor objetivo.
+                    """;
+        };
     }
 
     private String determineTrendSeverity(BigDecimal variacion) {

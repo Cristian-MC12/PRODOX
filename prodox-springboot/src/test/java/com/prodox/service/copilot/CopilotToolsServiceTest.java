@@ -206,7 +206,7 @@ class CopilotToolsServiceTest {
 
         SprintMetricsSummaryDto metrics = new SprintMetricsSummaryDto(
                 sprintId, 3, "Goal", "en_ejecucion", LocalDate.now(), null,
-                null, Map.of("Calidad", new BigDecimal("8.0")), 5, true);
+                null, Map.of("Calidad", new BigDecimal("8.0")), List.of(), 5, true);
         when(analyticsService.getSprintMetricsSummary(sprintId)).thenReturn(metrics);
 
         Object resultado = service.executeTool("getActiveSprintMetrics", Map.of(), userId, proyectoId);

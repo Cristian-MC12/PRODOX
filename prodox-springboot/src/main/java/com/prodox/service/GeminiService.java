@@ -105,6 +105,9 @@ public class GeminiService {
     /**
      * Llama a Gemini y devuelve el texto generado para el prompt dado.
      * MÉTODO ORIGINAL - Mantiene compatibilidad con código existente.
+     * 
+     * ACTUALIZACIÓN: Soporta tanto claves legacy (AIzaSy...) como nuevas (AQ.Ab...).
+     * Las claves AQ.Ab requieren el header x-goog-api-key en lugar de query parameter.
      */
     public String generate(String prompt) {
         Map<String, Object> body = Map.of(
@@ -113,13 +116,29 @@ public class GeminiService {
             )
         );
 
-        String url = apiUrl + "?key=" + apiKey;
+        // Para claves nuevas (AQ.), usar header x-goog-api-key
+        // Para claves legacy (AIza), mantener query parameter por retrocompatibilidad
+        String url;
+        boolean useHeader = apiKey.startsWith("AQ.");
+        
+        if (useHeader) {
+            url = apiUrl;  // Sin query parameter
+        } else {
+            url = apiUrl + "?key=" + apiKey;  // Legacy format
+        }
 
         String response;
         try {
-            response = restClient().post()
+            RestClient.RequestBodySpec request = restClient().post()
                     .uri(url)
-                    .header("Content-Type", "application/json")
+                    .header("Content-Type", "application/json");
+            
+            // Agregar header x-goog-api-key para claves nuevas
+            if (useHeader) {
+                request = request.header("x-goog-api-key", apiKey);
+            }
+            
+            response = request
                     .body(body)
                     .retrieve()
                     .onStatus(status -> status.isError(), (req, res) -> {
@@ -184,6 +203,9 @@ public class GeminiService {
      * Llama a Gemini con soporte de function calling / tool use.
      * Soporta conversaciones multi-turn y system instructions.
      * 
+     * ACTUALIZACIÓN: Soporta tanto claves legacy (AIzaSy...) como nuevas (AQ.Ab...).
+     * Las claves AQ.Ab requieren el header x-goog-api-key en lugar de query parameter.
+     * 
      * @param messages Historial de mensajes de la conversación
      * @param tools Lista de herramientas disponibles (puede ser null)
      * @param systemInstruction Instrucción del sistema (puede ser null)
@@ -195,16 +217,33 @@ public class GeminiService {
             String systemInstruction
     ) {
         Map<String, Object> body = buildRequestBody(messages, tools, systemInstruction);
-        String url = apiUrl + "?key=" + apiKey;
+        
+        // Para claves nuevas (AQ.), usar header x-goog-api-key
+        // Para claves legacy (AIza), mantener query parameter por retrocompatibilidad
+        String url;
+        boolean useHeader = apiKey.startsWith("AQ.");
+        
+        if (useHeader) {
+            url = apiUrl;  // Sin query parameter
+        } else {
+            url = apiUrl + "?key=" + apiKey;  // Legacy format
+        }
 
         log.debug("Llamando a Gemini con {} mensajes y {} tools", 
                   messages.size(), tools != null ? tools.size() : 0);
 
         String responseJson;
         try {
-            responseJson = restClient().post()
+            RestClient.RequestBodySpec request = restClient().post()
                     .uri(url)
-                    .header("Content-Type", "application/json")
+                    .header("Content-Type", "application/json");
+            
+            // Agregar header x-goog-api-key para claves nuevas
+            if (useHeader) {
+                request = request.header("x-goog-api-key", apiKey);
+            }
+            
+            responseJson = request
                     .body(body)
                     .retrieve()
                     .onStatus(status -> status.isError(), (req, res) -> {

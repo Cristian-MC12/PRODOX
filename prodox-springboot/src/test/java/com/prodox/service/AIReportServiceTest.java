@@ -3,9 +3,11 @@ package com.prodox.service;
 
 import com.prodox.dto.ai.AIInsightDto;
 import com.prodox.dto.ai.AISprintReportDto;
+import com.prodox.dto.analytics.MetricaDetalleDto;
 import com.prodox.dto.analytics.SprintMetricsSummaryDto;
 import com.prodox.entity.ProjectMember;
 import com.prodox.entity.Sprint;
+import com.prodox.repository.MetricaRepository;
 import com.prodox.repository.ProjectMemberRepository;
 import com.prodox.repository.SprintRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -30,6 +32,7 @@ class AIReportServiceTest {
 
     @Mock SprintRepository sprintRepository;
     @Mock ProjectMemberRepository projectMemberRepository;
+    @Mock MetricaRepository metricaRepository;
     @Mock AgileAnalyticsService analyticsService;
     @Mock AIInsightsService insightsService;
     @Mock GeminiService geminiService;
@@ -122,7 +125,7 @@ class AIReportServiceTest {
         SprintMetricsSummaryDto summary = new SprintMetricsSummaryDto(
                 sprintId, 5, "Goal", "finalizado",
                 LocalDate.now().minusWeeks(2), LocalDate.now().minusWeeks(1),
-                14, metricas, 10, true
+                14, metricas, List.of(), 10, true
         );
 
         when(analyticsService.getSprintMetricsSummary(sprintId)).thenReturn(summary);
@@ -181,7 +184,7 @@ class AIReportServiceTest {
         when(analyticsService.getSprintMetricsSummary(sprintId)).thenReturn(
                 new SprintMetricsSummaryDto(sprintId, 5, "Goal", "finalizado",
                         LocalDate.now().minusWeeks(2), LocalDate.now().minusWeeks(1),
-                        14, Map.of("Calidad", new BigDecimal("8.5")), 10, true));
+                        14, Map.of("Calidad", new BigDecimal("8.5")), List.of(), 10, true));
         when(insightsService.getProjectInsights(proyectoId, userId)).thenReturn(List.of());
         when(geminiService.generate(anyString())).thenReturn(
                 "RESUMEN: r\nHIGHLIGHTS:\n- h\nCONCERNS:\n- c\nRECOMENDACIONES: rec");
@@ -212,7 +215,7 @@ class AIReportServiceTest {
         SprintMetricsSummaryDto summaryVacio = new SprintMetricsSummaryDto(
                 sprintId, 5, "Goal", "finalizado",
                 LocalDate.now().minusWeeks(2), LocalDate.now().minusWeeks(1),
-                14, Map.of(), 0, false
+                14, Map.of(), List.of(), 0, false
         );
 
         when(analyticsService.getSprintMetricsSummary(sprintId)).thenReturn(summaryVacio);
@@ -247,7 +250,7 @@ class AIReportServiceTest {
         SprintMetricsSummaryDto summary = new SprintMetricsSummaryDto(
                 sprintId, 5, "Goal", "finalizado",
                 LocalDate.now().minusWeeks(2), LocalDate.now().minusWeeks(1),
-                14, Map.of("Calidad", BigDecimal.TEN), 5, true
+                14, Map.of("Calidad", BigDecimal.TEN), List.of(), 5, true
         );
 
         AIInsightDto insight = new AIInsightDto(
@@ -284,7 +287,7 @@ class AIReportServiceTest {
         return new SprintMetricsSummaryDto(
                 sprintId, 5, "Goal", "finalizado",
                 LocalDate.now().minusWeeks(2), LocalDate.now().minusWeeks(1),
-                14, Map.of("Calidad", BigDecimal.TEN), 5, true
+                14, Map.of("Calidad", BigDecimal.TEN), List.of(), 5, true
         );
     }
 
@@ -404,5 +407,78 @@ class AIReportServiceTest {
         m.setUserId(userId);
         m.setRol("scrum_member");
         return m;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // V50 FASE 5C: Tests de integración con detalleMetricas
+    // ═══════════════════════════════════════════════════════════════════════
+
+    @Test
+    @DisplayName("FASE 5C: reporte incluye contexto detallado de métricas MAYOR_MEJOR")
+    void fase5c_reporteIncluyeContextoMetricasMayorMejor() {
+        when(sprintRepository.findById(sprintId)).thenReturn(Optional.of(sprint));
+        when(projectMemberRepository.findByProyectoIdAndUserId(proyectoId, userId))
+                .thenReturn(Optional.of(scrumMaster()));
+
+        List<MetricaDetalleDto> detalles = List.of(
+                new MetricaDetalleDto(
+                        UUID.randomUUID(), UUID.randomUUID(), "COV_CODE",
+                        "Cobertura de código", "Cobertura de código", "Calidad",
+                        new BigDecimal("85.5"), new BigDecimal("80"), new BigDecimal("90"),
+                        10, "MAYOR_MEJOR", null, "grupal", "% cobertura", "diaria"
+                )
+        );
+
+        SprintMetricsSummaryDto summary = new SprintMetricsSummaryDto(
+                sprintId, 5, "Goal", "finalizado",
+                LocalDate.now().minusWeeks(2), LocalDate.now().minusWeeks(1), 14,
+                Map.of("Calidad", new BigDecimal("85.5")),
+                detalles, 10, true
+        );
+
+        when(analyticsService.getSprintMetricsSummary(sprintId)).thenReturn(summary);
+        when(insightsService.getProjectInsights(proyectoId, userId)).thenReturn(List.of());
+        when(geminiService.generate(anyString())).thenReturn(
+                "RESUMEN: OK\nHIGHLIGHTS:\n- H\nCONCERNS:\n- C\nRECOMENDACIONES: R"
+        );
+
+        service.generateReport(sprintId, userId);
+
+        org.mockito.ArgumentCaptor<String> promptCaptor = org.mockito.ArgumentCaptor.forClass(String.class);
+        verify(geminiService).generate(promptCaptor.capture());
+        String prompt = promptCaptor.getValue();
+
+        assertThat(prompt).contains("Cobertura de código");
+        assertThat(prompt).contains("mayor es mejor");
+        assertThat(prompt).contains("85.5");
+    }
+
+    @Test
+    @DisplayName("FASE 5C: fallback a método legacy cuando detalleMetricas está vacío")
+    void fase5c_fallbackAMetodoLegacyCuandoDetallesVacios() {
+        when(sprintRepository.findById(sprintId)).thenReturn(Optional.of(sprint));
+        when(projectMemberRepository.findByProyectoIdAndUserId(proyectoId, userId))
+                .thenReturn(Optional.of(scrumMaster()));
+
+        // Summary CON promedios pero SIN detalles (caso legacy)
+        SprintMetricsSummaryDto summary = new SprintMetricsSummaryDto(
+                sprintId, 5, "Goal", "finalizado",
+                LocalDate.now().minusWeeks(2), LocalDate.now().minusWeeks(1), 14,
+                Map.of("Calidad", new BigDecimal("8.5")),
+                List.of(), // detalles vacíos
+                10, true
+        );
+
+        when(analyticsService.getSprintMetricsSummary(sprintId)).thenReturn(summary);
+        when(insightsService.getProjectInsights(proyectoId, userId)).thenReturn(List.of());
+        when(metricaRepository.findByCategoriaNombre("Calidad")).thenReturn(List.of()); // Fallback usa repositorio
+        when(geminiService.generate(anyString())).thenReturn(
+                "RESUMEN: OK\nHIGHLIGHTS:\n- H\nCONCERNS:\n- C\nRECOMENDACIONES: R"
+        );
+
+        service.generateReport(sprintId, userId);
+
+        // Verifica que se usó el método legacy (consulta al repositorio)
+        verify(metricaRepository).findByCategoriaNombre("Calidad");
     }
 }

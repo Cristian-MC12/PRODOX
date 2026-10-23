@@ -12,6 +12,7 @@ import com.prodox.dto.analytics.RiskDto;
 import com.prodox.dto.analytics.SprintComparisonDto;
 import com.prodox.dto.analytics.SprintMetricsSummaryDto;
 import com.prodox.dto.analytics.TrendAnalysisDto;
+import com.prodox.dto.analytics.MetricaDetalleDto;
 import com.prodox.entity.AIChatMessage;
 import com.prodox.entity.Proyecto;
 import com.prodox.entity.Sprint;
@@ -407,9 +408,17 @@ public class AICopilotService {
         "REGLAS ESTRICTAS:\n" +
         "1. No inventes métricas, valores, sprints, riesgos ni tendencias que no aparezcan a continuación.\n" +
         "2. No modifiques ningún número.\n" +
-        "3. PRODOX no define si un aumento o una disminución de una métrica es 'mejor' o 'peor'. " +
-        "NUNCA concluyas que el equipo 'mejoró' o 'empeoró' salvo que el dato ya venga clasificado " +
-        "así: describe los cambios como 'subió de X a Y', 'bajó de X a Y' o 'se mantuvo en X'.\n" +
+        "3. PRODOX define la DIRECCIÓN DESEABLE de cada métrica:\n" +
+        "   - [mayor es mejor]: un valor mayor puede ser favorable, considerando contexto y magnitud. " +
+        "Un aumento excesivo puede indicar anomalías.\n" +
+        "   - [menor es mejor]: un valor menor puede ser favorable, considerando contexto y magnitud. " +
+        "Una reducción excesiva puede indicar falta de actividad.\n" +
+        "   - [objetivo: X]: evalúa cercanía al valor objetivo, NO solo si sube o baja. " +
+        "Usa el porcentaje de cumplimiento cuando esté disponible.\n" +
+        "   - [dirección no configurada]: la dirección NO está definida. Describe el cambio de manera " +
+        "NEUTRAL sin asumir que es positivo o negativo.\n" +
+        "   NUNCA mezcles ni interpretes como una sola tendencia favorable métricas individuales con " +
+        "direcciones diferentes dentro de una misma categoría. Analiza cada métrica según su propia dirección.\n" +
         "4. Distingue con claridad HECHOS (datos observados) de INTERPRETACIÓN (tu explicación) y " +
         "de RECOMENDACIONES (acciones sugeridas). Nunca presentes una recomendación como si fuera un hecho.\n" +
         "5. Si los datos no permiten concluir algo, dilo explícitamente: \"Con los datos disponibles " +
@@ -466,9 +475,70 @@ public class AICopilotService {
 
         sb.append("SPRINT ACTUAL: Sprint ").append(actual.getNumero())
           .append(" (estado: ").append(actual.getEstado()).append(")\n");
+        
+        // V50 Fase 5E: Usar detalleMetricas cuando esté disponible
         sb.append("MÉTRICAS DEL SPRINT ACTUAL:\n");
-        metricasActuales.promediosPorCategoria().forEach((categoria, valor) ->
-                sb.append("- ").append(categoria).append(": ").append(valor).append("\n"));
+        if (metricasActuales.detalleMetricas() == null || metricasActuales.detalleMetricas().isEmpty()) {
+            // Fallback: sin detalles, usar promedios por categoría
+            metricasActuales.promediosPorCategoria().forEach((categoria, valor) ->
+                    sb.append("- ").append(categoria).append(": ").append(valor).append("\n"));
+        } else {
+            // Agrupar detalles por categoría en memoria
+            java.util.Map<String, java.util.List<MetricaDetalleDto>> porCategoria = new java.util.LinkedHashMap<>();
+            for (MetricaDetalleDto detalle : metricasActuales.detalleMetricas()) {
+                porCategoria.computeIfAbsent(detalle.categoria(), k -> new java.util.ArrayList<>()).add(detalle);
+            }
+            
+            for (java.util.Map.Entry<String, java.util.List<MetricaDetalleDto>> entry : porCategoria.entrySet()) {
+                String categoria = entry.getKey();
+                java.util.List<MetricaDetalleDto> metricas = entry.getValue();
+                
+                sb.append("- ").append(categoria).append(":\n");
+                
+                for (MetricaDetalleDto detalle : metricas) {
+                    sb.append("  • ").append(detalle.metricaNombre())
+                      .append(": ").append(String.format(java.util.Locale.ROOT, "%.2f", detalle.promedio()));
+                    
+                    // Dirección deseable
+                    if (detalle.direccionDeseable() != null) {
+                        switch (detalle.direccionDeseable()) {
+                            case "MAYOR_MEJOR" -> sb.append(" [mayor es mejor]");
+                            case "MENOR_MEJOR" -> sb.append(" [menor es mejor]");
+                            case "OBJETIVO" -> {
+                                if (detalle.valorObjetivo() != null) {
+                                    BigDecimal cumplimiento = detalle.porcentajeCumplimientoObjetivo();
+                                    sb.append(String.format(java.util.Locale.ROOT, " [objetivo: %.2f",
+                                            detalle.valorObjetivo()));
+                                    if (cumplimiento != null) {
+                                        sb.append(String.format(java.util.Locale.ROOT, ", cumplimiento: %.1f%%",
+                                                cumplimiento));
+                                    }
+                                    sb.append("]");
+                                } else {
+                                    sb.append(" [objetivo no configurado]");
+                                }
+                            }
+                        }
+                    } else {
+                        sb.append(" [dirección no configurada]");
+                    }
+                    
+                    // Rango y registros
+                    if (detalle.min() != null && detalle.max() != null) {
+                        sb.append(String.format(java.util.Locale.ROOT, " (rango: %.2f-%.2f",
+                                detalle.min(), detalle.max()));
+                        if (detalle.totalRegistros() != null) {
+                            sb.append(", ").append(detalle.totalRegistros()).append(" registros");
+                        }
+                        sb.append(")");
+                    } else if (detalle.totalRegistros() != null) {
+                        sb.append(" (").append(detalle.totalRegistros()).append(" registros)");
+                    }
+                    
+                    sb.append("\n");
+                }
+            }
+        }
 
         if (anterior == null) {
             sb.append("\nSPRINT ANTERIOR: no existe un sprint finalizado anterior disponible.\n");

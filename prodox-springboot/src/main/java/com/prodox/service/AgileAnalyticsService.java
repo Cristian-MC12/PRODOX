@@ -5,8 +5,10 @@ import com.prodox.dto.EvaluacionSprintDto;
 import com.prodox.dto.analytics.*;
 import com.prodox.entity.Proyecto;
 import com.prodox.entity.Sprint;
+import com.prodox.entity.Variable;
 import com.prodox.repository.ProyectoRepository;
 import com.prodox.repository.SprintRepository;
+import com.prodox.repository.VariableRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -37,6 +39,7 @@ public class AgileAnalyticsService {
 
     private final SprintRepository   sprintRepo;
     private final ProyectoRepository proyectoRepo;
+    private final VariableRepository variableRepo;
     private final EvaluacionService  evaluacionService;
 
     // Umbrales para detección de tendencias y anomalías
@@ -62,7 +65,7 @@ public class AgileAnalyticsService {
             return buildEmptySummary(sprint);
         }
 
-        // Agrupar por categoría y calcular promedio
+        // Agrupar por categoría y calcular promedio (mantener compatibilidad)
         Map<String, BigDecimal> promediosPorCategoria = evaluaciones.stream()
                 .collect(Collectors.groupingBy(
                         EvaluacionSprintDto::categoria,
@@ -77,6 +80,9 @@ public class AgileAnalyticsService {
         int totalRegistros = evaluaciones.stream()
                 .mapToInt(EvaluacionSprintDto::totalRegistros)
                 .sum();
+        
+        // V50 Fase 4: Construir detalle de métricas con dirección deseable
+        List<MetricaDetalleDto> detalleMetricas = buildDetalleMetricas(evaluaciones);
 
         Integer duracionDias = null;
         if (sprint.getFechaInicio() != null && sprint.getFechaFin() != null) {
@@ -92,6 +98,7 @@ public class AgileAnalyticsService {
                 sprint.getFechaFin(),
                 duracionDias,
                 promediosPorCategoria,
+                detalleMetricas,
                 totalRegistros,
                 true
         );
@@ -112,9 +119,83 @@ public class AgileAnalyticsService {
                 sprint.getFechaFin(),
                 duracionDias,
                 Map.of(),
+                List.of(), // V50 Fase 4: lista vacía de detalles
                 0,
                 false
         );
+    }
+    
+    /**
+     * Construye lista de detalles de métricas con dirección deseable.
+     * 
+     * V50 — Fase 4: Calidad analítica de módulos de IA (Prioridad 1)
+     * 
+     * Para cada evaluación, consulta la Variable correspondiente y extrae
+     * información de la Metrica asociada (dirección deseable, valor objetivo).
+     * 
+     * Si una Variable no se encuentra (edge case: fue eliminada entre la evaluación
+     * y este cálculo), se omite silenciosamente del detalle.
+     * 
+     * @param evaluaciones Evaluaciones ya calculadas por EvaluacionService
+     * @return Lista de detalles ordenados por categoría y nombre de variable
+     */
+    private List<MetricaDetalleDto> buildDetalleMetricas(List<EvaluacionSprintDto> evaluaciones) {
+        List<MetricaDetalleDto> detalles = new ArrayList<>();
+        
+        for (EvaluacionSprintDto eval : evaluaciones) {
+            try {
+                // Obtener Variable con su Metrica cargada (EAGER fetch)
+                Optional<Variable> varOpt = variableRepo.findById(eval.variableId());
+                
+                if (varOpt.isEmpty()) {
+                    log.warn("Variable {} no encontrada para evaluación de sprint {}. Omitiendo del detalle.",
+                            eval.variableId(), eval.sprintId());
+                    continue;
+                }
+                
+                Variable variable = varOpt.get();
+                
+                // Extraer información de Metrica (acceso directo por fetch EAGER)
+                String metricaCodigo = variable.getMetrica().getCodigo();
+                String metricaNombre = variable.getMetrica().getNombre();
+                UUID metricaId = variable.getMetrica().getId();
+                String direccionDeseable = variable.getMetrica().getDireccionDeseable();
+                BigDecimal valorObjetivo = variable.getMetrica().getValorObjetivo();
+                
+                MetricaDetalleDto detalle = new MetricaDetalleDto(
+                        eval.variableId(),
+                        metricaId,
+                        metricaCodigo,
+                        eval.variableNombre(),
+                        metricaNombre,
+                        eval.categoria(),
+                        eval.promedio(),
+                        eval.min(),
+                        eval.max(),
+                        eval.totalRegistros(),
+                        direccionDeseable,
+                        valorObjetivo,
+                        eval.tipoAlcance(),
+                        eval.formulaTexto(),
+                        eval.frecuenciaCaptura()
+                );
+                
+                detalles.add(detalle);
+                
+            } catch (Exception e) {
+                // Defensa en profundidad: cualquier error en construcción de un detalle
+                // individual no debe tumbar todo el resumen. Se omite el detalle problemático.
+                log.error("Error construyendo detalle de métrica para variable {} sprint {}: {}",
+                        eval.variableId(), eval.sprintId(), e.getMessage());
+            }
+        }
+        
+        // Ordenar por categoría, luego por nombre de variable
+        detalles.sort(Comparator
+                .comparing(MetricaDetalleDto::categoria)
+                .thenComparing(MetricaDetalleDto::variableNombre));
+        
+        return detalles;
     }
 
     // ═══════════════════════════════════════════════════════════════════════

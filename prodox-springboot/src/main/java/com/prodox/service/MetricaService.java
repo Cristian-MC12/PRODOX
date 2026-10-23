@@ -16,16 +16,26 @@ public class MetricaService {
     public List<MetricaDto> listar() {
         return metricaRepo.findAllByOrderByCategoriaIdAscNombreAsc().stream()
                 .map(m -> new MetricaDto(
-                        m.getId(), m.getCodigo(), m.getNombre(),
-                        m.getDescripcion(), m.getCategoria().getNombre()))
+                        m.getId(), 
+                        m.getCodigo(), 
+                        m.getNombre(),
+                        m.getDescripcion(), 
+                        m.getCategoria().getNombre(),
+                        m.getDireccionDeseable(),
+                        m.getValorObjetivo()))
                 .toList();
     }
 
     public List<MetricaDto> listarPorCategoria(String categoria) {
         return metricaRepo.findByCategoriaNombre(categoria).stream()
                 .map(m -> new MetricaDto(
-                        m.getId(), m.getCodigo(), m.getNombre(),
-                        m.getDescripcion(), m.getCategoria().getNombre()))
+                        m.getId(), 
+                        m.getCodigo(), 
+                        m.getNombre(),
+                        m.getDescripcion(), 
+                        m.getCategoria().getNombre(),
+                        m.getDireccionDeseable(),
+                        m.getValorObjetivo()))
                 .toList();
     }
 }

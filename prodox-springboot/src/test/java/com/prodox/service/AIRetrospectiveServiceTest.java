@@ -6,6 +6,7 @@ import com.prodox.dto.ai.AIRetrospectiveDto;
 import com.prodox.dto.analytics.*;
 import com.prodox.entity.ProjectMember;
 import com.prodox.entity.Sprint;
+import com.prodox.repository.MetricaRepository;
 import com.prodox.repository.ProjectMemberRepository;
 import com.prodox.repository.SprintRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -31,6 +32,7 @@ class AIRetrospectiveServiceTest {
 
     @Mock SprintRepository sprintRepository;
     @Mock ProjectMemberRepository projectMemberRepository;
+    @Mock MetricaRepository metricaRepository;
     @Mock AgileAnalyticsService analyticsService;
     @Mock AIInsightsService insightsService;
     @Mock GeminiService geminiService;
@@ -132,7 +134,7 @@ class AIRetrospectiveServiceTest {
         when(analyticsService.getSprintMetricsSummary(sprintId)).thenReturn(
                 new SprintMetricsSummaryDto(sprintId, 1, "Goal", "finalizado",
                         LocalDate.now().minusWeeks(2), LocalDate.now().minusWeeks(1),
-                        14, Map.of("Calidad", BigDecimal.TEN), 5, true));
+                        14, Map.of("Calidad", BigDecimal.TEN), List.of(), 5, true));
         when(insightsService.getProjectInsights(proyectoId, userId)).thenReturn(List.of());
         when(analyticsService.identifyRisks(proyectoId)).thenReturn(List.of());
         when(geminiService.generate(anyString())).thenReturn(
@@ -167,7 +169,7 @@ class AIRetrospectiveServiceTest {
         SprintMetricsSummaryDto summary = new SprintMetricsSummaryDto(
                 sprintId, 1, "Goal", "finalizado",
                 LocalDate.now().minusWeeks(2), LocalDate.now().minusWeeks(1),
-                14, Map.of("Calidad", BigDecimal.TEN), 5, true
+                14, Map.of("Calidad", BigDecimal.TEN), List.of(), 5, true
         );
 
         when(analyticsService.getSprintMetricsSummary(sprintId)).thenReturn(summary);
@@ -221,7 +223,7 @@ class AIRetrospectiveServiceTest {
         SprintMetricsSummaryDto summary = new SprintMetricsSummaryDto(
                 sprintId, 5, "Goal", "finalizado",
                 LocalDate.now().minusWeeks(2), LocalDate.now().minusWeeks(1),
-                14, Map.of("Calidad", new BigDecimal("9.0")), 10, true
+                14, Map.of("Calidad", new BigDecimal("9.0")), List.of(), 10, true
         );
 
         SprintComparisonDto comparison = new SprintComparisonDto(
@@ -278,7 +280,7 @@ class AIRetrospectiveServiceTest {
         SprintMetricsSummaryDto summary = new SprintMetricsSummaryDto(
                 sprintId, 5, "Goal", "finalizado",
                 LocalDate.now().minusWeeks(2), LocalDate.now().minusWeeks(1),
-                14, Map.of("Productividad", BigDecimal.TEN), 10, true
+                14, Map.of("Productividad", BigDecimal.TEN), List.of(), 10, true
         );
 
         AIInsightDto insight = new AIInsightDto(
@@ -339,7 +341,7 @@ class AIRetrospectiveServiceTest {
         SprintMetricsSummaryDto summaryVacio = new SprintMetricsSummaryDto(
                 sprintId, 5, "Goal", "finalizado",
                 LocalDate.now().minusWeeks(2), LocalDate.now().minusWeeks(1),
-                14, Map.of(), 0, false
+                14, Map.of(), List.of(), 0, false
         );
 
         when(analyticsService.getSprintMetricsSummary(sprintId)).thenReturn(summaryVacio);
@@ -376,7 +378,7 @@ class AIRetrospectiveServiceTest {
         return new SprintMetricsSummaryDto(
                 sprintId, 5, "Goal", "finalizado",
                 LocalDate.now().minusWeeks(2), LocalDate.now().minusWeeks(1),
-                14, Map.of("Calidad", BigDecimal.TEN), 10, true
+                14, Map.of("Calidad", BigDecimal.TEN), List.of(), 10, true
         );
     }
 
@@ -514,7 +516,7 @@ class AIRetrospectiveServiceTest {
         SprintMetricsSummaryDto summary = new SprintMetricsSummaryDto(
                 sprintId, 5, "Goal", "finalizado",
                 LocalDate.now().minusWeeks(2), LocalDate.now().minusWeeks(1),
-                14, Map.of("Calidad", BigDecimal.TEN), 10, true
+                14, Map.of("Calidad", BigDecimal.TEN), List.of(), 10, true
         );
 
         when(analyticsService.getSprintMetricsSummary(sprintId)).thenReturn(summary);
@@ -560,7 +562,7 @@ class AIRetrospectiveServiceTest {
         SprintMetricsSummaryDto summary = new SprintMetricsSummaryDto(
                 sprintId, 5, "Goal", "finalizado",
                 LocalDate.now().minusWeeks(2), LocalDate.now().minusWeeks(1),
-                14, Map.of("Significado", new BigDecimal("3.00")), 10, true
+                14, Map.of("Significado", new BigDecimal("3.00")), List.of(), 10, true
         );
 
         // Refleja exactamente lo que AgileAnalyticsService.compareSprints(anterior, actual)
@@ -616,7 +618,7 @@ class AIRetrospectiveServiceTest {
         SprintMetricsSummaryDto summary = new SprintMetricsSummaryDto(
                 sprintId, 5, "Goal", "finalizado",
                 LocalDate.now().minusWeeks(2), LocalDate.now().minusWeeks(1),
-                14, Map.of("Significado", new BigDecimal("4.00")), 10, true
+                14, Map.of("Significado", new BigDecimal("4.00")), List.of(), 10, true
         );
 
         // anterior=3.00, actual=4.00: (4-3)/3*100 = +33.33%.
@@ -656,6 +658,214 @@ class AIRetrospectiveServiceTest {
         String prompt = promptCaptor.getValue();
         assertThat(prompt).contains("33.33");
         assertThat(prompt).contains("UP");
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // FASE 5D — Integración de detalleMetricas
+    // ═══════════════════════════════════════════════════════════════════════
+
+    @Test
+    @DisplayName("FASE 5D: retrospectiva incluye contexto de métrica con dirección MAYOR_MEJOR")
+    void fase5d_retrospectiveIncluyeContextoMetricasMayorMejor() {
+        when(sprintRepository.findById(sprintId)).thenReturn(Optional.of(sprint));
+        when(projectMemberRepository.findByProyectoIdAndUserId(proyectoId, userId)).thenReturn(Optional.of(scrumMaster()));
+        when(sprintRepository.findByProyectoIdOrderByNumeroDesc(proyectoId)).thenReturn(List.of(sprint));
+
+        MetricaDetalleDto detalle = new MetricaDetalleDto(
+                UUID.randomUUID(), // variableId
+                UUID.randomUUID(), // metricaId
+                "COV_CODE", // metricaCodigo
+                "Cobertura Sprint 5", // variableNombre
+                "Cobertura de código", // metricaNombre
+                "Calidad", // categoria
+                new BigDecimal("85.50"), // promedio
+                new BigDecimal("70.00"), // min
+                new BigDecimal("95.00"), // max
+                10, // totalRegistros
+                "MAYOR_MEJOR", // direccionDeseable
+                null, // valorObjetivo
+                "grupal", // tipoAlcance
+                "lineas_cubiertas / lineas_totales * 100", // formulaTexto
+                "diaria" // frecuenciaCaptura
+        );
+
+        SprintMetricsSummaryDto summary = new SprintMetricsSummaryDto(
+                sprintId, 5, "Goal", "finalizado",
+                LocalDate.now().minusWeeks(2), LocalDate.now().minusWeeks(1),
+                14, Map.of("Calidad", new BigDecimal("85.50")),
+                List.of(detalle), 10, true
+        );
+
+        when(analyticsService.getSprintMetricsSummary(sprintId)).thenReturn(summary);
+        when(insightsService.getProjectInsights(proyectoId, userId)).thenReturn(List.of());
+        when(analyticsService.identifyRisks(proyectoId)).thenReturn(List.of());
+
+        ArgumentCaptor<String> promptCaptor = ArgumentCaptor.forClass(String.class);
+        when(geminiService.generate(promptCaptor.capture())).thenReturn("""
+                WHAT WENT WELL:
+                - Cobertura en buen nivel
+                WHAT COULD IMPROVE:
+                - Mantener consistencia
+                RISKS:
+                RECOMMENDATIONS:
+                - Continuar prácticas
+                QUESTIONS FOR TEAM:
+                - ¿Cómo mejorar?
+                """);
+
+        service.generateRetrospective(sprintId, userId);
+
+        String prompt = promptCaptor.getValue();
+        assertThat(prompt).contains("CONTEXTO DE MÉTRICAS (SPRINT ACTUAL)");
+        assertThat(prompt).contains("Cobertura de código");
+        assertThat(prompt).contains("mayor es mejor");
+        assertThat(prompt).containsAnyOf("85.50", "85,50"); // Formato puede variar por locale
+        assertThat(prompt).matches("(?s).*rango:.*70.*95.*10 registros.*"); // Verifica presencia de min, max, registros
+        
+        // Verifica que NO se consultó MetricaRepository (N+1 eliminado)
+        verifyNoInteractions(metricaRepository);
+    }
+
+    @Test
+    @DisplayName("FASE 5D: fallback a método legacy cuando detalleMetricas está vacío")
+    void fase5d_fallbackAMetodoLegacyCuandoDetallesVacios() {
+        when(sprintRepository.findById(sprintId)).thenReturn(Optional.of(sprint));
+        when(projectMemberRepository.findByProyectoIdAndUserId(proyectoId, userId)).thenReturn(Optional.of(scrumMaster()));
+        when(sprintRepository.findByProyectoIdOrderByNumeroDesc(proyectoId)).thenReturn(List.of(sprint));
+
+        // Summary CON promedios pero SIN detalleMetricas
+        SprintMetricsSummaryDto summary = new SprintMetricsSummaryDto(
+                sprintId, 5, "Goal", "finalizado",
+                LocalDate.now().minusWeeks(2), LocalDate.now().minusWeeks(1),
+                14, Map.of("Calidad", BigDecimal.TEN),
+                List.of(), // ← vacío, activa fallback
+                10, true
+        );
+
+        com.prodox.entity.Metrica metrica = new com.prodox.entity.Metrica();
+        metrica.setNombre("Cobertura");
+        metrica.setDireccionDeseable("MAYOR_MEJOR");
+        when(metricaRepository.findByCategoriaNombre("Calidad")).thenReturn(List.of(metrica));
+
+        when(analyticsService.getSprintMetricsSummary(sprintId)).thenReturn(summary);
+        when(insightsService.getProjectInsights(proyectoId, userId)).thenReturn(List.of());
+        when(analyticsService.identifyRisks(proyectoId)).thenReturn(List.of());
+
+        when(geminiService.generate(anyString())).thenReturn("""
+                WHAT WENT WELL:
+                - Sprint completado
+                WHAT COULD IMPROVE:
+                - Mejorar tracking
+                RISKS:
+                RECOMMENDATIONS:
+                - Continuar
+                QUESTIONS FOR TEAM:
+                - ¿Cómo mejorar?
+                """);
+
+        service.generateRetrospective(sprintId, userId);
+
+        // Verifica que SÍ se consultó MetricaRepository (fallback legacy activo)
+        verify(metricaRepository).findByCategoriaNombre("Calidad");
+    }
+
+    @Test
+    @DisplayName("FASE 5D: distingue sprint actual vs anterior en el contexto")
+    void fase5d_distingueSprintActualYAnterior() {
+        when(sprintRepository.findById(sprintId)).thenReturn(Optional.of(sprint));
+        when(projectMemberRepository.findByProyectoIdAndUserId(proyectoId, userId)).thenReturn(Optional.of(scrumMaster()));
+        when(sprintRepository.findByProyectoIdOrderByNumeroDesc(proyectoId))
+                .thenReturn(List.of(sprint, previousSprint));
+
+        MetricaDetalleDto detalleActual = new MetricaDetalleDto(
+                UUID.randomUUID(), UUID.randomUUID(),
+                "VEL", "Velocidad Sprint 5", "Velocidad",
+                "Productividad",
+                new BigDecimal("30.00"), new BigDecimal("25.00"), new BigDecimal("35.00"),
+                10,
+                "MAYOR_MEJOR", null,
+                "grupal", "story_points_completados", "por_sprint"
+        );
+
+        MetricaDetalleDto detalleAnterior = new MetricaDetalleDto(
+                UUID.randomUUID(), UUID.randomUUID(),
+                "VEL", "Velocidad Sprint 4", "Velocidad",
+                "Productividad",
+                new BigDecimal("28.00"), new BigDecimal("22.00"), new BigDecimal("32.00"),
+                10,
+                "MAYOR_MEJOR", null,
+                "grupal", "story_points_completados", "por_sprint"
+        );
+
+        SprintMetricsSummaryDto summaryActual = new SprintMetricsSummaryDto(
+                sprintId, 5, "Goal", "finalizado",
+                LocalDate.now().minusWeeks(2), LocalDate.now().minusWeeks(1),
+                14, Map.of("Productividad", new BigDecimal("30.00")),
+                List.of(detalleActual), 10, true
+        );
+
+        SprintMetricsSummaryDto summaryAnterior = new SprintMetricsSummaryDto(
+                previousSprintId, 4, "Goal", "finalizado",
+                LocalDate.now().minusWeeks(4), LocalDate.now().minusWeeks(3),
+                14, Map.of("Productividad", new BigDecimal("28.00")),
+                List.of(detalleAnterior), 10, true
+        );
+
+        when(analyticsService.getSprintMetricsSummary(sprintId)).thenReturn(summaryActual);
+        when(analyticsService.getSprintMetricsSummary(previousSprintId)).thenReturn(summaryAnterior);
+        
+        SprintComparisonDto comparison = new SprintComparisonDto(
+                previousSprintId, 4, sprintId, 5,
+                Map.of("Productividad", new BigDecimal("28.00")),
+                Map.of("Productividad", new BigDecimal("30.00")),
+                Map.of("Productividad", new BigDecimal("2.00")),
+                Map.of("Productividad", new BigDecimal("7.14")),
+                Map.of("Productividad", "UP"),
+                true
+        );
+        
+        when(analyticsService.compareSprints(previousSprintId, sprintId)).thenReturn(comparison);
+        when(insightsService.getProjectInsights(proyectoId, userId)).thenReturn(List.of());
+        when(analyticsService.identifyRisks(proyectoId)).thenReturn(List.of());
+
+        ArgumentCaptor<String> promptCaptor = ArgumentCaptor.forClass(String.class);
+        when(geminiService.generate(promptCaptor.capture())).thenReturn("""
+                WHAT WENT WELL:
+                - Velocidad mejoró
+                WHAT COULD IMPROVE:
+                - Mantener ritmo
+                RISKS:
+                RECOMMENDATIONS:
+                - Continuar
+                QUESTIONS FOR TEAM:
+                - ¿Cómo mantener?
+                """);
+
+        service.generateRetrospective(sprintId, userId);
+
+        String prompt = promptCaptor.getValue();
+        
+        // Verifica que ambos sprints están identificados en el contexto
+        assertThat(prompt).contains("CONTEXTO DE MÉTRICAS (SPRINT ACTUAL)");
+        assertThat(prompt).contains("CONTEXTO DE MÉTRICAS (SPRINT ANTERIOR)");
+        
+        // Verifica que el contexto actual contiene los valores del sprint actual
+        int posActual = prompt.indexOf("CONTEXTO DE MÉTRICAS (SPRINT ACTUAL)");
+        int posAnterior = prompt.indexOf("CONTEXTO DE MÉTRICAS (SPRINT ANTERIOR)");
+        
+        assertThat(posActual).isGreaterThan(0);
+        assertThat(posAnterior).isGreaterThan(posActual); // Anterior aparece después en el prompt
+        
+        String seccionActual = prompt.substring(posActual, posAnterior);
+        assertThat(seccionActual).matches("(?s).*30.*"); // Promedio sprint actual (formato puede variar)
+        assertThat(seccionActual).matches("(?s).*rango:.*25.*35.*"); // Rango sprint actual
+        
+        String seccionAnterior = prompt.substring(posAnterior);
+        assertThat(seccionAnterior).matches("(?s).*28.*"); // Promedio sprint anterior
+        assertThat(seccionAnterior).matches("(?s).*rango:.*22.*32.*"); // Rango sprint anterior
+
+        // Verifica que NO se consultó MetricaRepository (N+1 eliminado)
+        verifyNoInteractions(metricaRepository);
     }
 
     private ProjectMember scrumMaster() {

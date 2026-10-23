@@ -10,6 +10,7 @@ import com.prodox.entity.ProjectMember;
 import com.prodox.entity.Proyecto;
 import com.prodox.entity.Sprint;
 import com.prodox.repository.AIInsightRepository;
+import com.prodox.repository.MetricaRepository;
 import com.prodox.repository.ProjectMemberRepository;
 import com.prodox.repository.ProyectoRepository;
 import com.prodox.repository.SprintRepository;
@@ -40,6 +41,7 @@ class AIInsightsServiceTest {
     @Mock ProyectoRepository proyectoRepo;
     @Mock SprintRepository sprintRepo;
     @Mock ProjectMemberRepository projectMemberRepo;
+    @Mock MetricaRepository metricaRepo;
     @Mock ObjectMapper objectMapper;
 
     @InjectMocks AIInsightsService service;
@@ -615,6 +617,20 @@ class AIInsightsServiceTest {
         when(proyectoRepo.findById(proyectoId)).thenReturn(Optional.of(proyecto));
         when(sprintRepo.findByProyectoIdOrderByNumeroDesc(proyectoId)).thenReturn(List.of(sprint, sprintAnterior));
         when(analyticsService.getSprintTrends(eq(proyectoId), isNull(), eq(3))).thenReturn(List.of(trend));
+        
+        // V50 Fase 5B: Mock para getSprintMetricsSummary (usado en buildMetricasDetalleContext)
+        // Retorna summary vacío para evitar NPE, los tests de parser no necesitan métricas detalladas
+        when(analyticsService.getSprintMetricsSummary(any(UUID.class))).thenReturn(
+                new SprintMetricsSummaryDto(
+                        sprintId, sprint.getNumero(), "Goal", "finalizado",
+                        sprint.getFechaInicio(), sprint.getFechaFin(), 14,
+                        Map.of(), List.of(), 0, false
+                )
+        );
+        
+        // V50 Fase 5B: Mock para metricaRepo (usado en obtenerDireccionDeseable)
+        when(metricaRepo.findByCategoriaNombre(anyString())).thenReturn(List.of());
+        
         when(insightRepo.findByProyectoIdAndTipoAndCategoriaAfectadaAndDismissedFalse(any(), any(), any()))
                 .thenReturn(List.of());
         when(insightRepo.save(any(AIInsight.class))).thenAnswer(invocation -> {
@@ -800,5 +816,68 @@ class AIInsightsServiceTest {
         s.setFechaInicio(LocalDate.now().minusWeeks(numero * 2L));
         s.setFechaFin(LocalDate.now().minusWeeks((numero * 2L) - 1));
         return s;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // V50 FASE 5B: Tests de integración con detalleMetricas
+    // ═══════════════════════════════════════════════════════════════════════
+
+    @Test
+    @DisplayName("FASE 5B: prompt incluye contexto de métricas con dirección MAYOR_MEJOR")
+    void fase5b_promptIncluyeMetricasMayorMejor() throws Exception {
+        mockSerializacionRealDeEvidencia();
+        
+        // Mock de métricas con dirección MAYOR_MEJOR (ej: Cobertura de código)
+        List<MetricaDetalleDto> detalles = List.of(
+                new MetricaDetalleDto(
+                        UUID.randomUUID(), UUID.randomUUID(), "COV_CODE",
+                        "Cobertura de código", "Cobertura de código", "Calidad",
+                        new BigDecimal("85.5"), new BigDecimal("80"), new BigDecimal("90"),
+                        10, "MAYOR_MEJOR", null, "grupal", "% cobertura", "diaria"
+                )
+        );
+        
+        SprintMetricsSummaryDto summary = new SprintMetricsSummaryDto(
+                sprintId, 3, "Sprint Goal", "finalizado",
+                LocalDate.now().minusWeeks(2), LocalDate.now().minusWeeks(1), 14,
+                Map.of("Calidad", new BigDecimal("85.5")),
+                detalles, 10, true
+        );
+        
+        TrendAnalysisDto trend = new TrendAnalysisDto(
+                proyectoId, "Calidad", 3,
+                List.of(new TrendAnalysisDto.SprintDataPoint(3, new BigDecimal("85.5"), "2026-01-15")),
+                new BigDecimal("85.5"), new BigDecimal("0"),
+                "UP", new BigDecimal("14.0"), true
+        );
+        
+        Sprint sprint3 = crearSprint(3, "finalizado");
+        Sprint sprint2 = crearSprint(2, "finalizado");
+        
+        when(projectMemberRepo.findByProyectoIdAndUserId(proyectoId, userId)).thenReturn(Optional.of(scrumMaster()));
+        when(proyectoRepo.findById(proyectoId)).thenReturn(Optional.of(proyecto));
+        when(sprintRepo.findByProyectoIdOrderByNumeroDesc(proyectoId))
+                .thenReturn(List.of(sprint3, sprint2));
+        when(analyticsService.getSprintTrends(eq(proyectoId), isNull(), eq(3)))
+                .thenReturn(List.of(trend));
+        when(analyticsService.getSprintMetricsSummary(sprint3.getId())).thenReturn(summary);
+        when(metricaRepo.findByCategoriaNombre("Calidad")).thenReturn(List.of());
+        when(insightRepo.findByProyectoIdAndTipoAndCategoriaAfectadaAndDismissedFalse(any(), any(), any()))
+                .thenReturn(List.of());
+        when(geminiService.generate(anyString())).thenReturn(
+                "TÍTULO: Mejora\nDESCRIPCIÓN: Sube\nRECOMENDACIÓN: Continuar"
+        );
+        when(insightRepo.save(any(AIInsight.class))).thenAnswer(inv -> {
+            AIInsight i = inv.getArgument(0);
+            if (i.getId() == null) i.setId(UUID.randomUUID());
+            return i;
+        });
+        
+        service.generateInsights(proyectoId, userId);
+        
+        // Verificar que el prompt incluyó métricas individuales con dirección
+        verify(geminiService).generate(argThat((String prompt) -> 
+                prompt.contains("mayor es mejor") && prompt.contains("Cobertura de código")
+        ));
     }
 }

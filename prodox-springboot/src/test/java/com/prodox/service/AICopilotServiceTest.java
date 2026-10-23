@@ -11,6 +11,7 @@ import com.prodox.dto.analytics.RiskDto;
 import com.prodox.dto.analytics.SprintComparisonDto;
 import com.prodox.dto.analytics.SprintMetricsSummaryDto;
 import com.prodox.dto.analytics.TrendAnalysisDto;
+import com.prodox.dto.analytics.MetricaDetalleDto;
 import com.prodox.entity.Proyecto;
 import com.prodox.entity.Sprint;
 import com.prodox.entity.AIChatMessage;
@@ -595,7 +596,7 @@ class AICopilotServiceTest {
 
         SprintMetricsSummaryDto resumen = new SprintMetricsSummaryDto(
                 sprintId, 2, "Meta del sprint", "finalizado", null, null, null,
-                Map.of("Calidad", new BigDecimal("8.5")), 10, true);
+                Map.of("Calidad", new BigDecimal("8.5")), List.of(), 10, true);
         when(agileAnalyticsService.getSprintMetricsSummary(sprintId)).thenReturn(resumen);
 
         ChatRequest request = new ChatRequest("¿Cuál fue el resultado del último sprint?", proyectoId, sprintId);
@@ -635,7 +636,7 @@ class AICopilotServiceTest {
         when(sprintRepo.findById(sprintId)).thenReturn(Optional.of(sprint));
 
         SprintMetricsSummaryDto resumenVacio = new SprintMetricsSummaryDto(
-                sprintId, 1, "Meta", "en_ejecucion", null, null, null, Map.of(), 0, false);
+                sprintId, 1, "Meta", "en_ejecucion", null, null, null, Map.of(), List.of(), 0, false);
         when(agileAnalyticsService.getSprintMetricsSummary(sprintId)).thenReturn(resumenVacio);
 
         when(chatMessageRepo.findByUserIdAndProyectoIdOrderByCreatedAtAsc(userId, proyectoId))
@@ -1005,7 +1006,7 @@ class AICopilotServiceTest {
 
         SprintMetricsSummaryDto metricas = new SprintMetricsSummaryDto(
                 sprintActualId, 1, "Meta", "en_ejecucion", null, null, null,
-                Map.of("Calidad", new BigDecimal("8")), 5, true);
+                Map.of("Calidad", new BigDecimal("8")), List.of(), 5, true);
         when(agileAnalyticsService.getSprintMetricsSummary(sprintActualId)).thenReturn(metricas);
         when(sprintRepo.findByProyectoIdOrderByNumeroDesc(proyectoId)).thenReturn(List.of(sprintActual));
         when(agileAnalyticsService.getSprintTrends(proyectoId, null, 3)).thenReturn(List.of());
@@ -1039,7 +1040,7 @@ class AICopilotServiceTest {
 
         SprintMetricsSummaryDto metricas = new SprintMetricsSummaryDto(
                 sprintActualId, 2, "Meta", "en_ejecucion", null, null, null,
-                Map.of("Calidad", new BigDecimal("7")), 5, true);
+                Map.of("Calidad", new BigDecimal("7")), List.of(), 5, true);
         when(agileAnalyticsService.getSprintMetricsSummary(sprintActualId)).thenReturn(metricas);
 
         SprintComparisonDto comparacion = new SprintComparisonDto(
@@ -1073,8 +1074,9 @@ class AICopilotServiceTest {
         assertThat(prompt).contains("5"); // valor del sprint anterior
         assertThat(prompt).contains("7"); // valor del sprint actual
         assertThat(prompt).contains("Variabilidad alta en Calidad");
-        // La regla de no asumir "mejor/peor" está en la instrucción enviada a Gemini.
-        assertThat(prompt).contains("NUNCA concluyas que el equipo 'mejoró' o 'empeoró'");
+        // V50 Fase 5E: La regla cambió - ahora define dirección deseable
+        assertThat(prompt).contains("DIRECCIÓN DESEABLE");
+        assertThat(prompt).contains("NUNCA mezcles ni interpretes como una sola tendencia favorable");
 
         verify(geminiService, times(1)).generate(anyString());
         verifyNoInteractions(aiAgentService);
@@ -1088,7 +1090,7 @@ class AICopilotServiceTest {
         when(sprintRepo.findById(sprintActualId)).thenReturn(Optional.of(sprintActual));
 
         SprintMetricsSummaryDto sinDatos = new SprintMetricsSummaryDto(
-                sprintActualId, 1, "Meta", "en_ejecucion", null, null, null, Map.of(), 0, false);
+                sprintActualId, 1, "Meta", "en_ejecucion", null, null, null, Map.of(), List.of(), 0, false);
         when(agileAnalyticsService.getSprintMetricsSummary(sprintActualId)).thenReturn(sinDatos);
 
         when(chatMessageRepo.findByUserIdAndProyectoIdOrderByCreatedAtAsc(userId, proyectoId))
@@ -1124,7 +1126,7 @@ class AICopilotServiceTest {
 
         SprintMetricsSummaryDto metricasB = new SprintMetricsSummaryDto(
                 sprintActualB, 1, "Meta", "en_ejecucion", null, null, null,
-                Map.of("Calidad", new BigDecimal("9")), 5, true);
+                Map.of("Calidad", new BigDecimal("9")), List.of(), 5, true);
         when(agileAnalyticsService.getSprintMetricsSummary(sprintActualB)).thenReturn(metricasB);
         when(agileAnalyticsService.getSprintTrends(proyectoB, null, 3)).thenReturn(List.of());
         when(agileAnalyticsService.identifyRisks(proyectoB)).thenReturn(List.of());
@@ -1148,7 +1150,7 @@ class AICopilotServiceTest {
 
         SprintMetricsSummaryDto metricas = new SprintMetricsSummaryDto(
                 sprintActualId, 1, "Meta", "en_ejecucion", null, null, null,
-                Map.of("Calidad", new BigDecimal("8")), 5, true);
+                Map.of("Calidad", new BigDecimal("8")), List.of(), 5, true);
         when(agileAnalyticsService.getSprintMetricsSummary(sprintActualId)).thenReturn(metricas);
         when(agileAnalyticsService.getSprintTrends(proyectoId, null, 3)).thenReturn(List.of());
         when(agileAnalyticsService.identifyRisks(proyectoId)).thenReturn(List.of());
@@ -1260,5 +1262,232 @@ class AICopilotServiceTest {
         assertThat(response.message()).contains("Bien en B");
         verify(aiRetrospectiveService).generateRetrospective(sprintB, userId);
         verify(aiRetrospectiveService, times(1)).generateRetrospective(any(), any());
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════════
+    // FASE 5E — Integración de detalleMetricas y direccionDeseable en recomendaciones
+    // ══════════════════════════════════════════════════════════════════════════════
+
+    @Test
+    void fase5e_recomendacionesIncluyeMetricaMayorMejor() {
+        UUID sprintActualId = UUID.randomUUID();
+        Sprint sprintActual = sprintDe(sprintActualId, proyectoId, 1, "en_ejecucion");
+        when(sprintRepo.findById(sprintActualId)).thenReturn(Optional.of(sprintActual));
+
+        MetricaDetalleDto detalle = new MetricaDetalleDto(
+                UUID.randomUUID(), UUID.randomUUID(), "VEL", "Velocidad Sprint 1", "Velocidad",
+                "Productividad", new BigDecimal("30.00"), new BigDecimal("25.00"), new BigDecimal("35.00"),
+                10, "MAYOR_MEJOR", null, "grupal", "story_points_completados", "por_sprint");
+
+        SprintMetricsSummaryDto metricas = new SprintMetricsSummaryDto(
+                sprintActualId, 1, "Meta", "en_ejecucion", null, null, null,
+                Map.of("Productividad", new BigDecimal("30.00")),
+                List.of(detalle), 10, true);
+        when(agileAnalyticsService.getSprintMetricsSummary(sprintActualId)).thenReturn(metricas);
+        when(sprintRepo.findByProyectoIdOrderByNumeroDesc(proyectoId)).thenReturn(List.of(sprintActual));
+        when(agileAnalyticsService.getSprintTrends(proyectoId, null, 3)).thenReturn(List.of());
+        when(agileAnalyticsService.identifyRisks(proyectoId)).thenReturn(List.of());
+
+        ArgumentCaptor<String> promptCaptor = ArgumentCaptor.forClass(String.class);
+        when(geminiService.generate(promptCaptor.capture())).thenReturn("Resumen\n- Velocidad estable.");
+
+        ChatRequest request = new ChatRequest("¿Qué deberíamos mejorar?", proyectoId, sprintActualId);
+        service.chat(request, userId);
+
+        String prompt = promptCaptor.getValue();
+        assertThat(prompt).contains("Velocidad");
+        assertThat(prompt).contains("30.00");
+        assertThat(prompt).contains("mayor es mejor");
+        assertThat(prompt).matches("(?s).*rango:.*25\\.00.*35\\.00.*");
+        assertThat(prompt).contains("10 registros");
+        
+        // Verifica que la instrucción actualizada está presente
+        assertThat(prompt).contains("DIRECCIÓN DESEABLE");
+        assertThat(prompt).doesNotContain("PRODOX no define si un aumento");
+    }
+
+    @Test
+    void fase5e_recomendacionesIncluyeMetricaMenorMejor() {
+        UUID sprintActualId = UUID.randomUUID();
+        Sprint sprintActual = sprintDe(sprintActualId, proyectoId, 1, "en_ejecucion");
+        when(sprintRepo.findById(sprintActualId)).thenReturn(Optional.of(sprintActual));
+
+        MetricaDetalleDto detalle = new MetricaDetalleDto(
+                UUID.randomUUID(), UUID.randomUUID(), "DEF", "Defectos Sprint 1", "Defectos por Sprint",
+                "Calidad", new BigDecimal("2.50"), new BigDecimal("0.00"), new BigDecimal("5.00"),
+                8, "MENOR_MEJOR", null, "grupal", "defectos_reportados", "diaria");
+
+        SprintMetricsSummaryDto metricas = new SprintMetricsSummaryDto(
+                sprintActualId, 1, "Meta", "en_ejecucion", null, null, null,
+                Map.of("Calidad", new BigDecimal("2.50")),
+                List.of(detalle), 8, true);
+        when(agileAnalyticsService.getSprintMetricsSummary(sprintActualId)).thenReturn(metricas);
+        when(sprintRepo.findByProyectoIdOrderByNumeroDesc(proyectoId)).thenReturn(List.of(sprintActual));
+        when(agileAnalyticsService.getSprintTrends(proyectoId, null, 3)).thenReturn(List.of());
+        when(agileAnalyticsService.identifyRisks(proyectoId)).thenReturn(List.of());
+
+        ArgumentCaptor<String> promptCaptor = ArgumentCaptor.forClass(String.class);
+        when(geminiService.generate(promptCaptor.capture())).thenReturn("Resumen\n- Defectos bajos.");
+
+        ChatRequest request = new ChatRequest("¿Qué deberíamos mejorar?", proyectoId, sprintActualId);
+        service.chat(request, userId);
+
+        String prompt = promptCaptor.getValue();
+        assertThat(prompt).contains("Defectos por Sprint");
+        assertThat(prompt).contains("2.50");
+        assertThat(prompt).contains("menor es mejor");
+    }
+
+    @Test
+    void fase5e_recomendacionesIncluyeMetricaObjetivo() {
+        UUID sprintActualId = UUID.randomUUID();
+        Sprint sprintActual = sprintDe(sprintActualId, proyectoId, 1, "en_ejecucion");
+        when(sprintRepo.findById(sprintActualId)).thenReturn(Optional.of(sprintActual));
+
+        MetricaDetalleDto detalle = new MetricaDetalleDto(
+                UUID.randomUUID(), UUID.randomUUID(), "COV", "Cobertura Sprint 1", "Cobertura de código",
+                "Calidad", new BigDecimal("85.00"), new BigDecimal("70.00"), new BigDecimal("95.00"),
+                10, "OBJETIVO", new BigDecimal("90.00"), "grupal", "lineas_cubiertas/totales*100", "diaria");
+
+        SprintMetricsSummaryDto metricas = new SprintMetricsSummaryDto(
+                sprintActualId, 1, "Meta", "en_ejecucion", null, null, null,
+                Map.of("Calidad", new BigDecimal("85.00")),
+                List.of(detalle), 10, true);
+        when(agileAnalyticsService.getSprintMetricsSummary(sprintActualId)).thenReturn(metricas);
+        when(sprintRepo.findByProyectoIdOrderByNumeroDesc(proyectoId)).thenReturn(List.of(sprintActual));
+        when(agileAnalyticsService.getSprintTrends(proyectoId, null, 3)).thenReturn(List.of());
+        when(agileAnalyticsService.identifyRisks(proyectoId)).thenReturn(List.of());
+
+        ArgumentCaptor<String> promptCaptor = ArgumentCaptor.forClass(String.class);
+        when(geminiService.generate(promptCaptor.capture())).thenReturn("Resumen\n- Cerca del objetivo.");
+
+        ChatRequest request = new ChatRequest("¿Qué deberíamos mejorar?", proyectoId, sprintActualId);
+        service.chat(request, userId);
+
+        String prompt = promptCaptor.getValue();
+        assertThat(prompt).contains("Cobertura de código");
+        assertThat(prompt).contains("85.00");
+        assertThat(prompt).contains("objetivo: 90.00");
+        assertThat(prompt).contains("cumplimiento: 94.4%"); // 85/90*100 = 94.44...
+    }
+
+    @Test
+    void fase5e_recomendacionesIncluyeMetricaDireccionDesconocida() {
+        UUID sprintActualId = UUID.randomUUID();
+        Sprint sprintActual = sprintDe(sprintActualId, proyectoId, 1, "en_ejecucion");
+        when(sprintRepo.findById(sprintActualId)).thenReturn(Optional.of(sprintActual));
+
+        MetricaDetalleDto detalle = new MetricaDetalleDto(
+                UUID.randomUUID(), UUID.randomUUID(), "REU", "Reuniones Sprint 1", "Reuniones por semana",
+                "Productividad", new BigDecimal("12.00"), new BigDecimal("8.00"), new BigDecimal("15.00"),
+                5, null, null, "grupal", "count(reuniones)/semanas", "semanal");
+
+        SprintMetricsSummaryDto metricas = new SprintMetricsSummaryDto(
+                sprintActualId, 1, "Meta", "en_ejecucion", null, null, null,
+                Map.of("Productividad", new BigDecimal("12.00")),
+                List.of(detalle), 5, true);
+        when(agileAnalyticsService.getSprintMetricsSummary(sprintActualId)).thenReturn(metricas);
+        when(sprintRepo.findByProyectoIdOrderByNumeroDesc(proyectoId)).thenReturn(List.of(sprintActual));
+        when(agileAnalyticsService.getSprintTrends(proyectoId, null, 3)).thenReturn(List.of());
+        when(agileAnalyticsService.identifyRisks(proyectoId)).thenReturn(List.of());
+
+        ArgumentCaptor<String> promptCaptor = ArgumentCaptor.forClass(String.class);
+        when(geminiService.generate(promptCaptor.capture())).thenReturn("Resumen\n- Reuniones frecuentes.");
+
+        ChatRequest request = new ChatRequest("¿Qué deberíamos mejorar?", proyectoId, sprintActualId);
+        service.chat(request, userId);
+
+        String prompt = promptCaptor.getValue();
+        assertThat(prompt).contains("Reuniones por semana");
+        assertThat(prompt).contains("12.00");
+        assertThat(prompt).contains("dirección no configurada");
+        
+        // Verifica que la instrucción indica tratamiento neutral
+        assertThat(prompt).contains("[dirección no configurada]: la dirección NO está definida");
+    }
+
+    @Test
+    void fase5e_recomendacionesDistingueMetricasMixtasEnCategoria() {
+        UUID sprintActualId = UUID.randomUUID();
+        Sprint sprintActual = sprintDe(sprintActualId, proyectoId, 1, "en_ejecucion");
+        when(sprintRepo.findById(sprintActualId)).thenReturn(Optional.of(sprintActual));
+
+        MetricaDetalleDto detalle1 = new MetricaDetalleDto(
+                UUID.randomUUID(), UUID.randomUUID(), "VEL", "Velocidad Sprint 1", "Velocidad",
+                "Productividad", new BigDecimal("30.00"), new BigDecimal("25.00"), new BigDecimal("35.00"),
+                10, "MAYOR_MEJOR", null, "grupal", "story_points", "por_sprint");
+
+        MetricaDetalleDto detalle2 = new MetricaDetalleDto(
+                UUID.randomUUID(), UUID.randomUUID(), "TPT", "Tiempo Sprint 1", "Tiempo promedio por tarea",
+                "Productividad", new BigDecimal("4.50"), new BigDecimal("2.00"), new BigDecimal("8.00"),
+                10, "MENOR_MEJOR", null, "grupal", "horas/tarea", "diaria");
+
+        SprintMetricsSummaryDto metricas = new SprintMetricsSummaryDto(
+                sprintActualId, 1, "Meta", "en_ejecucion", null, null, null,
+                Map.of("Productividad", new BigDecimal("17.25")), // Promedio sin sentido
+                List.of(detalle1, detalle2), 20, true);
+        when(agileAnalyticsService.getSprintMetricsSummary(sprintActualId)).thenReturn(metricas);
+        when(sprintRepo.findByProyectoIdOrderByNumeroDesc(proyectoId)).thenReturn(List.of(sprintActual));
+        when(agileAnalyticsService.getSprintTrends(proyectoId, null, 3)).thenReturn(List.of());
+        when(agileAnalyticsService.identifyRisks(proyectoId)).thenReturn(List.of());
+
+        ArgumentCaptor<String> promptCaptor = ArgumentCaptor.forClass(String.class);
+        when(geminiService.generate(promptCaptor.capture())).thenReturn("Resumen\n- Productividad mixta.");
+
+        ChatRequest request = new ChatRequest("¿Qué deberíamos mejorar?", proyectoId, sprintActualId);
+        service.chat(request, userId);
+
+        String prompt = promptCaptor.getValue();
+        // Verifica que ambas métricas están listadas individualmente
+        assertThat(prompt).contains("Velocidad");
+        assertThat(prompt).contains("30.00");
+        assertThat(prompt).contains("mayor es mejor");
+        assertThat(prompt).contains("Tiempo promedio por tarea");
+        assertThat(prompt).contains("4.50");
+        assertThat(prompt).contains("menor es mejor");
+        
+        // Verifica que la instrucción advierte sobre mezclar direcciones
+        assertThat(prompt).contains("NUNCA mezcles ni interpretes como una sola tendencia favorable");
+    }
+
+    @Test
+    void fase5e_recomendacionesFallbackCuandoDetallesVacios() {
+        UUID sprintActualId = UUID.randomUUID();
+        Sprint sprintActual = sprintDe(sprintActualId, proyectoId, 1, "en_ejecucion");
+        when(sprintRepo.findById(sprintActualId)).thenReturn(Optional.of(sprintActual));
+
+        // Summary CON promedios pero SIN detalleMetricas
+        SprintMetricsSummaryDto metricas = new SprintMetricsSummaryDto(
+                sprintActualId, 1, "Meta", "en_ejecucion", null, null, null,
+                Map.of("Calidad", new BigDecimal("8.00")),
+                List.of(), // ← vacío, activa fallback
+                5, true);
+        when(agileAnalyticsService.getSprintMetricsSummary(sprintActualId)).thenReturn(metricas);
+        when(sprintRepo.findByProyectoIdOrderByNumeroDesc(proyectoId)).thenReturn(List.of(sprintActual));
+        when(agileAnalyticsService.getSprintTrends(proyectoId, null, 3)).thenReturn(List.of());
+        when(agileAnalyticsService.identifyRisks(proyectoId)).thenReturn(List.of());
+
+        ArgumentCaptor<String> promptCaptor = ArgumentCaptor.forClass(String.class);
+        when(geminiService.generate(promptCaptor.capture())).thenReturn("Resumen\n- Datos básicos.");
+
+        ChatRequest request = new ChatRequest("¿Qué deberíamos mejorar?", proyectoId, sprintActualId);
+        service.chat(request, userId);
+
+        String prompt = promptCaptor.getValue();
+        // Con fallback, el formato es el antiguo (solo promedios por categoría)
+        // Aceptar tanto "Calidad: 8" como "Calidad: 8.00" (formato BigDecimal)
+        assertThat(prompt).containsPattern("Calidad:\\s*8(\\.0+)?");
+        
+        // Extraer solo la sección de DATOS (después de "DATOS (fuente de verdad" y antes de "PREGUNTA DEL USUARIO")
+        int inicioD = prompt.indexOf("DATOS (fuente de verdad");
+        int finDatos = prompt.indexOf("PREGUNTA DEL USUARIO");
+        String seccionDatos = (inicioD >= 0 && finDatos > inicioD) 
+            ? prompt.substring(inicioD, finDatos) 
+            : "";
+        
+        // En la sección de DATOS NO deben aparecer direcciones individuales cuando se usa fallback
+        assertThat(seccionDatos).doesNotContain("[mayor es mejor]");
+        assertThat(seccionDatos).doesNotContain("[menor es mejor]");
+        assertThat(seccionDatos).doesNotContain("[objetivo:");
     }
 }

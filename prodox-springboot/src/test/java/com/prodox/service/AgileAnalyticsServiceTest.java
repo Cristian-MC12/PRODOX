@@ -9,6 +9,7 @@ import com.prodox.entity.Proyecto;
 import com.prodox.entity.Sprint;
 import com.prodox.repository.ProyectoRepository;
 import com.prodox.repository.SprintRepository;
+import com.prodox.repository.VariableRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -60,6 +61,7 @@ class AgileAnalyticsServiceTest {
 
     @Mock private SprintRepository sprintRepo;
     @Mock private ProyectoRepository proyectoRepo;
+    @Mock private VariableRepository variableRepo;
     @Mock private EvaluacionService evaluacionService;
 
     private AgileAnalyticsService service;
@@ -67,7 +69,7 @@ class AgileAnalyticsServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new AgileAnalyticsService(sprintRepo, proyectoRepo, evaluacionService);
+        service = new AgileAnalyticsService(sprintRepo, proyectoRepo, variableRepo, evaluacionService);
         proyectoId = UUID.randomUUID();
     }
 
