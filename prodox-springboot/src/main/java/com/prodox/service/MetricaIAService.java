@@ -237,6 +237,7 @@ public class MetricaIAService {
             4. tipoOperacionSugerido, si lo propones, debe ser EXACTAMENTE uno de: SUMA,
                PROMEDIO, DIRECTO, FORMULA (o "No determinado" si no aplica claramente).
             5. nombre debe ser corto (máximo 8 palabras), sin inventar siglas técnicas.
+            6. escalaTipo debe ser EXACTAMENTE "NUMERICA_ENTERA" o "NUMERICA_DECIMAL".
 
             Responde ÚNICAMENTE con un objeto JSON, sin texto adicional, sin markdown, sin
             explicaciones fuera del JSON:
@@ -249,7 +250,13 @@ public class MetricaIAService {
               "tipoOperacionSugerido": "SUMA | PROMEDIO | DIRECTO | FORMULA | No determinado",
               "formulaSugerida": "Fórmula o procedimiento sugerido, si aplica, o No determinado",
               "unidadResultado": "Unidad del resultado (ej: puntos, %, horas) o No determinado",
-              "fuenteSugerida": "Referencia académica/práctica verificable, o No determinado"
+              "fuenteSugerida": "Referencia académica/práctica verificable, o No determinado",
+              "escalaTipo": "NUMERICA_ENTERA | NUMERICA_DECIMAL",
+              "escalaMin": 0,
+              "escalaMax": 100,
+              "escalaPaso": 1,
+              "escalaSinLimite": false,
+              "escalaDescripcion": "Significado de los valores, ej: 0=Bajo; 100=Alto"
             }
             """;
     }

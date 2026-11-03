@@ -22,5 +22,21 @@ public record MetricaIAPropuestaDto(
     String tipoOperacionSugerido,
     String formulaSugerida,
     String unidadResultado,
-    String fuenteSugerida
-) {}
+    String fuenteSugerida,
+    String escalaTipo,
+    Double escalaMin,
+    Double escalaMax,
+    Double escalaPaso,
+    Boolean escalaSinLimite,
+    String escalaDescripcion
+) {
+    /** Constructor de compatibilidad para código existente con 9 parámetros. */
+    public MetricaIAPropuestaDto(
+            String nombre, String descripcion, String objetivo, String queMide,
+            String variablesSugeridas, String tipoOperacionSugerido, String formulaSugerida,
+            String unidadResultado, String fuenteSugerida) {
+        this(nombre, descripcion, objetivo, queMide, variablesSugeridas,
+             tipoOperacionSugerido, formulaSugerida, unidadResultado, fuenteSugerida,
+             null, null, null, null, null, null);
+    }
+}

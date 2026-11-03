@@ -106,7 +106,7 @@ import { ToastService } from '../../shared/toast/toast.service';
                     }
                   } @else {
                     <span class="text-success small">
-                      <i class="bi bi-check-circle-fill me-1"></i>parametrización lista para uso
+                      <i class="bi bi-check-circle-fill me-1"></i>Parametrización lista para uso
                     </span>
                   }
                 </div>
@@ -345,41 +345,19 @@ import { ToastService } from '../../shared/toast/toast.service';
               <span class="small text-muted">
                 <i class="bi bi-robot me-1"></i>Esta es una propuesta de IA, no una configuración oficial
               </span>
-              <div class="d-flex flex-wrap gap-2">
-                <button class="btn btn-outline-primary btn-sm text-nowrap"
-                        (click)="usarPropuesta(propuestas[0])">
-                  <i class="bi bi-clipboard-check me-1"></i>Copiar al formulario
-                </button>
-                @if (estadoActual !== 'propuesta') {
-                  <button class="btn btn-success btn-sm text-nowrap"
-                          [disabled]="guardando"
-                          (click)="guardarPropuesta()">
-                    @if (guardando) {
-                      <span class="spinner-border spinner-border-sm me-1"></span>
-                      Guardando...
-                    } @else {
-                      <i class="bi bi-floppy me-1"></i>
-                      {{ estadoActual === 'aprobada' ? 'Guardar como nueva propuesta' : 'Guardar propuesta' }}
-                    }
-                  </button>
-                }
-              </div>
+              <button class="btn btn-primary btn-sm text-nowrap"
+                      (click)="usarPropuesta(propuestas[0])">
+                <i class="bi bi-clipboard-check me-1"></i>Copiar al formulario
+              </button>
             </div>
-            @if (errorGuardar) {
-              <div class="card-footer pt-0 pb-2">
-                <div class="alert alert-danger small mb-0 py-1">
-                  <i class="bi bi-exclamation-triangle me-1"></i>{{ errorGuardar }}
-                </div>
-              </div>
-            }
           </div>
         }
 
         <!-- Formulario de parametrización -->
-        <div class="card mb-4">
+        <div id="formulario-parametrizacion" class="card mb-4">
           <div class="card-header fw-semibold small">
             <i class="bi bi-pencil me-1"></i>
-            {{ propuestas.length > 0 ? 'Revisar y ajustar parametrización' : 'parametrización manual' }}
+            {{ propuestas.length > 0 ? 'Revisar y ajustar parametrización' : 'Parametrización manual' }}
           </div>
           <div class="card-body">
             <div class="row g-3">
@@ -601,13 +579,21 @@ import { ToastService } from '../../shared/toast/toast.service';
                       (click)="guardar()">
                 @if (guardando) {
                   <span class="spinner-border spinner-border-sm me-1"></span>
+                  Guardando...
                 } @else {
                   <i class="bi bi-floppy me-1"></i>
+                  {{ propuestas.length > 0 ? (estadoActual === 'aprobada' ? 'Guardar como nueva propuesta' : 'Guardar propuesta') : 'Guardar parametrización' }}
                 }
-                Guardar parametrización
               </button>
             </div>
           </div>
+          @if (errorGuardar) {
+            <div class="card-footer pt-0 pb-2">
+              <div class="alert alert-danger small mb-0 py-1">
+                <i class="bi bi-exclamation-triangle me-1"></i>{{ errorGuardar }}
+              </div>
+            </div>
+          }
         </div>
 
       }
@@ -924,9 +910,11 @@ export class ParametrizacionComponent implements OnInit {
       responsableCaptura: this.form.responsableCaptura || 'SCRUM_MASTER'
     };
     this.errorEscala = '';
+    this.toast.info('Propuesta copiada al formulario. Revisá y ajustá los campos antes de guardar.');
     // Scroll al formulario para que el usuario vea los cambios
     setTimeout(() => {
-      const formulario = document.querySelector('.card:last-of-type');
+      const formulario = document.getElementById('formulario-parametrizacion')
+        ?? document.querySelector('.card:last-of-type');
       formulario?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, 100);
   }
@@ -1032,15 +1020,15 @@ export class ParametrizacionComponent implements OnInit {
 
   guardar(): void {
     if (!this.metrica) return;
-    // Corrección de duplicados en Verificación: reentrada bloqueada sobre el estado
-    // real del componente, no solo sobre [disabled]="guardando" del template — dos
-    // clics muy rápidos pueden invocar guardar() dos veces antes de que Angular
-    // refleje el atributo disabled en el DOM (mismo patrón ya aplicado en
-    // resumen-seleccion.component.ts:aceptar()). La protección real y definitiva
-    // contra duplicados sigue estando en el backend (MetricRankingService), esto
-    // es solo una mejora de UX que evita una petición HTTP innecesaria.
     if (this.guardando) return;
     if (!this.validarEscala()) return;
+
+    // Si viene del flujo de IA (o tiene propuesta generada), guardar como propuesta para revisión del Scrum Master
+    if (this.propuestas.length > 0) {
+      this.guardarPropuesta();
+      return;
+    }
+
     this.guardando = true;
 
     const escalaTexto = this.escalaTexto();
@@ -1127,7 +1115,7 @@ export class ParametrizacionComponent implements OnInit {
    * NO aprueba automáticamente - requiere acción explícita del usuario.
    */
   guardarPropuesta(): void {
-    if (!this.metrica || !this.propuestas[0]) return;
+    if (!this.metrica) return;
     if (this.guardando) return; // ver comentario de reentrada en guardar()
     if (!this.validarEscala()) return;
 
@@ -1156,10 +1144,10 @@ export class ParametrizacionComponent implements OnInit {
       tipoOperacion: this.form.tipoOperacion || null,
       unidadResultado: this.form.unidadResultado || null,
       // revisión de captura por parametrización: independiente de
-      // tipoOperacion — decide QUIÉN captura, no CÃ“MO se calcula.
+      // tipoOperacion — decide QUIÉN captura, no CÓMO se calcula.
       responsableCaptura: this.form.responsableCaptura || 'SCRUM_MASTER',
       nombreVariable: this.form.nombreVariable || null,
-      propuestaIAJson: JSON.stringify(this.propuestas[0]),
+      propuestaIAJson: this.propuestas[0] ? JSON.stringify(this.propuestas[0]) : null,
       escalaTipo: this.form.escalaTipo ?? null,
       escalaMin: this.form.escalaMin ?? null,
       escalaMax: this.form.escalaMax ?? null,

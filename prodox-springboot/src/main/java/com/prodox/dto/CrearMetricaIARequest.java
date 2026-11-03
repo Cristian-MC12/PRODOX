@@ -38,11 +38,11 @@ public record CrearMetricaIARequest(
     @NotNull Short categoriaId,
     /** Se persiste como Metrica.nombre (@Column(length = 120)). */
     @NotBlank @Size(max = 120) String nombre,
-    /** Se persiste como Metrica.descripcion (TEXT, sin límite en BD) — acotado como texto de prompt, mismo criterio que ChatRequest.message. */
-    @NotBlank @Size(max = 4000) String descripcion,
+    /** Se persiste como Metrica.descripcion (TEXT, sin límite en BD) — ampliado a 10000 para soportar textos largos. */
+    @NotBlank @Size(max = 10000) String descripcion,
     /** Nunca se persiste (FASE 23) — solo señal para MetricaSimilitudService. */
-    @Size(max = 4000) String objetivo,
-    @Size(max = 4000) String queMide,
-    @Size(max = 4000) String variablesSugeridas,
+    @Size(max = 10000) String objetivo,
+    @Size(max = 10000) String queMide,
+    @Size(max = 10000) String variablesSugeridas,
     Boolean confirmarCreacionDiferente
 ) {}

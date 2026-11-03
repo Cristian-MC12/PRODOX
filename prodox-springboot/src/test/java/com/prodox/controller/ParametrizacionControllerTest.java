@@ -12,6 +12,7 @@ import com.prodox.entity.MetricParametrizacion;
 import com.prodox.ratelimit.RateLimitService;
 import com.prodox.repository.MetricParametrizacionRepository;
 import com.prodox.repository.ProjectMemberRepository;
+import com.prodox.service.MetricRankingService;
 import com.prodox.service.ParametrizacionService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -55,6 +56,9 @@ class ParametrizacionControllerTest {
 
     @MockBean
     private ProjectMemberRepository projectMemberRepository;
+
+    @MockBean
+    private MetricRankingService metricRankingService;
 
     @Autowired
     private RateLimitService rateLimitService;

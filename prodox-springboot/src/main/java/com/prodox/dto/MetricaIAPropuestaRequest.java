@@ -12,6 +12,6 @@ import jakarta.validation.constraints.Size;
  * partir de texto libre, no crea ni asocia nada a ningún proyecto todavía.
  */
 public record MetricaIAPropuestaRequest(
-    /** Va directo al prompt de Gemini, nunca se persiste — mismo límite que ChatRequest.message. */
-    @NotBlank @Size(max = 4000) String necesidad
+    /** Va directo al prompt de Gemini, nunca se persiste — ampliado a 10000 para soportar descripciones largas. */
+    @NotBlank @Size(max = 10000) String necesidad
 ) {}

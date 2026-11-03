@@ -13,6 +13,7 @@ import com.prodox.ratelimit.RateLimitException;
 import com.prodox.ratelimit.RateLimitService;
 import com.prodox.repository.MetricParametrizacionRepository;
 import com.prodox.repository.ProjectMemberRepository;
+import com.prodox.service.MetricRankingService;
 import com.prodox.service.NombreVariableInvalidoException;
 import com.prodox.service.ParametrizacionService;
 import com.prodox.service.TipoOperacionInvalidoException;
@@ -50,6 +51,7 @@ public class ParametrizacionController {
     private final ParametrizacionService parametrizacionService;
     private final ProjectMemberRepository projectMemberRepository;
     private final RateLimitService rateLimitService;
+    private final MetricRankingService metricRankingService;
     
     /**
      * Obtiene la última versión aprobada de una parametrización.
@@ -201,6 +203,9 @@ public class ParametrizacionController {
             log.info("Aprobando parametrización {}", parametrizacionId);
             MetricParametrizacion parametrizacion = parametrizacionService.aprobarParametrizacion(
                     parametrizacionId, request);
+            if (metricRankingService != null && parametrizacion != null) {
+                metricRankingService.asegurarExistenciaRanking(parametrizacion);
+            }
             return ResponseEntity.ok(parametrizacion);
         } catch (TipoOperacionInvalidoException e) {
             log.warn("Aprobación rechazada: {}", e.getMessage());

@@ -414,4 +414,125 @@ describe('CrearMetricaIAComponent', () => {
     expect(planeacionServiceSpy.seleccionar).not.toHaveBeenCalled();
     expect(seleccionServiceSpy.agregar).not.toHaveBeenCalled();
   });
+
+  // ── MODO MANUAL Y VALIDACIONES COMPLETAS ──────────────────────────────────
+
+  it('permite cambiar a modo manual directamente mostrando el formulario', () => {
+    component.cambiarModo('manual');
+    expect(component.modo).toBe('manual');
+    expect(component.paso).toBe('revision');
+    expect(component.edit.escalaTipo).toBe('NUMERICA_ENTERA');
+    expect(component.edit.frecuenciaCaptura).toBe('por_sprint');
+    expect(component.edit.responsableCaptura).toBe('SCRUM_MASTER');
+  });
+
+  it('bloquea la creación si faltan campos obligatorios y muestra errores detallados', () => {
+    component.cambiarModo('manual');
+    component.edit.nombre = '';
+    component.edit.descripcion = '';
+    component.edit.objetivo = '';
+
+    component.usarPropuesta();
+
+    expect(component.erroresValidacion.length).toBeGreaterThan(0);
+    expect(component.erroresValidacion).toContain('El nombre de la métrica es obligatorio.');
+    expect(component.erroresValidacion).toContain('La descripción de la métrica es obligatoria.');
+    expect(component.erroresValidacion).toContain('El objetivo de medición es obligatorio.');
+    expect(metricaIAServiceSpy.crear).not.toHaveBeenCalled();
+  });
+
+  it('valida que el nombre no exceda los 120 caracteres', () => {
+    component.cambiarModo('manual');
+    component.edit.nombre = 'A'.repeat(125);
+    component.edit.descripcion = 'Desc';
+    component.edit.objetivo = 'Obj';
+    component.edit.procedimiento = 'Proc';
+    component.edit.indicadorVariable = 'Ind';
+
+    component.usarPropuesta();
+
+    expect(component.erroresValidacion).toContain('El nombre no puede superar los 120 caracteres.');
+    expect(metricaIAServiceSpy.crear).not.toHaveBeenCalled();
+  });
+
+  it('valida la escala estructurada correctamente (escalaMax < escalaMin)', () => {
+    component.cambiarModo('manual');
+    component.edit.nombre = 'Métrica test';
+    component.edit.descripcion = 'Desc test';
+    component.edit.objetivo = 'Obj test';
+    component.edit.procedimiento = 'Proc test';
+    component.edit.indicadorVariable = 'Ind test';
+    component.edit.escalaTipo = 'NUMERICA_ENTERA';
+    component.edit.escalaMin = 50;
+    component.edit.escalaMax = 10;
+    component.edit.escalaPaso = 1;
+
+    component.usarPropuesta();
+
+    expect(component.errorEscala).toContain('El máximo de la escala no puede ser menor que el mínimo.');
+    expect(metricaIAServiceSpy.crear).not.toHaveBeenCalled();
+  });
+
+  it('onEscalaSinLimiteChange limpia escalaMax cuando se activa', () => {
+    component.edit.escalaMax = 100;
+    component.edit.escalaSinLimite = true;
+    component.onEscalaSinLimiteChange();
+
+    expect(component.edit.escalaMax).toBeUndefined();
+  });
+
+  it('creación manual exitosa envía todos los campos de parametrización a seleccionService', () => {
+    component.cambiarModo('manual');
+    component.edit.nombre = 'Cobertura de pruebas unitarias';
+    component.edit.categoriaId = 2;
+    component.edit.descripcion = 'Porcentaje de líneas de código cubiertas';
+    component.edit.objetivo = 'Garantizar que al menos el 80% del código nuevo esté cubierto';
+    component.edit.procedimiento = 'Ejecutar jacoco y medir líneas cubiertas / líneas totales * 100';
+    component.edit.indicadorVariable = 'cobertura = lineas_cubiertas / lineas_totales * 100';
+    component.edit.escalaTipo = 'NUMERICA_DECIMAL';
+    component.edit.escalaMin = 0;
+    component.edit.escalaMax = 100;
+    component.edit.escalaPaso = 0.5;
+    component.edit.escalaSinLimite = false;
+    component.edit.escalaDescripcion = '0 a 100 por ciento';
+    component.edit.frecuenciaCaptura = 'por_sprint';
+    component.edit.responsableCaptura = 'EQUIPO';
+    component.edit.formulaAcademica = 'lineas_cubiertas / lineas_totales * 100';
+    component.edit.tipoOperacion = 'PORCENTAJE';
+    component.edit.unidadResultado = '%';
+
+    const creada: MetricaIACreadaDto = {
+      metricaId: 'metrica-manual-1', codigo: 'IA-002',
+      nombre: 'Cobertura de pruebas unitarias', proyectoId: 'proyecto-1'
+    };
+    metricaIAServiceSpy.crear.and.returnValue(of(creada));
+    seleccionServiceSpy.getSnapshot.and.returnValue([{
+      id: 'sel-manual-1', factorId: 'metrica-manual-1', factorNombre: 'Cobertura de pruebas unitarias',
+      factorCategoria: 'Flexibilidad', metricaNombre: 'Cobertura de pruebas unitarias',
+      metricaDescripcion: 'Porcentaje de líneas de código cubiertas', proyectoId: 'proyecto-1',
+      estadoParametrizacion: 'sin_parametrizar', creadoEn: new Date().toISOString()
+    }] as any);
+
+    component.usarPropuesta();
+
+    expect(metricaIAServiceSpy.crear).toHaveBeenCalled();
+    expect(seleccionServiceSpy.agregar).toHaveBeenCalled();
+    expect(seleccionServiceSpy.parametrizar).toHaveBeenCalledWith('sel-manual-1', jasmine.objectContaining({
+      objetivo: 'Garantizar que al menos el 80% del código nuevo esté cubierto',
+      procedimiento: 'Ejecutar jacoco y medir líneas cubiertas / líneas totales * 100',
+      indicadorVariable: 'cobertura = lineas_cubiertas / lineas_totales * 100',
+      escalaTipo: 'NUMERICA_DECIMAL',
+      escalaMin: 0,
+      escalaMax: 100,
+      escalaPaso: 0.5,
+      escalaSinLimite: false,
+      escalaDescripcion: '0 a 100 por ciento',
+      frecuenciaCaptura: 'por_sprint',
+      responsableCaptura: 'EQUIPO',
+      formulaAcademica: 'lineas_cubiertas / lineas_totales * 100',
+      tipoOperacion: 'PORCENTAJE',
+      unidadResultado: '%'
+    }));
+    expect(routerSpy.navigate).toHaveBeenCalledWith(['/parametrizacion', 'sel-manual-1']);
+  });
 });

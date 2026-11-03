@@ -15,6 +15,12 @@ export interface MetricaIAPropuestaDto {
   formulaSugerida: string;
   unidadResultado: string;
   fuenteSugerida: string;
+  escalaTipo?: 'NUMERICA_ENTERA' | 'NUMERICA_DECIMAL' | null;
+  escalaMin?: number | null;
+  escalaMax?: number | null;
+  escalaPaso?: number | null;
+  escalaSinLimite?: boolean | null;
+  escalaDescripcion?: string | null;
 }
 
 export interface CrearMetricaIARequest {

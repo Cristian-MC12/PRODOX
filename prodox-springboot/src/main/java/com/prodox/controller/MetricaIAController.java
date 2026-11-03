@@ -93,13 +93,13 @@ public class MetricaIAController {
             return ResponseEntity.status(HttpStatus.CONFLICT).body(body);
         } catch (IllegalArgumentException e) {
             log.warn("Solicitud inválida: {}", e.getMessage());
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("error", e.getMessage() != null ? e.getMessage() : "Solicitud inválida"));
         } catch (IllegalStateException e) {
             log.error("Error de autorización", e);
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", e.getMessage() != null ? e.getMessage() : "Error de autorización"));
         } catch (Exception e) {
             log.error("Error creando métrica desde IA", e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("error", "Error interno al crear métrica"));
         }
     }
 }

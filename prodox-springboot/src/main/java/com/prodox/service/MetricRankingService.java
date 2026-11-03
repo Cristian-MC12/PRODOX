@@ -505,8 +505,9 @@ public class MetricRankingService {
      * deshace esta fila igual que cualquier otra escritura de la transacción;
      * no puede quedar huérfana.
      */
-    private void asegurarExistenciaRanking(MetricParametrizacion p) {
-        if (p.getMetricaId() == null) {
+    @Transactional
+    public void asegurarExistenciaRanking(MetricParametrizacion p) {
+        if (p == null || p.getMetricaId() == null) {
             return;
         }
         String fingerprint = FingerprintUtil.calcularFingerprint(p);
