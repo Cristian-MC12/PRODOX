@@ -105,7 +105,7 @@ export default defineConfig({
     ],
 
     socialLinks: [
-      { icon: 'github', link: 'https://github.com/Cristian-MC12/PRODOX' }
+      { icon: 'github', link: 'https://github.com/Cristian-MC12/PRODOX-V1' }
     ],
 
     search: {
